@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +12,7 @@ import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { UserRole } from '@/types';
+import { createEmployee } from './actions';
 
 export default function NewEmployeePage() {
   const [name, setName] = useState('');
@@ -24,40 +24,25 @@ export default function NewEmployeePage() {
   const [loading, setLoading] = useState(false);
 
   const router = useRouter();
-  const supabase = createClient();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      const result = await createEmployee({
+        name,
         email,
         password,
-        email_confirm: true,
-      });
-
-      if (authError) {
-        // If admin API fails, try regular signup (for development)
-        const { error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (signUpError) throw signUpError;
-      }
-
-      // Create employee record
-      const { error: employeeError } = await supabase.from('employees').insert({
-        email,
-        name,
         role,
-        start_date: startDate,
-        is_active: true,
-        is_admin: isAdmin || role === 'owner' || role === 'manager',
+        startDate,
+        isAdmin,
       });
 
-      if (employeeError) throw employeeError;
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
 
       toast.success('Employee created successfully');
       router.push('/admin/employees');

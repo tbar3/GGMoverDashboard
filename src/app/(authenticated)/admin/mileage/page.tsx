@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -48,22 +47,20 @@ export default function MileagePage() {
     miles: '',
   });
 
-  const supabase = createClient();
-
   useEffect(() => {
     fetchData();
   }, []);
 
   async function fetchData() {
     const [entriesRes, employeesRes, jobsRes] = await Promise.all([
-      supabase.from('mileage_entries').select('*').order('date', { ascending: false }),
-      supabase.from('employees').select('*').eq('is_active', true).order('name'),
-      supabase.from('jobs').select('*').order('date', { ascending: false }).limit(50),
+      fetch('/api/mileage'),
+      fetch('/api/employees?active=true'),
+      fetch('/api/jobs?limit=50'),
     ]);
 
-    if (entriesRes.data) setEntries(entriesRes.data);
-    if (employeesRes.data) setEmployees(employeesRes.data);
-    if (jobsRes.data) setJobs(jobsRes.data);
+    if (entriesRes.ok) setEntries(await entriesRes.json());
+    if (employeesRes.ok) setEmployees(await employeesRes.json());
+    if (jobsRes.ok) setJobs(await jobsRes.json());
     setLoading(false);
   }
 
@@ -73,27 +70,27 @@ export default function MileagePage() {
     const miles = parseFloat(formData.miles);
     const amount = miles * CONFIG.MILEAGE_RATE;
 
-    const { error } = await supabase.from('mileage_entries').insert({
-      employee_id: formData.employee_id,
-      job_id: formData.job_id || null,
-      date: formData.date,
-      miles,
-      amount,
+    const res = await fetch('/api/mileage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        employee_id: formData.employee_id,
+        job_id: formData.job_id || null,
+        date: formData.date,
+        miles,
+        amount,
+      }),
     });
 
-    if (error) {
-      toast.error(error.message);
+    if (!res.ok) {
+      const err = await res.json();
+      toast.error(err.error || 'Failed to add mileage');
       return;
     }
 
     toast.success('Mileage entry added');
     setDialogOpen(false);
-    setFormData({
-      employee_id: '',
-      job_id: '',
-      date: new Date().toISOString().split('T')[0],
-      miles: '',
-    });
+    setFormData({ employee_id: '', job_id: '', date: new Date().toISOString().split('T')[0], miles: '' });
     fetchData();
   }
 
@@ -101,7 +98,6 @@ export default function MileagePage() {
     return employees.find(e => e.id === employeeId)?.name || 'Unknown';
   }
 
-  // Calculate totals by employee for current month
   const now = new Date();
   const monthStart = startOfMonth(now);
   const monthEnd = endOfMonth(now);
@@ -115,12 +111,12 @@ export default function MileagePage() {
     const empEntries = currentMonthEntries.filter(e => e.employee_id === emp.id);
     return {
       ...emp,
-      totalMiles: empEntries.reduce((sum, e) => sum + e.miles, 0),
-      totalAmount: empEntries.reduce((sum, e) => sum + e.amount, 0),
+      totalMiles: empEntries.reduce((sum, e) => sum + Number(e.miles), 0),
+      totalAmount: empEntries.reduce((sum, e) => sum + Number(e.amount), 0),
     };
   }).filter(e => e.totalMiles > 0).sort((a, b) => b.totalAmount - a.totalAmount);
 
-  const totalMileageOwed = currentMonthEntries.reduce((sum, e) => sum + e.amount, 0);
+  const totalMileageOwed = currentMonthEntries.reduce((sum, e) => sum + Number(e.amount), 0);
 
   if (loading) {
     return <div className="p-6">Loading...</div>;
@@ -244,7 +240,6 @@ export default function MileagePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Summary Card */}
         <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
           <CardHeader>
             <CardDescription className="text-blue-100">
@@ -256,12 +251,11 @@ export default function MileagePage() {
           </CardHeader>
           <CardContent>
             <p className="text-blue-100">
-              {currentMonthEntries.reduce((sum, e) => sum + e.miles, 0).toFixed(1)} miles total
+              {currentMonthEntries.reduce((sum, e) => sum + Number(e.miles), 0).toFixed(1)} miles total
             </p>
           </CardContent>
         </Card>
 
-        {/* Employee Breakdown */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -295,7 +289,6 @@ export default function MileagePage() {
         </Card>
       </div>
 
-      {/* All Entries */}
       <Card>
         <CardHeader>
           <CardTitle>All Mileage Entries</CardTitle>
@@ -322,9 +315,9 @@ export default function MileagePage() {
                     <TableCell className="font-medium">
                       {getEmployeeName(entry.employee_id)}
                     </TableCell>
-                    <TableCell>{entry.miles.toFixed(1)} mi</TableCell>
+                    <TableCell>{Number(entry.miles).toFixed(1)} mi</TableCell>
                     <TableCell className="text-green-600 font-medium">
-                      ${entry.amount.toFixed(2)}
+                      ${Number(entry.amount).toFixed(2)}
                     </TableCell>
                     <TableCell className="text-gray-500">
                       {entry.job_id

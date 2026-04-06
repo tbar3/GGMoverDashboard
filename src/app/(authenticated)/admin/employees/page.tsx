@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { currentUser } from '@clerk/nextjs/server';
+import { query } from '@/lib/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,15 +14,13 @@ import {
 import { differenceInMonths, format } from 'date-fns';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
+import { Employee } from '@/types';
 
 export default async function EmployeesPage() {
-  const supabase = await createClient();
+  const user = await currentUser();
+  if (!user) return null;
 
-  const { data: employees } = await supabase
-    .from('employees')
-    .select('*')
-    .order('name');
-
+  const employees = await query<Employee>('SELECT * FROM employees ORDER BY name');
   const now = new Date();
 
   return (
@@ -43,7 +42,7 @@ export default async function EmployeesPage() {
         <CardHeader>
           <CardTitle>All Employees</CardTitle>
           <CardDescription>
-            {employees?.length || 0} total employees
+            {employees.length} total employees
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -60,7 +59,7 @@ export default async function EmployeesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {employees && employees.length > 0 ? (
+              {employees.length > 0 ? (
                 employees.map((employee) => {
                   const tenureMonths = differenceInMonths(now, new Date(employee.start_date));
                   return (

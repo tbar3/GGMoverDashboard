@@ -16,13 +16,11 @@ import {
   Briefcase,
   LogOut,
   Menu,
-  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
-import { useRouter } from 'next/navigation';
+import { useClerk } from '@clerk/nextjs';
 
 interface NavItem {
   title: string;
@@ -190,13 +188,10 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
 
 export function Sidebar({ isAdmin, userName }: SidebarProps) {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
-  const supabase = createClient();
+  const { signOut } = useClerk();
 
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    router.push('/login');
-    router.refresh();
+  function handleLogout() {
+    signOut({ redirectUrl: '/login' });
   }
 
   return (

@@ -1,12 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -28,8 +26,6 @@ export default function AttendancePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const supabase = createClient();
-
   useEffect(() => {
     fetchData();
   }, [selectedDate]);
@@ -37,18 +33,18 @@ export default function AttendancePage() {
   async function fetchData() {
     setLoading(true);
     const [employeesRes, attendanceRes] = await Promise.all([
-      supabase.from('employees').select('*').eq('is_active', true).order('name'),
-      supabase.from('attendance').select('*').eq('date', selectedDate),
+      fetch('/api/employees?active=true'),
+      fetch(`/api/attendance?date=${selectedDate}`),
     ]);
 
-    if (employeesRes.data) setEmployees(employeesRes.data as Employee[]);
+    if (employeesRes.ok) setEmployees(await employeesRes.json());
 
-    // Convert attendance array to record by employee_id
-    const attendanceRecord: Record<string, Attendance> = {};
-    (attendanceRes.data as Attendance[] | null)?.forEach(a => {
-      attendanceRecord[a.employee_id] = a;
-    });
-    setAttendance(attendanceRecord);
+    if (attendanceRes.ok) {
+      const data: Attendance[] = await attendanceRes.json();
+      const record: Record<string, Attendance> = {};
+      data.forEach(a => { record[a.employee_id] = a; });
+      setAttendance(record);
+    }
 
     setLoading(false);
   }
@@ -61,7 +57,6 @@ export default function AttendancePage() {
         employee_id: employeeId,
         date: selectedDate,
         [field]: value,
-        // Auto-calculate is_tardy when arrival_time changes
         ...(field === 'arrival_time' && typeof value === 'string' ? {
           is_tardy: checkTardy(value),
         } : {}),
@@ -82,25 +77,23 @@ export default function AttendancePage() {
 
     const records = Object.values(attendance).filter(a => a.arrival_time);
 
-    for (const record of records) {
-      const { error } = await supabase
-        .from('attendance')
-        .upsert({
-          employee_id: record.employee_id,
-          date: selectedDate,
-          arrival_time: record.arrival_time,
-          is_tardy: record.is_tardy,
-          in_uniform: record.in_uniform ?? true,
-          notes: record.notes,
-        }, {
-          onConflict: 'employee_id,date',
-        });
+    const res = await fetch('/api/attendance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(records.map(r => ({
+        employee_id: r.employee_id,
+        date: selectedDate,
+        arrival_time: r.arrival_time,
+        is_tardy: r.is_tardy,
+        in_uniform: r.in_uniform ?? true,
+        notes: r.notes,
+      }))),
+    });
 
-      if (error) {
-        toast.error(`Error saving attendance: ${error.message}`);
-        setSaving(false);
-        return;
-      }
+    if (!res.ok) {
+      toast.error('Error saving attendance');
+      setSaving(false);
+      return;
     }
 
     toast.success('Attendance saved successfully');

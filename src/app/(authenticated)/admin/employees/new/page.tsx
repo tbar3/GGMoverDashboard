@@ -17,7 +17,6 @@ import { createEmployee } from './actions';
 export default function NewEmployeePage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('helper');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -33,7 +32,6 @@ export default function NewEmployeePage() {
       const result = await createEmployee({
         name,
         email,
-        password,
         role,
         startDate,
         isAdmin,
@@ -65,7 +63,7 @@ export default function NewEmployeePage() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Add Employee</h1>
-          <p className="text-gray-500 mt-1">Create a new crew member account</p>
+          <p className="text-gray-500 mt-1">Create a new crew member record</p>
         </div>
       </div>
 
@@ -73,7 +71,7 @@ export default function NewEmployeePage() {
         <CardHeader>
           <CardTitle>Employee Details</CardTitle>
           <CardDescription>
-            Enter the information for the new employee
+            Enter the information for the new employee. They will need to sign up via Clerk separately.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -100,21 +98,8 @@ export default function NewEmployeePage() {
                   placeholder="john@example.com"
                   required
                 />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Initial Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Temporary password"
-                  required
-                  minLength={6}
-                />
                 <p className="text-xs text-gray-500">
-                  Employee can change this after first login
+                  Must match the email they use to sign in with Clerk
                 </p>
               </div>
 

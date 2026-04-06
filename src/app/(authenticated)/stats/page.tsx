@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { currentUser } from '@clerk/nextjs/server';
+import { query, queryOne } from '@/lib/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -9,20 +10,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { differenceInMonths, format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths } from 'date-fns';
-import { CONFIG } from '@/types';
+import { differenceInMonths, format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { CONFIG, Employee, Attendance, PerformanceEvent, PerfectWeek, MileageEntry, ChecklistCompletion } from '@/types';
 import { CalendarCheck, Clock, TrendingUp, Award } from 'lucide-react';
 
 export default async function StatsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
+  const email = user?.emailAddresses[0]?.emailAddress;
 
-  // Get employee
-  const { data: employee } = await supabase
-    .from('employees')
-    .select('*')
-    .eq('email', user?.email)
-    .single();
+  const employee = await queryOne<Employee>(
+    'SELECT * FROM employees WHERE email = $1',
+    [email]
+  );
 
   if (!employee) {
     return (
@@ -39,22 +38,38 @@ export default async function StatsPage() {
   const now = new Date();
   const monthStart = startOfMonth(now);
   const monthEnd = endOfMonth(now);
+  const monthStartStr = format(monthStart, 'yyyy-MM-dd');
+  const monthEndStr = format(monthEnd, 'yyyy-MM-dd');
   const tenureMonths = differenceInMonths(now, new Date(employee.start_date));
+  const threeMonthsAgo = format(subMonths(now, 3), 'yyyy-MM-dd');
 
-  // Get attendance history (last 3 months)
-  const threeMonthsAgo = subMonths(now, 3);
-  const { data: attendance } = await supabase
-    .from('attendance')
-    .select('*')
-    .eq('employee_id', employee.id)
-    .gte('date', format(threeMonthsAgo, 'yyyy-MM-dd'))
-    .order('date', { ascending: false });
+  const [attendance, checklistCompletions, performanceEvents, perfectWeeks, mileage] = await Promise.all([
+    query<Attendance>(
+      'SELECT * FROM attendance WHERE employee_id = $1 AND date >= $2 ORDER BY date DESC',
+      [employee.id, threeMonthsAgo]
+    ),
+    query<ChecklistCompletion>(
+      'SELECT * FROM checklist_completions WHERE employee_id = $1 AND completed_at >= $2',
+      [employee.id, monthStartStr]
+    ),
+    query<PerformanceEvent>(
+      'SELECT * FROM performance_events WHERE employee_id = $1 ORDER BY date DESC LIMIT 10',
+      [employee.id]
+    ),
+    query<PerfectWeek>(
+      'SELECT * FROM perfect_weeks WHERE employee_id = $1 AND achieved = true ORDER BY week_start DESC',
+      [employee.id]
+    ),
+    query<MileageEntry>(
+      'SELECT miles, amount FROM mileage_entries WHERE employee_id = $1 AND date >= $2',
+      [employee.id, monthStartStr]
+    ),
+  ]);
 
-  // Current month stats
-  const currentMonthAttendance = attendance?.filter(a => {
+  const currentMonthAttendance = attendance.filter(a => {
     const date = new Date(a.date);
     return date >= monthStart && date <= monthEnd;
-  }) || [];
+  });
 
   const tardyCount = currentMonthAttendance.filter(a => a.is_tardy).length;
   const uniformCount = currentMonthAttendance.filter(a => !a.in_uniform).length;
@@ -63,40 +78,9 @@ export default async function StatsPage() {
     ? Math.round(((daysWorked - tardyCount) / daysWorked) * 100)
     : 100;
 
-  // Get checklist completions
-  const { data: checklistCompletions } = await supabase
-    .from('checklist_completions')
-    .select('*')
-    .eq('employee_id', employee.id)
-    .gte('completed_at', format(monthStart, 'yyyy-MM-dd'));
-
-  const checklistsCompleted = checklistCompletions?.length || 0;
-
-  // Get performance events
-  const { data: performanceEvents } = await supabase
-    .from('performance_events')
-    .select('*')
-    .eq('employee_id', employee.id)
-    .order('date', { ascending: false })
-    .limit(10);
-
-  // Get perfect weeks
-  const { data: perfectWeeks } = await supabase
-    .from('perfect_weeks')
-    .select('*')
-    .eq('employee_id', employee.id)
-    .eq('achieved', true)
-    .order('week_start', { ascending: false });
-
-  // Get mileage
-  const { data: mileage } = await supabase
-    .from('mileage_entries')
-    .select('miles, amount')
-    .eq('employee_id', employee.id)
-    .gte('date', format(monthStart, 'yyyy-MM-dd'));
-
-  const totalMiles = mileage?.reduce((sum, m) => sum + m.miles, 0) || 0;
-  const totalMileageAmount = mileage?.reduce((sum, m) => sum + m.amount, 0) || 0;
+  const checklistsCompleted = checklistCompletions.length;
+  const totalMiles = mileage.reduce((sum, m) => sum + Number(m.miles), 0);
+  const totalMileageAmount = mileage.reduce((sum, m) => sum + Number(m.amount), 0);
 
   return (
     <div className="p-6 space-y-6">
@@ -107,7 +91,6 @@ export default async function StatsPage() {
         </p>
       </div>
 
-      {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
@@ -148,15 +131,15 @@ export default async function StatsPage() {
               Perfect Weeks
             </CardDescription>
             <CardTitle className="text-3xl text-green-600">
-              {perfectWeeks?.filter(pw => {
+              {perfectWeeks.filter(pw => {
                 const weekStart = new Date(pw.week_start);
                 return weekStart >= monthStart && weekStart <= monthEnd;
-              }).length || 0}
+              }).length}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-gray-500">
-              this month ({perfectWeeks?.length || 0} total)
+              this month ({perfectWeeks.length} total)
             </p>
           </CardContent>
         </Card>
@@ -168,10 +151,10 @@ export default async function StatsPage() {
               Performance Score
             </CardDescription>
             <CardTitle className="text-3xl">
-              {performanceEvents?.filter(pe => {
+              {performanceEvents.filter(pe => {
                 const date = new Date(pe.date);
                 return date >= monthStart && date <= monthEnd;
-              }).length || 0}
+              }).length}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -182,9 +165,7 @@ export default async function StatsPage() {
         </Card>
       </div>
 
-      {/* Detailed Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Attendance History */}
         <Card>
           <CardHeader>
             <CardTitle>Recent Attendance</CardTitle>
@@ -201,7 +182,7 @@ export default async function StatsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {attendance && attendance.length > 0 ? (
+                {attendance.length > 0 ? (
                   attendance.slice(0, 10).map((record) => (
                     <TableRow key={record.id}>
                       <TableCell>
@@ -234,14 +215,13 @@ export default async function StatsPage() {
           </CardContent>
         </Card>
 
-        {/* Recognition History */}
         <Card>
           <CardHeader>
             <CardTitle>Recognition History</CardTitle>
             <CardDescription>Your performance events</CardDescription>
           </CardHeader>
           <CardContent>
-            {performanceEvents && performanceEvents.length > 0 ? (
+            {performanceEvents.length > 0 ? (
               <div className="space-y-3">
                 {performanceEvents.map((event) => (
                   <div
@@ -283,9 +263,7 @@ export default async function StatsPage() {
         </Card>
       </div>
 
-      {/* Additional Info */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Mileage Summary */}
         <Card>
           <CardHeader>
             <CardTitle>Mileage This Month</CardTitle>
@@ -310,7 +288,6 @@ export default async function StatsPage() {
           </CardContent>
         </Card>
 
-        {/* Profile Summary */}
         <Card>
           <CardHeader>
             <CardTitle>Profile Summary</CardTitle>

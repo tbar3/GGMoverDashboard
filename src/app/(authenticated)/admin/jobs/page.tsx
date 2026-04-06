@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -43,37 +42,40 @@ export default function JobsPage() {
     crew_ids: [] as string[],
   });
 
-  const supabase = createClient();
-
   useEffect(() => {
     fetchData();
   }, []);
 
   async function fetchData() {
     const [jobsRes, employeesRes] = await Promise.all([
-      supabase.from('jobs').select('*').order('date', { ascending: false }),
-      supabase.from('employees').select('*').eq('is_active', true).order('name'),
+      fetch('/api/jobs'),
+      fetch('/api/employees?active=true'),
     ]);
 
-    if (jobsRes.data) setJobs(jobsRes.data);
-    if (employeesRes.data) setEmployees(employeesRes.data);
+    if (jobsRes.ok) setJobs(await jobsRes.json());
+    if (employeesRes.ok) setEmployees(await employeesRes.json());
     setLoading(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const { error } = await supabase.from('jobs').insert({
-      date: formData.date,
-      customer_name: formData.customer_name,
-      pickup_address: formData.pickup_address,
-      dropoff_address: formData.dropoff_address,
-      revenue: formData.revenue ? parseFloat(formData.revenue) : null,
-      crew_ids: formData.crew_ids,
+    const res = await fetch('/api/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: formData.date,
+        customer_name: formData.customer_name,
+        pickup_address: formData.pickup_address,
+        dropoff_address: formData.dropoff_address,
+        revenue: formData.revenue ? parseFloat(formData.revenue) : null,
+        crew_ids: formData.crew_ids,
+      }),
     });
 
-    if (error) {
-      toast.error(error.message);
+    if (!res.ok) {
+      const err = await res.json();
+      toast.error(err.error || 'Failed to create job');
       return;
     }
 
@@ -251,7 +253,7 @@ export default function JobsPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      {job.revenue ? `$${job.revenue.toFixed(2)}` : '-'}
+                      {job.revenue ? `$${Number(job.revenue).toFixed(2)}` : '-'}
                     </TableCell>
                   </TableRow>
                 ))

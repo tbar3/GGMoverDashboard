@@ -1,29 +1,29 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { currentUser } from '@clerk/nextjs/server';
+import { queryOne } from '@/lib/db';
 import { Sidebar } from '@/components/navigation/sidebar';
+import { Employee } from '@/types';
 
 export default async function AuthenticatedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
 
   if (!user) {
     redirect('/login');
   }
 
-  // Get employee info to determine admin status
-  const { data: employee } = await supabase
-    .from('employees')
-    .select('name, is_admin, role')
-    .eq('email', user.email)
-    .single();
+  const email = user.emailAddresses[0]?.emailAddress;
+
+  const employee = await queryOne<Pick<Employee, 'name' | 'is_admin' | 'role'>>(
+    'SELECT name, is_admin, role FROM employees WHERE email = $1',
+    [email]
+  );
 
   const isAdmin = employee?.is_admin || employee?.role === 'owner' || employee?.role === 'manager';
-  const userName = employee?.name || user.email?.split('@')[0] || 'User';
+  const userName = employee?.name || email?.split('@')[0] || 'User';
 
   return (
     <div className="min-h-screen bg-gray-50">

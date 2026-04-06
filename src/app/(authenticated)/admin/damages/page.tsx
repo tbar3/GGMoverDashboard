@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -43,50 +42,47 @@ export default function DamagesPage() {
     was_reported: true,
   });
 
-  const supabase = createClient();
-
   useEffect(() => {
     fetchData();
   }, []);
 
   async function fetchData() {
     const [damagesRes, employeesRes, jobsRes] = await Promise.all([
-      supabase.from('damages').select('*').order('created_at', { ascending: false }),
-      supabase.from('employees').select('*').eq('is_active', true).order('name'),
-      supabase.from('jobs').select('*').order('date', { ascending: false }).limit(50),
+      fetch('/api/damages'),
+      fetch('/api/employees?active=true'),
+      fetch('/api/jobs?limit=50'),
     ]);
 
-    if (damagesRes.data) setDamages(damagesRes.data);
-    if (employeesRes.data) setEmployees(employeesRes.data);
-    if (jobsRes.data) setJobs(jobsRes.data);
+    if (damagesRes.ok) setDamages(await damagesRes.json());
+    if (employeesRes.ok) setEmployees(await employeesRes.json());
+    if (jobsRes.ok) setJobs(await jobsRes.json());
     setLoading(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const { error } = await supabase.from('damages').insert({
-      job_id: formData.job_id || null,
-      employee_ids: formData.employee_ids,
-      description: formData.description,
-      amount: parseFloat(formData.amount),
-      was_reported: formData.was_reported,
+    const res = await fetch('/api/damages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        job_id: formData.job_id || null,
+        employee_ids: formData.employee_ids,
+        description: formData.description,
+        amount: parseFloat(formData.amount),
+        was_reported: formData.was_reported,
+      }),
     });
 
-    if (error) {
-      toast.error(error.message);
+    if (!res.ok) {
+      const err = await res.json();
+      toast.error(err.error || 'Failed to log damage');
       return;
     }
 
     toast.success('Damage logged successfully');
     setDialogOpen(false);
-    setFormData({
-      job_id: '',
-      employee_ids: [],
-      description: '',
-      amount: '',
-      was_reported: true,
-    });
+    setFormData({ job_id: '', employee_ids: [], description: '', amount: '', was_reported: true });
     fetchData();
   }
 
@@ -107,7 +103,7 @@ export default function DamagesPage() {
   }
 
   function getPoolImpact(damage: Damage): number {
-    return damage.was_reported ? damage.amount : damage.amount * CONFIG.UNREPORTED_DAMAGE_MULTIPLIER;
+    return damage.was_reported ? Number(damage.amount) : Number(damage.amount) * CONFIG.UNREPORTED_DAMAGE_MULTIPLIER;
   }
 
   const totalPoolImpact = damages.reduce((sum, d) => sum + getPoolImpact(d), 0);
@@ -231,7 +227,6 @@ export default function DamagesPage() {
         </Dialog>
       </div>
 
-      {/* Summary Card */}
       <Card className="bg-red-50 border-red-200">
         <CardHeader className="pb-2">
           <CardDescription className="text-red-600">Total Pool Impact</CardDescription>
@@ -240,9 +235,7 @@ export default function DamagesPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-red-600">
-            This amount will be deducted from the bonus pool
-          </p>
+          <p className="text-sm text-red-600">This amount will be deducted from the bonus pool</p>
         </CardContent>
       </Card>
 
@@ -273,7 +266,7 @@ export default function DamagesPage() {
                     <TableCell className="font-medium max-w-[200px] truncate">
                       {damage.description}
                     </TableCell>
-                    <TableCell>${damage.amount.toFixed(2)}</TableCell>
+                    <TableCell>${Number(damage.amount).toFixed(2)}</TableCell>
                     <TableCell>
                       <Badge variant={damage.was_reported ? 'default' : 'destructive'}>
                         {damage.was_reported ? 'Yes' : 'No (2x)'}

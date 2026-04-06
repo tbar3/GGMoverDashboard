@@ -1,19 +1,18 @@
-import { createClient } from '@/lib/supabase/server';
+import { currentUser } from '@clerk/nextjs/server';
+import { query, queryOne } from '@/lib/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { differenceInMonths, format, startOfMonth, endOfMonth } from 'date-fns';
-import { CONFIG } from '@/types';
+import { CONFIG, Employee, Attendance, PerfectWeek, MileageEntry, PerformanceEvent, ChecklistCompletion } from '@/types';
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
+  const email = user?.emailAddresses[0]?.emailAddress;
 
-  // Get employee info
-  const { data: employee } = await supabase
-    .from('employees')
-    .select('*')
-    .eq('email', user?.email)
-    .single();
+  const employee = await queryOne<Employee>(
+    'SELECT * FROM employees WHERE email = $1',
+    [email]
+  );
 
   if (!employee) {
     return (
@@ -28,66 +27,42 @@ export default async function DashboardPage() {
   }
 
   const now = new Date();
-  const monthStart = startOfMonth(now);
-  const monthEnd = endOfMonth(now);
+  const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
+  const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
   const tenureMonths = differenceInMonths(now, new Date(employee.start_date));
 
-  // Get attendance for current month
-  const { data: attendance } = await supabase
-    .from('attendance')
-    .select('*')
-    .eq('employee_id', employee.id)
-    .gte('date', format(monthStart, 'yyyy-MM-dd'))
-    .lte('date', format(monthEnd, 'yyyy-MM-dd'));
+  const [attendance, perfectWeeks, mileage, performanceEvents, checklistCompletions] = await Promise.all([
+    query<Attendance>(
+      'SELECT * FROM attendance WHERE employee_id = $1 AND date >= $2 AND date <= $3',
+      [employee.id, monthStart, monthEnd]
+    ),
+    query<PerfectWeek>(
+      'SELECT * FROM perfect_weeks WHERE employee_id = $1 AND achieved = true AND week_start >= $2 AND week_end <= $3',
+      [employee.id, monthStart, monthEnd]
+    ),
+    query<MileageEntry>(
+      'SELECT miles, amount FROM mileage_entries WHERE employee_id = $1 AND date >= $2 AND date <= $3',
+      [employee.id, monthStart, monthEnd]
+    ),
+    query<PerformanceEvent>(
+      'SELECT * FROM performance_events WHERE employee_id = $1 AND date >= $2 AND date <= $3 ORDER BY date DESC LIMIT 5',
+      [employee.id, monthStart, monthEnd]
+    ),
+    query<ChecklistCompletion>(
+      'SELECT * FROM checklist_completions WHERE employee_id = $1 AND completed_at >= $2 AND completed_at <= $3',
+      [employee.id, monthStart, monthEnd]
+    ),
+  ]);
 
-  const tardyCount = attendance?.filter(a => a.is_tardy).length || 0;
-  const daysWorked = attendance?.length || 0;
-
-  // Get perfect weeks for current month
-  const { data: perfectWeeks } = await supabase
-    .from('perfect_weeks')
-    .select('*')
-    .eq('employee_id', employee.id)
-    .eq('achieved', true)
-    .gte('week_start', format(monthStart, 'yyyy-MM-dd'))
-    .lte('week_end', format(monthEnd, 'yyyy-MM-dd'));
-
-  const perfectWeekCount = perfectWeeks?.length || 0;
-
-  // Get mileage for current month
-  const { data: mileage } = await supabase
-    .from('mileage_entries')
-    .select('miles, amount')
-    .eq('employee_id', employee.id)
-    .gte('date', format(monthStart, 'yyyy-MM-dd'))
-    .lte('date', format(monthEnd, 'yyyy-MM-dd'));
-
-  const totalMiles = mileage?.reduce((sum, m) => sum + m.miles, 0) || 0;
-  const totalMileageAmount = mileage?.reduce((sum, m) => sum + m.amount, 0) || 0;
-
-  // Get performance events for current month
-  const { data: performanceEvents } = await supabase
-    .from('performance_events')
-    .select('*')
-    .eq('employee_id', employee.id)
-    .gte('date', format(monthStart, 'yyyy-MM-dd'))
-    .lte('date', format(monthEnd, 'yyyy-MM-dd'))
-    .order('date', { ascending: false })
-    .limit(5);
-
-  // Get checklist completions for current month
-  const { data: checklistCompletions } = await supabase
-    .from('checklist_completions')
-    .select('*')
-    .eq('employee_id', employee.id)
-    .gte('completed_at', format(monthStart, 'yyyy-MM-dd'))
-    .lte('completed_at', format(monthEnd, 'yyyy-MM-dd'));
-
-  const checklistsCompleted = checklistCompletions?.length || 0;
+  const tardyCount = attendance.filter(a => a.is_tardy).length;
+  const daysWorked = attendance.length;
+  const perfectWeekCount = perfectWeeks.length;
+  const totalMiles = mileage.reduce((sum, m) => sum + Number(m.miles), 0);
+  const totalMileageAmount = mileage.reduce((sum, m) => sum + Number(m.amount), 0);
+  const checklistsCompleted = checklistCompletions.length;
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">
           Welcome back, {employee.name.split(' ')[0]}!
@@ -97,9 +72,7 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Tenure */}
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Tenure</CardDescription>
@@ -112,7 +85,6 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Perfect Weeks */}
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Perfect Weeks</CardDescription>
@@ -125,7 +97,6 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Tardies */}
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Tardies This Month</CardDescription>
@@ -142,7 +113,6 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Mileage */}
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Mileage Earnings</CardDescription>
@@ -158,9 +128,7 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Details Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Performance Events */}
         <Card>
           <CardHeader>
             <CardTitle>Recent Recognition</CardTitle>
@@ -169,7 +137,7 @@ export default async function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {performanceEvents && performanceEvents.length > 0 ? (
+            {performanceEvents.length > 0 ? (
               <div className="space-y-3">
                 {performanceEvents.map((event) => (
                   <div
@@ -210,7 +178,6 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Quick Stats */}
         <Card>
           <CardHeader>
             <CardTitle>This Month at a Glance</CardTitle>
@@ -237,7 +204,7 @@ export default async function DashboardPage() {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Performance Events</span>
-              <span className="font-medium">{performanceEvents?.length || 0}</span>
+              <span className="font-medium">{performanceEvents.length}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Start Date</span>

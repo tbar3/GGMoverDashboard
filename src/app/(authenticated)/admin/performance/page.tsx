@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,46 +46,44 @@ export default function PerformancePage() {
     date: new Date().toISOString().split('T')[0],
   });
 
-  const supabase = createClient();
-
   useEffect(() => {
     fetchData();
   }, []);
 
   async function fetchData() {
     const [eventsRes, employeesRes] = await Promise.all([
-      supabase.from('performance_events').select('*').order('date', { ascending: false }),
-      supabase.from('employees').select('*').eq('is_active', true).order('name'),
+      fetch('/api/performance-events'),
+      fetch('/api/employees?active=true'),
     ]);
 
-    if (eventsRes.data) setEvents(eventsRes.data);
-    if (employeesRes.data) setEmployees(employeesRes.data);
+    if (eventsRes.ok) setEvents(await eventsRes.json());
+    if (employeesRes.ok) setEmployees(await employeesRes.json());
     setLoading(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const { error } = await supabase.from('performance_events').insert({
-      employee_id: formData.employee_id,
-      type: formData.type,
-      description: formData.description || null,
-      date: formData.date,
+    const res = await fetch('/api/performance-events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        employee_id: formData.employee_id,
+        type: formData.type,
+        description: formData.description || null,
+        date: formData.date,
+      }),
     });
 
-    if (error) {
-      toast.error(error.message);
+    if (!res.ok) {
+      const err = await res.json();
+      toast.error(err.error || 'Failed to log event');
       return;
     }
 
     toast.success('Performance event logged');
     setDialogOpen(false);
-    setFormData({
-      employee_id: '',
-      type: 'five_star_review',
-      description: '',
-      date: new Date().toISOString().split('T')[0],
-    });
+    setFormData({ employee_id: '', type: 'five_star_review', description: '', date: new Date().toISOString().split('T')[0] });
     fetchData();
   }
 
@@ -105,7 +102,6 @@ export default function PerformancePage() {
     }
   }
 
-  // Calculate leaderboard
   const leaderboard = employees
     .map(emp => ({
       ...emp,
@@ -213,7 +209,6 @@ export default function PerformancePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Leaderboard */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -253,7 +248,6 @@ export default function PerformancePage() {
           </CardContent>
         </Card>
 
-        {/* Recent Events */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Recent Recognition</CardTitle>

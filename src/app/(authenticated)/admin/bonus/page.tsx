@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,7 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
-import { format, startOfMonth, endOfMonth, differenceInMonths } from 'date-fns';
+import { format } from 'date-fns';
 import { Calculator, DollarSign, Users, TrendingDown, AlertTriangle, Star, Car } from 'lucide-react';
 import { toast } from 'sonner';
 import { Employee, Damage, PerformanceEvent, MileageEntry, PerfectWeek, CONFIG } from '@/types';
@@ -35,33 +34,22 @@ export default function BonusCalculatorPage() {
   const [calculated, setCalculated] = useState(false);
   const [result, setResult] = useState<ReturnType<typeof calculateMonthlyBonus> | null>(null);
 
-  const supabase = createClient();
   const now = new Date();
-  const monthStart = startOfMonth(now);
-  const monthEnd = endOfMonth(now);
 
   useEffect(() => {
     fetchData();
   }, []);
 
   async function fetchData() {
-    const monthStartStr = format(monthStart, 'yyyy-MM-dd');
-    const monthEndStr = format(monthEnd, 'yyyy-MM-dd');
-
-    const [employeesRes, damagesRes, performanceRes, mileageRes, perfectWeeksRes] = await Promise.all([
-      supabase.from('employees').select('*').eq('is_active', true),
-      supabase.from('damages').select('*').gte('created_at', monthStartStr).lte('created_at', monthEndStr),
-      supabase.from('performance_events').select('*').gte('date', monthStartStr).lte('date', monthEndStr),
-      supabase.from('mileage_entries').select('*').gte('date', monthStartStr).lte('date', monthEndStr),
-      supabase.from('perfect_weeks').select('*').gte('week_start', monthStartStr).lte('week_end', monthEndStr),
-    ]);
-
-    if (employeesRes.data) setEmployees(employeesRes.data);
-    if (damagesRes.data) setDamages(damagesRes.data);
-    if (performanceRes.data) setPerformanceEvents(performanceRes.data);
-    if (mileageRes.data) setMileageEntries(mileageRes.data);
-    if (perfectWeeksRes.data) setPerfectWeeks(perfectWeeksRes.data);
-
+    const res = await fetch('/api/bonus-data');
+    if (res.ok) {
+      const data = await res.json();
+      setEmployees(data.employees);
+      setDamages(data.damages);
+      setPerformanceEvents(data.performanceEvents);
+      setMileageEntries(data.mileageEntries);
+      setPerfectWeeks(data.perfectWeeks);
+    }
     setLoading(false);
   }
 
@@ -87,7 +75,7 @@ export default function BonusCalculatorPage() {
   }
 
   const totalDamages = damages.reduce((sum, d) => {
-    return sum + (d.was_reported ? d.amount : d.amount * CONFIG.UNREPORTED_DAMAGE_MULTIPLIER);
+    return sum + (d.was_reported ? Number(d.amount) : Number(d.amount) * CONFIG.UNREPORTED_DAMAGE_MULTIPLIER);
   }, 0);
 
   if (loading) {
@@ -103,7 +91,6 @@ export default function BonusCalculatorPage() {
         </p>
       </div>
 
-      {/* Input Section */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -123,10 +110,7 @@ export default function BonusCalculatorPage() {
                 type="number"
                 step="0.01"
                 value={revenue}
-                onChange={(e) => {
-                  setRevenue(e.target.value);
-                  setCalculated(false);
-                }}
+                onChange={(e) => { setRevenue(e.target.value); setCalculated(false); }}
                 placeholder="0.00"
               />
             </div>
@@ -139,10 +123,7 @@ export default function BonusCalculatorPage() {
                 min="0"
                 max="100"
                 value={poolPercentage}
-                onChange={(e) => {
-                  setPoolPercentage(e.target.value);
-                  setCalculated(false);
-                }}
+                onChange={(e) => { setPoolPercentage(e.target.value); setCalculated(false); }}
               />
             </div>
             <div className="flex items-end">
@@ -152,7 +133,6 @@ export default function BonusCalculatorPage() {
             </div>
           </div>
 
-          {/* Preview Metrics */}
           <Separator />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div className="p-3 bg-gray-50 rounded-lg">
@@ -187,10 +167,8 @@ export default function BonusCalculatorPage() {
         </CardContent>
       </Card>
 
-      {/* Results Section */}
       {calculated && result && (
         <>
-          {/* Pool Breakdown */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
               <CardHeader className="pb-2">
@@ -242,7 +220,6 @@ export default function BonusCalculatorPage() {
             </Card>
           </div>
 
-          {/* Individual Payouts */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -279,9 +256,7 @@ export default function BonusCalculatorPage() {
                             ({payout.tenureShares} shares)
                           </span>
                         </TableCell>
-                        <TableCell className="text-right">
-                          ${payout.tenureAmount.toFixed(2)}
-                        </TableCell>
+                        <TableCell className="text-right">${payout.tenureAmount.toFixed(2)}</TableCell>
                         <TableCell className="text-right">
                           {payout.performanceScore > 0 ? (
                             <Badge variant="secondary">{payout.performanceScore}</Badge>
@@ -289,12 +264,8 @@ export default function BonusCalculatorPage() {
                             <span className="text-gray-400">0</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right">
-                          ${payout.performanceAmount.toFixed(2)}
-                        </TableCell>
-                        <TableCell className="text-right text-blue-600">
-                          ${payout.mileageAmount.toFixed(2)}
-                        </TableCell>
+                        <TableCell className="text-right">${payout.performanceAmount.toFixed(2)}</TableCell>
+                        <TableCell className="text-right text-blue-600">${payout.mileageAmount.toFixed(2)}</TableCell>
                         <TableCell className="text-right">
                           {payout.perfectWeekHours > 0 ? (
                             <Badge variant="default">{payout.perfectWeekHours}hr</Badge>
@@ -302,12 +273,9 @@ export default function BonusCalculatorPage() {
                             <span className="text-gray-400">-</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right font-bold text-green-600">
-                          ${payout.totalAmount.toFixed(2)}
-                        </TableCell>
+                        <TableCell className="text-right font-bold text-green-600">${payout.totalAmount.toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
-                  {/* Total Row */}
                   <TableRow className="bg-gray-50 font-bold">
                     <TableCell>TOTAL</TableCell>
                     <TableCell className="text-right">{result.totalTenureShares} shares</TableCell>
@@ -329,7 +297,6 @@ export default function BonusCalculatorPage() {
             </CardContent>
           </Card>
 
-          {/* How It Works */}
           <Card>
             <CardHeader>
               <CardTitle>How the Bonus Pool Works</CardTitle>

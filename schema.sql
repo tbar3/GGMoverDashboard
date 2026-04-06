@@ -1,5 +1,9 @@
--- GoodGuys Dashboard Database Schema
--- Run this in your Supabase SQL Editor
+-- GoodGuys Dashboard Database Schema for Neon Postgres
+-- Run this against your Neon database
+
+-- Create schema
+CREATE SCHEMA IF NOT EXISTS mover_dashboard;
+SET search_path TO mover_dashboard;
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -36,7 +40,8 @@ CREATE TABLE IF NOT EXISTS checklist_completions (
   role TEXT NOT NULL CHECK (role IN ('driver', 'lead', 'helper')),
   items_completed TEXT[] DEFAULT '{}',
   completed_at TIMESTAMPTZ DEFAULT NOW(),
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(job_id, employee_id)
 );
 
 -- Attendance records
@@ -124,113 +129,6 @@ CREATE TABLE IF NOT EXISTS bonus_payouts (
   total_amount DECIMAL(10, 2) DEFAULT 0,
   UNIQUE(monthly_bonus_id, employee_id)
 );
-
--- Row Level Security Policies
-
--- Enable RLS on all tables
-ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
-ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE checklist_completions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
-ALTER TABLE perfect_weeks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE mileage_entries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE damages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE performance_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE monthly_bonuses ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bonus_payouts ENABLE ROW LEVEL SECURITY;
-
--- Helper function to check if user is admin
-CREATE OR REPLACE FUNCTION is_admin()
-RETURNS BOOLEAN AS $$
-BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM employees
-    WHERE email = auth.jwt() ->> 'email'
-    AND (is_admin = true OR role IN ('owner', 'manager'))
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Helper function to get current employee ID
-CREATE OR REPLACE FUNCTION current_employee_id()
-RETURNS UUID AS $$
-BEGIN
-  RETURN (
-    SELECT id FROM employees
-    WHERE email = auth.jwt() ->> 'email'
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Employees policies
-CREATE POLICY "Admins can do everything with employees" ON employees
-  FOR ALL USING (is_admin());
-
-CREATE POLICY "Users can view their own employee record" ON employees
-  FOR SELECT USING (email = auth.jwt() ->> 'email');
-
--- Jobs policies
-CREATE POLICY "Admins can do everything with jobs" ON jobs
-  FOR ALL USING (is_admin());
-
-CREATE POLICY "Users can view jobs they're assigned to" ON jobs
-  FOR SELECT USING (current_employee_id() = ANY(crew_ids) OR is_admin());
-
--- Checklist completions policies
-CREATE POLICY "Admins can do everything with checklists" ON checklist_completions
-  FOR ALL USING (is_admin());
-
-CREATE POLICY "Users can view and create their own checklists" ON checklist_completions
-  FOR ALL USING (employee_id = current_employee_id());
-
--- Attendance policies
-CREATE POLICY "Admins can do everything with attendance" ON attendance
-  FOR ALL USING (is_admin());
-
-CREATE POLICY "Users can view their own attendance" ON attendance
-  FOR SELECT USING (employee_id = current_employee_id());
-
--- Perfect weeks policies
-CREATE POLICY "Admins can do everything with perfect_weeks" ON perfect_weeks
-  FOR ALL USING (is_admin());
-
-CREATE POLICY "Users can view their own perfect_weeks" ON perfect_weeks
-  FOR SELECT USING (employee_id = current_employee_id());
-
--- Mileage policies
-CREATE POLICY "Admins can do everything with mileage" ON mileage_entries
-  FOR ALL USING (is_admin());
-
-CREATE POLICY "Users can view their own mileage" ON mileage_entries
-  FOR SELECT USING (employee_id = current_employee_id());
-
--- Damages policies
-CREATE POLICY "Admins can do everything with damages" ON damages
-  FOR ALL USING (is_admin());
-
-CREATE POLICY "Users can view damages they're involved in" ON damages
-  FOR SELECT USING (current_employee_id() = ANY(employee_ids) OR is_admin());
-
--- Performance events policies
-CREATE POLICY "Admins can do everything with performance" ON performance_events
-  FOR ALL USING (is_admin());
-
-CREATE POLICY "Users can view their own performance" ON performance_events
-  FOR SELECT USING (employee_id = current_employee_id());
-
--- Monthly bonuses policies
-CREATE POLICY "Admins can do everything with bonuses" ON monthly_bonuses
-  FOR ALL USING (is_admin());
-
-CREATE POLICY "Users can view monthly bonuses" ON monthly_bonuses
-  FOR SELECT USING (true);
-
--- Bonus payouts policies
-CREATE POLICY "Admins can do everything with payouts" ON bonus_payouts
-  FOR ALL USING (is_admin());
-
-CREATE POLICY "Users can view their own payouts" ON bonus_payouts
-  FOR SELECT USING (employee_id = current_employee_id());
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_employees_email ON employees(email);

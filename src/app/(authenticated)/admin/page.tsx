@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { currentUser } from '@clerk/nextjs/server';
+import { query } from '@/lib/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import Link from 'next/link';
@@ -6,55 +7,33 @@ import { Button } from '@/components/ui/button';
 import { Users, Briefcase, AlertTriangle, Star, Car, CalendarCheck } from 'lucide-react';
 
 export default async function AdminDashboardPage() {
-  const supabase = await createClient();
+  const user = await currentUser();
+  if (!user) return null;
+
   const now = new Date();
-  const monthStart = startOfMonth(now);
-  const monthEnd = endOfMonth(now);
+  const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
+  const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
 
-  // Get counts
-  const { count: employeeCount } = await supabase
-    .from('employees')
-    .select('*', { count: 'exact', head: true })
-    .eq('is_active', true);
+  const [employeeCountRes, jobCountRes, damages, performanceCountRes, mileage, attendance] = await Promise.all([
+    query<{ count: string }>('SELECT COUNT(*) as count FROM employees WHERE is_active = true'),
+    query<{ count: string }>('SELECT COUNT(*) as count FROM jobs WHERE date >= $1 AND date <= $2', [monthStart, monthEnd]),
+    query<{ amount: number; was_reported: boolean }>('SELECT amount, was_reported FROM damages WHERE created_at >= $1 AND created_at <= $2', [monthStart, monthEnd]),
+    query<{ count: string }>('SELECT COUNT(*) as count FROM performance_events WHERE date >= $1 AND date <= $2', [monthStart, monthEnd]),
+    query<{ amount: number }>('SELECT amount FROM mileage_entries WHERE date >= $1 AND date <= $2', [monthStart, monthEnd]),
+    query<{ is_tardy: boolean }>('SELECT is_tardy FROM attendance WHERE date >= $1 AND date <= $2', [monthStart, monthEnd]),
+  ]);
 
-  const { count: jobCount } = await supabase
-    .from('jobs')
-    .select('*', { count: 'exact', head: true })
-    .gte('date', format(monthStart, 'yyyy-MM-dd'))
-    .lte('date', format(monthEnd, 'yyyy-MM-dd'));
+  const employeeCount = parseInt(employeeCountRes[0]?.count || '0');
+  const jobCount = parseInt(jobCountRes[0]?.count || '0');
+  const performanceCount = parseInt(performanceCountRes[0]?.count || '0');
 
-  const { data: damages } = await supabase
-    .from('damages')
-    .select('amount, was_reported')
-    .gte('created_at', format(monthStart, 'yyyy-MM-dd'))
-    .lte('created_at', format(monthEnd, 'yyyy-MM-dd'));
+  const totalDamages = damages.reduce((sum, d) => {
+    return sum + (d.was_reported ? Number(d.amount) : Number(d.amount) * 2);
+  }, 0);
 
-  const totalDamages = damages?.reduce((sum, d) => {
-    return sum + (d.was_reported ? d.amount : d.amount * 2);
-  }, 0) || 0;
-
-  const { count: performanceCount } = await supabase
-    .from('performance_events')
-    .select('*', { count: 'exact', head: true })
-    .gte('date', format(monthStart, 'yyyy-MM-dd'))
-    .lte('date', format(monthEnd, 'yyyy-MM-dd'));
-
-  const { data: mileage } = await supabase
-    .from('mileage_entries')
-    .select('amount')
-    .gte('date', format(monthStart, 'yyyy-MM-dd'))
-    .lte('date', format(monthEnd, 'yyyy-MM-dd'));
-
-  const totalMileage = mileage?.reduce((sum, m) => sum + m.amount, 0) || 0;
-
-  const { data: attendance } = await supabase
-    .from('attendance')
-    .select('is_tardy')
-    .gte('date', format(monthStart, 'yyyy-MM-dd'))
-    .lte('date', format(monthEnd, 'yyyy-MM-dd'));
-
-  const tardyCount = attendance?.filter(a => a.is_tardy).length || 0;
-  const totalAttendance = attendance?.length || 0;
+  const totalMileage = mileage.reduce((sum, m) => sum + Number(m.amount), 0);
+  const tardyCount = attendance.filter(a => a.is_tardy).length;
+  const totalAttendance = attendance.length;
 
   const quickActions = [
     { title: 'Employees', href: '/admin/employees', icon: <Users className="h-5 w-5" />, description: 'Manage crew' },
@@ -74,18 +53,15 @@ export default async function AdminDashboardPage() {
         </p>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Active Employees</CardDescription>
-            <CardTitle className="text-3xl">{employeeCount || 0}</CardTitle>
+            <CardTitle className="text-3xl">{employeeCount}</CardTitle>
           </CardHeader>
           <CardContent>
             <Link href="/admin/employees">
-              <Button variant="link" className="p-0 h-auto">
-                Manage Employees →
-              </Button>
+              <Button variant="link" className="p-0 h-auto">Manage Employees →</Button>
             </Link>
           </CardContent>
         </Card>
@@ -93,13 +69,11 @@ export default async function AdminDashboardPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Jobs This Month</CardDescription>
-            <CardTitle className="text-3xl">{jobCount || 0}</CardTitle>
+            <CardTitle className="text-3xl">{jobCount}</CardTitle>
           </CardHeader>
           <CardContent>
             <Link href="/admin/jobs">
-              <Button variant="link" className="p-0 h-auto">
-                View Jobs →
-              </Button>
+              <Button variant="link" className="p-0 h-auto">View Jobs →</Button>
             </Link>
           </CardContent>
         </Card>
@@ -116,9 +90,7 @@ export default async function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             <Link href="/admin/attendance">
-              <Button variant="link" className="p-0 h-auto">
-                View Attendance →
-              </Button>
+              <Button variant="link" className="p-0 h-auto">View Attendance →</Button>
             </Link>
           </CardContent>
         </Card>
@@ -132,9 +104,7 @@ export default async function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             <Link href="/admin/damages">
-              <Button variant="link" className="p-0 h-auto">
-                View Damages →
-              </Button>
+              <Button variant="link" className="p-0 h-auto">View Damages →</Button>
             </Link>
           </CardContent>
         </Card>
@@ -142,15 +112,11 @@ export default async function AdminDashboardPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Performance Events</CardDescription>
-            <CardTitle className="text-3xl text-green-600">
-              {performanceCount || 0}
-            </CardTitle>
+            <CardTitle className="text-3xl text-green-600">{performanceCount}</CardTitle>
           </CardHeader>
           <CardContent>
             <Link href="/admin/performance">
-              <Button variant="link" className="p-0 h-auto">
-                View Performance →
-              </Button>
+              <Button variant="link" className="p-0 h-auto">View Performance →</Button>
             </Link>
           </CardContent>
         </Card>
@@ -158,21 +124,16 @@ export default async function AdminDashboardPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Mileage Owed</CardDescription>
-            <CardTitle className="text-3xl">
-              ${totalMileage.toFixed(2)}
-            </CardTitle>
+            <CardTitle className="text-3xl">${totalMileage.toFixed(2)}</CardTitle>
           </CardHeader>
           <CardContent>
             <Link href="/admin/mileage">
-              <Button variant="link" className="p-0 h-auto">
-                View Mileage →
-              </Button>
+              <Button variant="link" className="p-0 h-auto">View Mileage →</Button>
             </Link>
           </CardContent>
         </Card>
       </div>
 
-      {/* Quick Actions */}
       <Card>
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
@@ -195,7 +156,6 @@ export default async function AdminDashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Bonus Calculator Link */}
       <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
         <CardHeader>
           <CardTitle className="text-white">Monthly Bonus Calculator</CardTitle>
@@ -205,9 +165,7 @@ export default async function AdminDashboardPage() {
         </CardHeader>
         <CardContent>
           <Link href="/admin/bonus">
-            <Button variant="secondary">
-              Open Bonus Calculator →
-            </Button>
+            <Button variant="secondary">Open Bonus Calculator →</Button>
           </Link>
         </CardContent>
       </Card>

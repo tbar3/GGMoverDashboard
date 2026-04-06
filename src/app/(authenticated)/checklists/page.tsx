@@ -1,10 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
@@ -40,52 +38,31 @@ export default function ChecklistsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
 
-  const supabase = createClient();
-
   useEffect(() => {
     fetchData();
   }, []);
 
   async function fetchData() {
-    // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    // Get employee
-    const { data: emp } = await supabase
-      .from('employees')
-      .select('*')
-      .eq('email', user.email)
-      .single();
-
-    if (!emp) {
-      setLoading(false);
-      return;
-    }
+    const meRes = await fetch('/api/me');
+    if (!meRes.ok) { setLoading(false); return; }
+    const emp: Employee = await meRes.json();
     setEmployee(emp);
 
-    // Get today's jobs where this employee is assigned
     const today = format(new Date(), 'yyyy-MM-dd');
-    const { data: jobsData } = await supabase
-      .from('jobs')
-      .select('*')
-      .eq('date', today)
-      .contains('crew_ids', [emp.id]);
+    const jobsRes = await fetch(`/api/jobs?date=${today}&employee_id=${emp.id}`);
+    const jobsData: Job[] = jobsRes.ok ? await jobsRes.json() : [];
+    setJobs(jobsData);
 
-    setJobs(jobsData || []);
-
-    // Get existing completions
-    const { data: completionsData } = await supabase
-      .from('checklist_completions')
-      .select('*')
-      .eq('employee_id', emp.id)
-      .in('job_id', (jobsData || []).map(j => j.id));
-
-    const completionsMap: Record<string, ChecklistCompletion> = {};
-    completionsData?.forEach(c => {
-      completionsMap[c.job_id] = c;
-    });
-    setCompletions(completionsMap);
+    if (jobsData.length > 0) {
+      const jobIds = jobsData.map(j => j.id).join(',');
+      const checklistRes = await fetch(`/api/checklists?employee_id=${emp.id}&job_ids=${jobIds}`);
+      if (checklistRes.ok) {
+        const completionsData: ChecklistCompletion[] = await checklistRes.json();
+        const completionsMap: Record<string, ChecklistCompletion> = {};
+        completionsData.forEach(c => { completionsMap[c.job_id] = c; });
+        setCompletions(completionsMap);
+      }
+    }
 
     setLoading(false);
   }
@@ -101,19 +78,19 @@ export default function ChecklistsPage() {
 
     setSaving(jobId);
 
-    const { error } = await supabase
-      .from('checklist_completions')
-      .upsert({
+    const res = await fetch('/api/checklists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         job_id: jobId,
         employee_id: employee.id,
-        role: employee.role === 'owner' || employee.role === 'manager' ? 'lead' : employee.role as 'driver' | 'lead' | 'helper',
+        role: employee.role === 'owner' || employee.role === 'manager' ? 'lead' : employee.role,
         items_completed: newItems,
         completed_at: new Date().toISOString(),
-      }, {
-        onConflict: 'job_id,employee_id',
-      });
+      }),
+    });
 
-    if (error) {
+    if (!res.ok) {
       toast.error('Failed to save checklist');
       setSaving(null);
       return;
@@ -159,7 +136,6 @@ export default function ChecklistsPage() {
         </p>
       </div>
 
-      {/* Role Info */}
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
@@ -174,7 +150,6 @@ export default function ChecklistsPage() {
         </CardContent>
       </Card>
 
-      {/* Jobs */}
       {jobs.length > 0 ? (
         jobs.map((job) => {
           const completion = completions[job.id];
@@ -254,7 +229,6 @@ export default function ChecklistsPage() {
         </Card>
       )}
 
-      {/* Checklist Reference */}
       <Card>
         <CardHeader>
           <CardTitle>Checklist Reference</CardTitle>

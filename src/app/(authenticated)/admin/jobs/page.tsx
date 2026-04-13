@@ -24,11 +24,13 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { format } from 'date-fns';
-import { Plus } from 'lucide-react';
+import { Plus, Eye } from 'lucide-react';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 import { Job, Employee } from '@/types';
 
 export default function JobsPage() {
+  const router = useRouter();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -229,37 +231,51 @@ export default function JobsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Job #</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Customer</TableHead>
-                <TableHead>Pickup</TableHead>
-                <TableHead>Dropoff</TableHead>
+                <TableHead>Address</TableHead>
                 <TableHead>Crew</TableHead>
                 <TableHead className="text-right">Revenue</TableHead>
+                <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {jobs.length > 0 ? (
                 jobs.map((job) => (
-                  <TableRow key={job.id}>
+                  <TableRow key={job.id} className="cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/admin/jobs/${job.id}`)}>
+                    <TableCell>
+                      {job.job_number ? (
+                        <Badge variant="outline">{job.job_number}</Badge>
+                      ) : (
+                        <span className="text-gray-400 text-xs">Manual</span>
+                      )}
+                    </TableCell>
                     <TableCell>{format(new Date(job.date), 'MMM d, yyyy')}</TableCell>
                     <TableCell className="font-medium">{job.customer_name}</TableCell>
-                    <TableCell className="max-w-[200px] truncate">{job.pickup_address}</TableCell>
-                    <TableCell className="max-w-[200px] truncate">{job.dropoff_address}</TableCell>
+                    <TableCell className="max-w-[200px] truncate">{job.pickup_address || '-'}</TableCell>
                     <TableCell>
-                      {job.crew_ids.length > 0 ? (
+                      {job.crew_ids && job.crew_ids.length > 0 ? (
                         <span className="text-sm">{getCrewNames(job.crew_ids)}</span>
+                      ) : job.crew_manifest && job.crew_manifest.length > 0 ? (
+                        <span className="text-sm text-gray-500">{job.crew_manifest.map(m => m.name).join(', ')}</span>
                       ) : (
-                        <span className="text-gray-400 text-sm">No crew assigned</span>
+                        <span className="text-gray-400 text-sm">No crew</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
                       {job.revenue ? `$${Number(job.revenue).toFixed(2)}` : '-'}
                     </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); router.push(`/admin/jobs/${job.id}`); }}>
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                     No jobs found. Add your first job to get started.
                   </TableCell>
                 </TableRow>

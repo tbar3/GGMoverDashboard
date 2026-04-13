@@ -47,12 +47,36 @@ export async function POST(request: NextRequest) {
     let synced = 0;
     let skipped = 0;
     const errors: string[] = [];
+    const unmatchedCrew: string[] = [];
+
+    // Load all active employees and build a name→ID lookup
+    const employees = await query<{ id: string; name: string }>(
+      'SELECT id, name FROM employees WHERE is_active = true'
+    );
+    const nameToId = new Map<string, string>();
+    for (const emp of employees) {
+      // Exact match by full name (case-insensitive)
+      nameToId.set(emp.name.toLowerCase(), emp.id);
+    }
 
     for (const event of events) {
       const parsed = parseCalendarEvent(event);
       if (!parsed) {
         skipped++;
         continue;
+      }
+
+      // Auto-match crew members from SmartMoving to employee IDs
+      const matchedCrewIds: string[] = [];
+      for (const member of parsed.crew_members) {
+        const employeeId = nameToId.get(member.name.toLowerCase());
+        if (employeeId) {
+          matchedCrewIds.push(employeeId);
+        } else {
+          if (!unmatchedCrew.includes(member.name)) {
+            unmatchedCrew.push(member.name);
+          }
+        }
       }
 
       try {
@@ -77,6 +101,7 @@ export async function POST(request: NextRequest) {
             customer_name = EXCLUDED.customer_name,
             pickup_address = EXCLUDED.pickup_address,
             revenue = EXCLUDED.revenue,
+            crew_ids = EXCLUDED.crew_ids,
             job_number = EXCLUDED.job_number,
             service_type = EXCLUDED.service_type,
             start_time = EXCLUDED.start_time,
@@ -108,7 +133,7 @@ export async function POST(request: NextRequest) {
             parsed.origin_address || '',
             '', // dropoff not in calendar
             parsed.revenue,
-            '{}', // crew_ids matched later
+            matchedCrewIds,
             parsed.calendar_event_id,
             parsed.job_number,
             parsed.service_type,
@@ -147,6 +172,7 @@ export async function POST(request: NextRequest) {
       synced,
       skipped,
       errors,
+      unmatched_crew: unmatchedCrew,
     });
   } catch (error) {
     console.error('Calendar sync error:', error);

@@ -33,6 +33,7 @@ export default function CalendarSyncPage() {
     synced: number;
     skipped: number;
     errors: string[];
+    unmatched_crew: string[];
   } | null>(null);
 
   useEffect(() => {
@@ -202,6 +203,16 @@ export default function CalendarSyncPage() {
                   Synced {lastSyncResult.synced} jobs &middot;
                   Skipped {lastSyncResult.skipped} non-job events
                 </p>
+                {lastSyncResult.unmatched_crew.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-sm text-yellow-700 font-medium">
+                      Unmatched crew (not in dashboard — add them under Employees):
+                    </p>
+                    <p className="text-sm text-yellow-600">
+                      {lastSyncResult.unmatched_crew.join(', ')}
+                    </p>
+                  </div>
+                )}
                 {lastSyncResult.errors.length > 0 && (
                   <div className="mt-2">
                     <p className="text-sm text-red-600 font-medium">Errors:</p>

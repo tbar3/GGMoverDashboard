@@ -37,6 +37,11 @@ const employeeNavItems: NavItem[] = [
     icon: <LayoutDashboard className="h-5 w-5" />,
   },
   {
+    title: 'My Jobs',
+    href: '/jobs',
+    icon: <Briefcase className="h-5 w-5" />,
+  },
+  {
     title: 'My Checklists',
     href: '/checklists',
     icon: <ClipboardList className="h-5 w-5" />,

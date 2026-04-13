@@ -27,6 +27,16 @@ import { DollarSign, Loader2, Save, ChevronLeft, ChevronRight } from 'lucide-rea
 import { toast } from 'sonner';
 import { Employee, PayrollEntry } from '@/types';
 
+interface ExpectedData {
+  employee_id: string;
+  employee_name: string;
+  hourly_rate: number;
+  expected_hours: number;
+  expected_pay: number;
+  job_count: number;
+  jobs: { id: string; customer_name: string; job_number: string | null; date: string; estimated_hours: number | null }[];
+}
+
 function getMonday(date: Date): Date {
   return startOfWeek(date, { weekStartsOn: 1 });
 }
@@ -43,6 +53,7 @@ function getPayDate(weekStart: Date): Date {
 export default function AdminPayrollPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [entries, setEntries] = useState<Map<string, PayrollEntry>>(new Map());
+  const [expectedMap, setExpectedMap] = useState<Map<string, ExpectedData>>(new Map());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState(() => {
@@ -59,9 +70,10 @@ export default function AdminPayrollPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [empRes, payRes] = await Promise.all([
+    const [empRes, payRes, expRes] = await Promise.all([
       fetch('/api/employees?active=true'),
       fetch(`/api/payroll?week_start=${weekStartStr}`),
+      fetch(`/api/payroll/expected?week_start=${weekStartStr}&week_end=${weekEndStr}`),
     ]);
 
     if (empRes.ok) setEmployees(await empRes.json());
@@ -73,8 +85,16 @@ export default function AdminPayrollPage() {
       }
       setEntries(map);
     }
+    if (expRes.ok) {
+      const expData: ExpectedData[] = await expRes.json();
+      const map = new Map<string, ExpectedData>();
+      for (const exp of expData) {
+        map.set(exp.employee_id, exp);
+      }
+      setExpectedMap(map);
+    }
     setLoading(false);
-  }, [weekStartStr]);
+  }, [weekStartStr, weekEndStr]);
 
   useEffect(() => {
     fetchData();
@@ -156,6 +176,7 @@ export default function AdminPayrollPage() {
               key={emp.id}
               employee={emp}
               entry={entries.get(emp.id) || null}
+              expected={expectedMap.get(emp.id) || null}
               saving={saving === emp.id}
               onSave={(data) => saveEntry(emp.id, data)}
             />
@@ -180,6 +201,8 @@ export default function AdminPayrollPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Employee</TableHead>
+                  <TableHead className="text-right text-blue-600">Exp. Hrs</TableHead>
+                  <TableHead className="text-right text-blue-600">Exp. Pay</TableHead>
                   <TableHead className="text-right">Travel</TableHead>
                   <TableHead className="text-right">Job</TableHead>
                   <TableHead className="text-right">Warehouse</TableHead>
@@ -194,9 +217,12 @@ export default function AdminPayrollPage() {
                 {Array.from(entries.values()).map((entry) => {
                   const totalReimb = Number(entry.lunch_reimbursement) + Number(entry.mileage_reimbursement) + Number(entry.other_reimbursement);
                   const total = Number(entry.gross_pay) + totalReimb + Number(entry.tip);
+                  const exp = expectedMap.get(entry.employee_id);
                   return (
                     <TableRow key={entry.id}>
                       <TableCell className="font-medium">{entry.employee_name}</TableCell>
+                      <TableCell className="text-right text-blue-600">{exp ? exp.expected_hours.toFixed(1) : '—'}</TableCell>
+                      <TableCell className="text-right text-blue-600">{exp ? `$${exp.expected_pay.toFixed(2)}` : '—'}</TableCell>
                       <TableCell className="text-right">{Number(entry.travel_hours).toFixed(1)}</TableCell>
                       <TableCell className="text-right">{Number(entry.job_hours).toFixed(1)}</TableCell>
                       <TableCell className="text-right">{Number(entry.warehouse_hours).toFixed(1)}</TableCell>
@@ -211,6 +237,12 @@ export default function AdminPayrollPage() {
                 {/* Totals row */}
                 <TableRow className="bg-gray-50 font-bold">
                   <TableCell>TOTALS</TableCell>
+                  <TableCell className="text-right text-blue-600">
+                    {Array.from(expectedMap.values()).reduce((s, e) => s + e.expected_hours, 0).toFixed(1)}
+                  </TableCell>
+                  <TableCell className="text-right text-blue-600">
+                    ${Array.from(expectedMap.values()).reduce((s, e) => s + e.expected_pay, 0).toFixed(2)}
+                  </TableCell>
                   <TableCell className="text-right">
                     {Array.from(entries.values()).reduce((s, e) => s + Number(e.travel_hours), 0).toFixed(1)}
                   </TableCell>
@@ -251,11 +283,13 @@ export default function AdminPayrollPage() {
 function EmployeePayrollRow({
   employee,
   entry,
+  expected,
   saving,
   onSave,
 }: {
   employee: Employee;
   entry: PayrollEntry | null;
+  expected: ExpectedData | null;
   saving: boolean;
   onSave: (data: Partial<PayrollEntry>) => void;
 }) {
@@ -320,6 +354,18 @@ function EmployeePayrollRow({
         </div>
       </CardHeader>
       <CardContent>
+        {/* Expected from jobs */}
+        {expected && expected.job_count > 0 && (
+          <div className="mb-3 p-2 rounded-lg bg-blue-50 flex items-center gap-4 text-sm">
+            <span className="text-blue-700 font-medium">Expected:</span>
+            <span className="text-blue-600">{expected.job_count} job{expected.job_count !== 1 ? 's' : ''}</span>
+            <span className="text-blue-600">{expected.expected_hours.toFixed(1)} hrs</span>
+            <span className="text-blue-600 font-medium">${expected.expected_pay.toFixed(2)}</span>
+            <span className="text-blue-400 text-xs">
+              ({expected.jobs.map(j => j.job_number || j.customer_name).join(', ')})
+            </span>
+          </div>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">Rate/hr</Label>

@@ -55,84 +55,84 @@ export default async function AdminDashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Active Employees</CardDescription>
-            <CardTitle className="text-3xl">{employeeCount}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/employees">
-              <Button variant="link" className="p-0 h-auto">Manage Employees →</Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <Link href="/admin/employees">
+          <Card className="cursor-pointer hover:bg-gray-50 transition-colors h-full">
+            <CardHeader className="pb-2">
+              <CardDescription>Active Employees</CardDescription>
+              <CardTitle className="text-3xl">{employeeCount}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-blue-600">Manage Employees &rarr;</p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Jobs This Month</CardDescription>
-            <CardTitle className="text-3xl">{jobCount}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/jobs">
-              <Button variant="link" className="p-0 h-auto">View Jobs →</Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <Link href="/admin/jobs">
+          <Card className="cursor-pointer hover:bg-gray-50 transition-colors h-full">
+            <CardHeader className="pb-2">
+              <CardDescription>Jobs This Month</CardDescription>
+              <CardTitle className="text-3xl">{jobCount}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-blue-600">View Jobs &rarr;</p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Tardies This Month</CardDescription>
-            <CardTitle className="text-3xl">
-              <span className={tardyCount === 0 ? 'text-green-600' : 'text-yellow-600'}>
-                {tardyCount}
-              </span>
-              <span className="text-lg text-gray-400">/{totalAttendance}</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/attendance">
-              <Button variant="link" className="p-0 h-auto">View Attendance →</Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <Link href="/admin/attendance">
+          <Card className="cursor-pointer hover:bg-gray-50 transition-colors h-full">
+            <CardHeader className="pb-2">
+              <CardDescription>Tardies This Month</CardDescription>
+              <CardTitle className="text-3xl">
+                <span className={tardyCount === 0 ? 'text-green-600' : 'text-yellow-600'}>
+                  {tardyCount}
+                </span>
+                <span className="text-lg text-gray-400">/{totalAttendance}</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-blue-600">View Attendance &rarr;</p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Damages (Pool Impact)</CardDescription>
-            <CardTitle className="text-3xl text-red-600">
-              ${totalDamages.toFixed(2)}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/damages">
-              <Button variant="link" className="p-0 h-auto">View Damages →</Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <Link href="/admin/damages">
+          <Card className="cursor-pointer hover:bg-gray-50 transition-colors h-full">
+            <CardHeader className="pb-2">
+              <CardDescription>Damages (Pool Impact)</CardDescription>
+              <CardTitle className="text-3xl text-red-600">
+                ${totalDamages.toFixed(2)}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-blue-600">View Damages &rarr;</p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Performance Events</CardDescription>
-            <CardTitle className="text-3xl text-green-600">{performanceCount}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/performance">
-              <Button variant="link" className="p-0 h-auto">View Performance →</Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <Link href="/admin/performance">
+          <Card className="cursor-pointer hover:bg-gray-50 transition-colors h-full">
+            <CardHeader className="pb-2">
+              <CardDescription>Performance Events</CardDescription>
+              <CardTitle className="text-3xl text-green-600">{performanceCount}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-blue-600">View Performance &rarr;</p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Mileage Owed</CardDescription>
-            <CardTitle className="text-3xl">${totalMileage.toFixed(2)}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/mileage">
-              <Button variant="link" className="p-0 h-auto">View Mileage →</Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <Link href="/admin/mileage">
+          <Card className="cursor-pointer hover:bg-gray-50 transition-colors h-full">
+            <CardHeader className="pb-2">
+              <CardDescription>Mileage Owed</CardDescription>
+              <CardTitle className="text-3xl">${totalMileage.toFixed(2)}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-blue-600">View Mileage &rarr;</p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       <Card>

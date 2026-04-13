@@ -41,6 +41,23 @@ export default async function MyPayrollPage() {
     [employee.id]
   );
 
+  // Get expected hours for current/upcoming week from assigned jobs
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const currentMonday = new Date(today);
+  currentMonday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
+  const currentSunday = new Date(currentMonday);
+  currentSunday.setDate(currentMonday.getDate() + 6);
+
+  const thisWeekJobs = await query<{ estimated_hours: number | null; customer_name: string; job_number: string | null; date: string }>(
+    `SELECT estimated_hours, customer_name, job_number, date FROM jobs
+     WHERE $1 = ANY(crew_ids) AND date >= $2 AND date <= $3`,
+    [employee.id, format(currentMonday, 'yyyy-MM-dd'), format(currentSunday, 'yyyy-MM-dd')]
+  );
+
+  const expectedHours = thisWeekJobs.reduce((sum, j) => sum + (Number(j.estimated_hours) || 0), 0);
+  const expectedPay = expectedHours * (Number(employee.hourly_rate) || 0);
+
   const latestEntry = entries[0] || null;
   const totalEarnings = entries.reduce((sum, e) => {
     const reimb = Number(e.lunch_reimbursement) + Number(e.mileage_reimbursement) + Number(e.other_reimbursement);
@@ -54,6 +71,37 @@ export default async function MyPayrollPage() {
         <h1 className="text-2xl font-bold text-gray-900">My Payroll</h1>
         <p className="text-gray-500 mt-1">Your weekly pay breakdown and history</p>
       </div>
+
+      {/* This Week Expected */}
+      {thisWeekJobs.length > 0 && (
+        <Card className="border-blue-200 bg-blue-50/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-blue-800">This Week&apos;s Expected</CardTitle>
+            <CardDescription>
+              {format(currentMonday, 'MMM d')} – {format(currentSunday, 'MMM d')} &middot; {thisWeekJobs.length} job{thisWeekJobs.length !== 1 ? 's' : ''}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-6">
+              <div>
+                <p className="text-2xl font-bold text-blue-700">{expectedHours.toFixed(1)} hrs</p>
+                <p className="text-xs text-blue-500">Expected Hours</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-blue-700">${expectedPay.toFixed(2)}</p>
+                <p className="text-xs text-blue-500">Expected Pay</p>
+              </div>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {thisWeekJobs.map((job, i) => (
+                <Badge key={i} variant="secondary" className="text-xs">
+                  {job.job_number || job.customer_name} — {format(new Date(job.date), 'EEE')} ({Number(job.estimated_hours) || 0}h)
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

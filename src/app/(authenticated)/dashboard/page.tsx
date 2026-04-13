@@ -82,59 +82,67 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Tenure</CardDescription>
-            <CardTitle className="text-3xl">{tenureMonths}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-500">
-              {tenureMonths === 1 ? 'month' : 'months'} (= {tenureMonths} shares)
-            </p>
-          </CardContent>
-        </Card>
+        <Link href="/stats">
+          <Card className="cursor-pointer hover:bg-gray-50 transition-colors">
+            <CardHeader className="pb-2">
+              <CardDescription>Tenure</CardDescription>
+              <CardTitle className="text-3xl">{tenureMonths}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-500">
+                {tenureMonths === 1 ? 'month' : 'months'} (= {tenureMonths} shares)
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Perfect Weeks</CardDescription>
-            <CardTitle className="text-3xl">{perfectWeekCount}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-500">
-              {perfectWeekCount} bonus {perfectWeekCount === 1 ? 'hour' : 'hours'} earned
-            </p>
-          </CardContent>
-        </Card>
+        <Link href="/stats">
+          <Card className="cursor-pointer hover:bg-gray-50 transition-colors">
+            <CardHeader className="pb-2">
+              <CardDescription>Perfect Weeks</CardDescription>
+              <CardTitle className="text-3xl">{perfectWeekCount}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-500">
+                {perfectWeekCount} bonus {perfectWeekCount === 1 ? 'hour' : 'hours'} earned
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Tardies This Month</CardDescription>
-            <CardTitle className="text-3xl">
-              <span className={tardyCount === 0 ? 'text-green-600' : 'text-red-600'}>
-                {tardyCount}
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-500">
-              {daysWorked} days worked
-            </p>
-          </CardContent>
-        </Card>
+        <Link href="/stats">
+          <Card className="cursor-pointer hover:bg-gray-50 transition-colors">
+            <CardHeader className="pb-2">
+              <CardDescription>Tardies This Month</CardDescription>
+              <CardTitle className="text-3xl">
+                <span className={tardyCount === 0 ? 'text-green-600' : 'text-red-600'}>
+                  {tardyCount}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-500">
+                {daysWorked} days worked
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Mileage Earnings</CardDescription>
-            <CardTitle className="text-3xl">
-              ${totalMileageAmount.toFixed(2)}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-500">
-              {totalMiles} miles @ ${CONFIG.MILEAGE_RATE}/mi
-            </p>
-          </CardContent>
-        </Card>
+        <Link href="/payroll">
+          <Card className="cursor-pointer hover:bg-gray-50 transition-colors">
+            <CardHeader className="pb-2">
+              <CardDescription>Mileage Earnings</CardDescription>
+              <CardTitle className="text-3xl">
+                ${totalMileageAmount.toFixed(2)}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-500">
+                {totalMiles} miles @ ${CONFIG.MILEAGE_RATE}/mi
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {/* Upcoming Jobs */}
@@ -241,30 +249,30 @@ export default async function DashboardPage() {
             <CardTitle>This Month at a Glance</CardTitle>
             <CardDescription>Your performance metrics</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center">
+          <CardContent className="space-y-1">
+            <div className="flex justify-between items-center p-2 rounded-md">
               <span className="text-sm text-gray-600">Role</span>
               <Badge variant="outline" className="capitalize">
                 {employee.role}
               </Badge>
             </div>
-            <div className="flex justify-between items-center">
+            <Link href="/checklists" className="flex justify-between items-center p-2 rounded-md hover:bg-gray-50 transition-colors cursor-pointer">
               <span className="text-sm text-gray-600">Checklists Completed</span>
-              <span className="font-medium">{checklistsCompleted}</span>
-            </div>
-            <div className="flex justify-between items-center">
+              <span className="font-medium">{checklistsCompleted} &rarr;</span>
+            </Link>
+            <Link href="/stats" className="flex justify-between items-center p-2 rounded-md hover:bg-gray-50 transition-colors cursor-pointer">
               <span className="text-sm text-gray-600">Attendance Rate</span>
               <span className="font-medium">
                 {daysWorked > 0
                   ? `${Math.round(((daysWorked - tardyCount) / daysWorked) * 100)}%`
-                  : 'N/A'}
+                  : 'N/A'} &rarr;
               </span>
-            </div>
-            <div className="flex justify-between items-center">
+            </Link>
+            <Link href="/stats" className="flex justify-between items-center p-2 rounded-md hover:bg-gray-50 transition-colors cursor-pointer">
               <span className="text-sm text-gray-600">Performance Events</span>
-              <span className="font-medium">{performanceEvents.length}</span>
-            </div>
-            <div className="flex justify-between items-center">
+              <span className="font-medium">{performanceEvents.length} &rarr;</span>
+            </Link>
+            <div className="flex justify-between items-center p-2 rounded-md">
               <span className="text-sm text-gray-600">Start Date</span>
               <span className="font-medium">
                 {format(new Date(employee.start_date), 'MMM d, yyyy')}

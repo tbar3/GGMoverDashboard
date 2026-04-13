@@ -8,6 +8,7 @@ import {
   Users,
   ClipboardList,
   CalendarCheck,
+  CalendarSync,
   Car,
   AlertTriangle,
   Star,
@@ -88,6 +89,12 @@ const adminNavItems: NavItem[] = [
     title: 'Mileage',
     href: '/admin/mileage',
     icon: <Car className="h-5 w-5" />,
+    adminOnly: true,
+  },
+  {
+    title: 'Calendar Sync',
+    href: '/admin/calendar',
+    icon: <CalendarSync className="h-5 w-5" />,
     adminOnly: true,
   },
   {

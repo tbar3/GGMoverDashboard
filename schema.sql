@@ -29,6 +29,41 @@ CREATE TABLE IF NOT EXISTS jobs (
   dropoff_address TEXT NOT NULL,
   revenue DECIMAL(10, 2),
   crew_ids UUID[] DEFAULT '{}',
+  -- Calendar sync fields
+  calendar_event_id TEXT UNIQUE,
+  job_number TEXT,
+  service_type TEXT,
+  start_time TEXT,
+  end_time TEXT,
+  branch TEXT,
+  job_details TEXT,
+  pricing_type TEXT,
+  customer_phone TEXT,
+  customer_email TEXT,
+  lead_source TEXT,
+  estimated_hours DECIMAL(4, 1),
+  volume_cuft DECIMAL(10, 2),
+  weight_lbs DECIMAL(10, 2),
+  arrival_window TEXT,
+  property_type TEXT,
+  dispatch_notes TEXT,
+  internal_notes TEXT,
+  crew_notes TEXT,
+  customer_notes TEXT,
+  quoted_trucks INTEGER,
+  quoted_crew INTEGER,
+  truck_name TEXT,
+  crew_manifest JSONB DEFAULT '[]',
+  synced_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Google tokens storage
+CREATE TABLE IF NOT EXISTS google_tokens (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  access_token TEXT NOT NULL,
+  refresh_token TEXT NOT NULL,
+  expiry_date TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

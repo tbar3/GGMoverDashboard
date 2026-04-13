@@ -22,6 +22,32 @@ export interface Job {
   dropoff_address: string;
   revenue: number | null;
   crew_ids: string[];
+  // Calendar sync fields
+  calendar_event_id: string | null;
+  job_number: string | null;
+  service_type: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  branch: string | null;
+  job_details: string | null;
+  pricing_type: string | null;
+  customer_phone: string | null;
+  customer_email: string | null;
+  lead_source: string | null;
+  estimated_hours: number | null;
+  volume_cuft: number | null;
+  weight_lbs: number | null;
+  arrival_window: string | null;
+  property_type: string | null;
+  dispatch_notes: string | null;
+  internal_notes: string | null;
+  crew_notes: string | null;
+  customer_notes: string | null;
+  quoted_trucks: number | null;
+  quoted_crew: number | null;
+  truck_name: string | null;
+  crew_manifest: { name: string; phone: string }[];
+  synced_at: string | null;
   created_at: string;
 }
 

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Users, Briefcase, AlertTriangle, Star, Car, CalendarCheck } from 'lucide-react';
+import { Users, Briefcase, AlertTriangle, Star, Car, CalendarCheck, CalendarSync } from 'lucide-react';
 
 export default async function AdminDashboardPage() {
   const user = await currentUser();
@@ -42,6 +42,7 @@ export default async function AdminDashboardPage() {
     { title: 'Damages', href: '/admin/damages', icon: <AlertTriangle className="h-5 w-5" />, description: 'Log damages' },
     { title: 'Performance', href: '/admin/performance', icon: <Star className="h-5 w-5" />, description: 'Log reviews' },
     { title: 'Mileage', href: '/admin/mileage', icon: <Car className="h-5 w-5" />, description: 'Log mileage' },
+    { title: 'Calendar Sync', href: '/admin/calendar', icon: <CalendarSync className="h-5 w-5" />, description: 'Import jobs' },
   ];
 
   return (

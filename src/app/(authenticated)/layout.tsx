@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { currentUser } from '@clerk/nextjs/server';
 import { queryOne } from '@/lib/db';
 import { Sidebar } from '@/components/navigation/sidebar';
+import { I18nWrapper } from '@/components/providers/i18n-provider';
 import { Employee } from '@/types';
 
 export default async function AuthenticatedLayout({
@@ -26,13 +27,15 @@ export default async function AuthenticatedLayout({
   const userName = employee?.name || email?.split('@')[0] || 'User';
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Sidebar isAdmin={isAdmin} userName={userName} />
-      <main className="lg:pl-64">
-        <div className="pt-16 lg:pt-0">
-          {children}
-        </div>
-      </main>
-    </div>
+    <I18nWrapper>
+      <div className="min-h-screen bg-gray-50">
+        <Sidebar isAdmin={isAdmin} userName={userName} />
+        <main className="lg:pl-64">
+          <div className="pt-16 lg:pt-0">
+            {children}
+          </div>
+        </main>
+      </div>
+    </I18nWrapper>
   );
 }

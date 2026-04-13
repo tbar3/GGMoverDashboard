@@ -24,9 +24,11 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useState } from 'react';
 import { useClerk } from '@clerk/nextjs';
+import { useI18n, Locale } from '@/lib/i18n';
 
 interface NavItem {
-  title: string;
+  titleKey: string;
+  fallback: string;
   href: string;
   icon: React.ReactNode;
   adminOnly?: boolean;
@@ -34,99 +36,49 @@ interface NavItem {
 
 const employeeNavItems: NavItem[] = [
   {
-    title: 'Dashboard',
+    titleKey: 'nav.dashboard',
+    fallback: 'Dashboard',
     href: '/dashboard',
     icon: <LayoutDashboard className="h-5 w-5" />,
   },
   {
-    title: 'My Jobs',
+    titleKey: 'nav.my_jobs',
+    fallback: 'My Jobs',
     href: '/jobs',
     icon: <Briefcase className="h-5 w-5" />,
   },
   {
-    title: 'My Checklists',
+    titleKey: 'nav.my_checklists',
+    fallback: 'My Checklists',
     href: '/checklists',
     icon: <ClipboardList className="h-5 w-5" />,
   },
   {
-    title: 'My Payroll',
+    titleKey: 'nav.my_payroll',
+    fallback: 'My Payroll',
     href: '/payroll',
     icon: <DollarSign className="h-5 w-5" />,
   },
   {
-    title: 'My Stats',
+    titleKey: 'nav.my_stats',
+    fallback: 'My Stats',
     href: '/stats',
     icon: <BarChart3 className="h-5 w-5" />,
   },
 ];
 
 const adminNavItems: NavItem[] = [
-  {
-    title: 'Admin Dashboard',
-    href: '/admin',
-    icon: <LayoutDashboard className="h-5 w-5" />,
-    adminOnly: true,
-  },
-  {
-    title: 'Employees',
-    href: '/admin/employees',
-    icon: <Users className="h-5 w-5" />,
-    adminOnly: true,
-  },
-  {
-    title: 'Jobs',
-    href: '/admin/jobs',
-    icon: <Briefcase className="h-5 w-5" />,
-    adminOnly: true,
-  },
-  {
-    title: 'Attendance',
-    href: '/admin/attendance',
-    icon: <CalendarCheck className="h-5 w-5" />,
-    adminOnly: true,
-  },
-  {
-    title: 'Damages',
-    href: '/admin/damages',
-    icon: <AlertTriangle className="h-5 w-5" />,
-    adminOnly: true,
-  },
-  {
-    title: 'Performance',
-    href: '/admin/performance',
-    icon: <Star className="h-5 w-5" />,
-    adminOnly: true,
-  },
-  {
-    title: 'Mileage',
-    href: '/admin/mileage',
-    icon: <Car className="h-5 w-5" />,
-    adminOnly: true,
-  },
-  {
-    title: 'Payroll',
-    href: '/admin/payroll',
-    icon: <DollarSign className="h-5 w-5" />,
-    adminOnly: true,
-  },
-  {
-    title: 'Calendar Sync',
-    href: '/admin/calendar',
-    icon: <CalendarSync className="h-5 w-5" />,
-    adminOnly: true,
-  },
-  {
-    title: 'Import Data',
-    href: '/admin/import',
-    icon: <FileSpreadsheet className="h-5 w-5" />,
-    adminOnly: true,
-  },
-  {
-    title: 'Bonus Calculator',
-    href: '/admin/bonus',
-    icon: <Calculator className="h-5 w-5" />,
-    adminOnly: true,
-  },
+  { titleKey: '', fallback: 'Admin Dashboard', href: '/admin', icon: <LayoutDashboard className="h-5 w-5" />, adminOnly: true },
+  { titleKey: '', fallback: 'Employees', href: '/admin/employees', icon: <Users className="h-5 w-5" />, adminOnly: true },
+  { titleKey: '', fallback: 'Jobs', href: '/admin/jobs', icon: <Briefcase className="h-5 w-5" />, adminOnly: true },
+  { titleKey: '', fallback: 'Attendance', href: '/admin/attendance', icon: <CalendarCheck className="h-5 w-5" />, adminOnly: true },
+  { titleKey: '', fallback: 'Damages', href: '/admin/damages', icon: <AlertTriangle className="h-5 w-5" />, adminOnly: true },
+  { titleKey: '', fallback: 'Performance', href: '/admin/performance', icon: <Star className="h-5 w-5" />, adminOnly: true },
+  { titleKey: '', fallback: 'Mileage', href: '/admin/mileage', icon: <Car className="h-5 w-5" />, adminOnly: true },
+  { titleKey: '', fallback: 'Payroll', href: '/admin/payroll', icon: <DollarSign className="h-5 w-5" />, adminOnly: true },
+  { titleKey: '', fallback: 'Calendar Sync', href: '/admin/calendar', icon: <CalendarSync className="h-5 w-5" />, adminOnly: true },
+  { titleKey: '', fallback: 'Import Data', href: '/admin/import', icon: <FileSpreadsheet className="h-5 w-5" />, adminOnly: true },
+  { titleKey: '', fallback: 'Bonus Calculator', href: '/admin/bonus', icon: <Calculator className="h-5 w-5" />, adminOnly: true },
 ];
 
 interface SidebarProps {
@@ -136,6 +88,12 @@ interface SidebarProps {
 
 function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: () => void }) {
   const pathname = usePathname();
+  const { t, locale, setLocale } = useI18n();
+
+  function getTitle(item: NavItem) {
+    if (item.titleKey) return t(item.titleKey);
+    return item.fallback;
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -152,7 +110,7 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
         {/* Employee Section */}
         <div className="space-y-1">
           <p className="px-3 text-xs font-semibold uppercase text-gray-500">
-            My Dashboard
+            {t('nav.my_dashboard')}
           </p>
           {employeeNavItems.map((item) => (
             <Link
@@ -166,7 +124,7 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
               )}
             >
               {item.icon}
-              {item.title}
+              {getTitle(item)}
             </Link>
           ))}
         </div>
@@ -189,15 +147,38 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
                 )}
               >
                 {item.icon}
-                {item.title}
+                {getTitle(item)}
               </Link>
             ))}
           </div>
         )}
       </nav>
 
-      {/* User Section */}
-      <div className="border-t p-4">
+      {/* Language Toggle + User Section */}
+      <div className="border-t p-4 space-y-3">
+        {/* Language Toggle */}
+        <div className="flex items-center justify-center gap-1 rounded-lg bg-gray-100 p-1">
+          <button
+            onClick={() => setLocale('en')}
+            className={cn(
+              'flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+              locale === 'en' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+            )}
+          >
+            English
+          </button>
+          <button
+            onClick={() => setLocale('es')}
+            className={cn(
+              'flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+              locale === 'es' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+            )}
+          >
+            Español
+          </button>
+        </div>
+
+        {/* User */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-600 font-medium">
@@ -205,7 +186,7 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
             </div>
             <div>
               <p className="text-sm font-medium">{userName}</p>
-              <p className="text-xs text-gray-500">{isAdmin ? 'Admin' : 'Crew'}</p>
+              <p className="text-xs text-gray-500">{isAdmin ? 'Admin' : t('nav.crew')}</p>
             </div>
           </div>
           <Button variant="ghost" size="icon" onClick={onLogout}>

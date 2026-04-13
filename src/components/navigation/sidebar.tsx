@@ -15,6 +15,8 @@ import {
   Calculator,
   BarChart3,
   Briefcase,
+  DollarSign,
+  FileSpreadsheet,
   LogOut,
   Menu,
 } from 'lucide-react';
@@ -45,6 +47,11 @@ const employeeNavItems: NavItem[] = [
     title: 'My Checklists',
     href: '/checklists',
     icon: <ClipboardList className="h-5 w-5" />,
+  },
+  {
+    title: 'My Payroll',
+    href: '/payroll',
+    icon: <DollarSign className="h-5 w-5" />,
   },
   {
     title: 'My Stats',
@@ -97,9 +104,21 @@ const adminNavItems: NavItem[] = [
     adminOnly: true,
   },
   {
+    title: 'Payroll',
+    href: '/admin/payroll',
+    icon: <DollarSign className="h-5 w-5" />,
+    adminOnly: true,
+  },
+  {
     title: 'Calendar Sync',
     href: '/admin/calendar',
     icon: <CalendarSync className="h-5 w-5" />,
+    adminOnly: true,
+  },
+  {
+    title: 'Import Data',
+    href: '/admin/import',
+    icon: <FileSpreadsheet className="h-5 w-5" />,
     adminOnly: true,
   },
   {

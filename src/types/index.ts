@@ -10,7 +10,32 @@ export interface Employee {
   start_date: string;
   is_active: boolean;
   is_admin: boolean;
+  hourly_rate: number | null;
   created_at: string;
+}
+
+// Payroll entry (one per employee per pay week)
+export interface PayrollEntry {
+  id: string;
+  employee_id: string;
+  week_start: string; // Monday
+  week_end: string;   // Sunday
+  pay_date: string;   // Friday of following week
+  travel_hours: number;
+  job_hours: number;
+  warehouse_hours: number;
+  total_hours: number;
+  hourly_rate: number;
+  gross_pay: number;
+  lunch_reimbursement: number;
+  mileage_reimbursement: number;
+  other_reimbursement: number;
+  tip: number;
+  notes: string | null;
+  created_at: string;
+  // Joined fields
+  employee_name?: string;
+  employee_role?: string;
 }
 
 // Job

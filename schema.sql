@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS employees (
   start_date DATE NOT NULL,
   is_active BOOLEAN DEFAULT true,
   is_admin BOOLEAN DEFAULT false,
+  hourly_rate DECIMAL(6, 2),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -165,6 +166,28 @@ CREATE TABLE IF NOT EXISTS bonus_payouts (
   UNIQUE(monthly_bonus_id, employee_id)
 );
 
+-- Payroll entries (one per employee per pay week, Mon-Sun)
+CREATE TABLE IF NOT EXISTS payroll_entries (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  employee_id UUID REFERENCES employees(id) ON DELETE CASCADE,
+  week_start DATE NOT NULL,
+  week_end DATE NOT NULL,
+  pay_date DATE NOT NULL,
+  travel_hours DECIMAL(6, 2) DEFAULT 0,
+  job_hours DECIMAL(6, 2) DEFAULT 0,
+  warehouse_hours DECIMAL(6, 2) DEFAULT 0,
+  total_hours DECIMAL(6, 2) DEFAULT 0,
+  hourly_rate DECIMAL(6, 2) NOT NULL,
+  gross_pay DECIMAL(10, 2) DEFAULT 0,
+  lunch_reimbursement DECIMAL(8, 2) DEFAULT 0,
+  mileage_reimbursement DECIMAL(8, 2) DEFAULT 0,
+  other_reimbursement DECIMAL(8, 2) DEFAULT 0,
+  tip DECIMAL(8, 2) DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(employee_id, week_start)
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_employees_email ON employees(email);
 CREATE INDEX IF NOT EXISTS idx_employees_active ON employees(is_active);
@@ -175,3 +198,6 @@ CREATE INDEX IF NOT EXISTS idx_checklist_employee ON checklist_completions(emplo
 CREATE INDEX IF NOT EXISTS idx_mileage_employee_date ON mileage_entries(employee_id, date);
 CREATE INDEX IF NOT EXISTS idx_performance_employee_date ON performance_events(employee_id, date);
 CREATE INDEX IF NOT EXISTS idx_bonus_month_year ON monthly_bonuses(month, year);
+CREATE INDEX IF NOT EXISTS idx_payroll_employee ON payroll_entries(employee_id);
+CREATE INDEX IF NOT EXISTS idx_payroll_week ON payroll_entries(week_start);
+CREATE INDEX IF NOT EXISTS idx_payroll_pay_date ON payroll_entries(pay_date);

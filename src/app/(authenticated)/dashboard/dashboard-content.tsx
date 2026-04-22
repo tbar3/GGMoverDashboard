@@ -39,23 +39,23 @@ export function DashboardContent({
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-foreground">
           {t('dash.welcome', { name: employee.name.split(' ')[0] })}
         </h1>
-        <p className="text-gray-500 mt-1">
+        <p className="text-muted-foreground mt-1">
           {t('dash.summary_for', { period: monthLabel })}
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Link href="/stats">
-          <Card className="cursor-pointer hover:bg-gray-50 transition-colors">
+          <Card className="cursor-pointer hover:bg-muted transition-colors">
             <CardHeader className="pb-2">
               <CardDescription>{t('dash.tenure')}</CardDescription>
               <CardTitle className="text-3xl">{tenureMonths}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground">
                 {tenureMonths === 1
                   ? t('dash.month_share')
                   : t('dash.months_shares', { count: tenureMonths })}
@@ -65,13 +65,13 @@ export function DashboardContent({
         </Link>
 
         <Link href="/stats">
-          <Card className="cursor-pointer hover:bg-gray-50 transition-colors">
+          <Card className="cursor-pointer hover:bg-muted transition-colors">
             <CardHeader className="pb-2">
               <CardDescription>{t('dash.perfect_weeks')}</CardDescription>
               <CardTitle className="text-3xl">{perfectWeekCount}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground">
                 {perfectWeekCount === 1
                   ? t('dash.bonus_hour')
                   : t('dash.bonus_hours', { count: perfectWeekCount })}
@@ -81,17 +81,17 @@ export function DashboardContent({
         </Link>
 
         <Link href="/stats">
-          <Card className="cursor-pointer hover:bg-gray-50 transition-colors">
+          <Card className="cursor-pointer hover:bg-muted transition-colors">
             <CardHeader className="pb-2">
               <CardDescription>{t('dash.tardies')}</CardDescription>
               <CardTitle className="text-3xl">
-                <span className={tardyCount === 0 ? 'text-green-600' : 'text-red-600'}>
+                <span className={tardyCount === 0 ? 'text-green-600' : 'text-destructive'}>
                   {tardyCount}
                 </span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground">
                 {t('dash.days_worked', { count: daysWorked })}
               </p>
             </CardContent>
@@ -99,7 +99,7 @@ export function DashboardContent({
         </Link>
 
         <Link href="/payroll">
-          <Card className="cursor-pointer hover:bg-gray-50 transition-colors">
+          <Card className="cursor-pointer hover:bg-muted transition-colors">
             <CardHeader className="pb-2">
               <CardDescription>{t('dash.mileage_earnings')}</CardDescription>
               <CardTitle className="text-3xl">
@@ -107,7 +107,7 @@ export function DashboardContent({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground">
                 {t('dash.miles_at', { miles: totalMiles, rate: CONFIG.MILEAGE_RATE })}
               </p>
             </CardContent>
@@ -132,14 +132,14 @@ export function DashboardContent({
           <CardContent>
             <div className="space-y-3">
               {upcomingJobs.map((job) => (
-                <div key={job.id} className={`flex items-start justify-between p-3 rounded-lg border ${job.date === today ? 'bg-blue-50 border-blue-200' : 'bg-gray-50'}`}>
+                <div key={job.id} className={`flex items-start justify-between p-3 rounded-lg border ${job.date === today ? 'bg-secondary/40 border-blue-200' : 'bg-muted'}`}>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{job.customer_name}</span>
                       {job.job_number && <Badge variant="outline" className="text-xs">{job.job_number}</Badge>}
-                      {job.date === today && <Badge className="bg-blue-600 text-xs">{t('dash.today')}</Badge>}
+                      {job.date === today && <Badge className="bg-primary text-xs">{t('dash.today')}</Badge>}
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-gray-500">
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
                       <span>{format(new Date(job.date), 'EEE, MMM d')}</span>
                       {job.start_time && (
                         <span className="flex items-center gap-1">
@@ -148,7 +148,7 @@ export function DashboardContent({
                       )}
                     </div>
                     {job.pickup_address && (
-                      <div className="flex items-center gap-1 text-sm text-gray-500">
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
                         <MapPin className="h-3 w-3" />
                         <span className="truncate max-w-[300px]">{job.pickup_address}</span>
                       </div>
@@ -181,12 +181,12 @@ export function DashboardContent({
                       </Badge>
                       <span className="text-sm">{event.description || t('dash.great_work')}</span>
                     </div>
-                    <span className="text-xs text-gray-500">{format(new Date(event.date), 'MMM d')}</span>
+                    <span className="text-xs text-muted-foreground">{format(new Date(event.date), 'MMM d')}</span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500 text-sm">{t('dash.no_recognition')}</p>
+              <p className="text-muted-foreground text-sm">{t('dash.no_recognition')}</p>
             )}
           </CardContent>
         </Card>
@@ -198,25 +198,25 @@ export function DashboardContent({
           </CardHeader>
           <CardContent className="space-y-1">
             <div className="flex justify-between items-center p-2 rounded-md">
-              <span className="text-sm text-gray-600">{t('dash.role')}</span>
+              <span className="text-sm text-muted-foreground">{t('dash.role')}</span>
               <Badge variant="outline" className="capitalize">{employee.role}</Badge>
             </div>
-            <Link href="/checklists" className="flex justify-between items-center p-2 rounded-md hover:bg-gray-50 transition-colors cursor-pointer">
-              <span className="text-sm text-gray-600">{t('dash.checklists_completed')}</span>
+            <Link href="/checklists" className="flex justify-between items-center p-2 rounded-md hover:bg-muted transition-colors cursor-pointer">
+              <span className="text-sm text-muted-foreground">{t('dash.checklists_completed')}</span>
               <span className="font-medium">{checklistsCompleted} &rarr;</span>
             </Link>
-            <Link href="/stats" className="flex justify-between items-center p-2 rounded-md hover:bg-gray-50 transition-colors cursor-pointer">
-              <span className="text-sm text-gray-600">{t('dash.attendance_rate')}</span>
+            <Link href="/stats" className="flex justify-between items-center p-2 rounded-md hover:bg-muted transition-colors cursor-pointer">
+              <span className="text-sm text-muted-foreground">{t('dash.attendance_rate')}</span>
               <span className="font-medium">
                 {daysWorked > 0 ? `${Math.round(((daysWorked - tardyCount) / daysWorked) * 100)}%` : 'N/A'} &rarr;
               </span>
             </Link>
-            <Link href="/stats" className="flex justify-between items-center p-2 rounded-md hover:bg-gray-50 transition-colors cursor-pointer">
-              <span className="text-sm text-gray-600">{t('dash.performance_events')}</span>
+            <Link href="/stats" className="flex justify-between items-center p-2 rounded-md hover:bg-muted transition-colors cursor-pointer">
+              <span className="text-sm text-muted-foreground">{t('dash.performance_events')}</span>
               <span className="font-medium">{performanceEvents.length} &rarr;</span>
             </Link>
             <div className="flex justify-between items-center p-2 rounded-md">
-              <span className="text-sm text-gray-600">{t('dash.start_date')}</span>
+              <span className="text-sm text-muted-foreground">{t('dash.start_date')}</span>
               <span className="font-medium">{format(new Date(employee.start_date), 'MMM d, yyyy')}</span>
             </div>
           </CardContent>

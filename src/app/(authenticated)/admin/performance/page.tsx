@@ -94,11 +94,11 @@ export default function PerformancePage() {
   function getTypeInfo(type: PerformanceEventType) {
     switch (type) {
       case 'five_star_review':
-        return { label: '5-Star Review', icon: <Star className="h-4 w-4" />, color: 'bg-yellow-100 text-yellow-800' };
+        return { label: '5-Star Review', icon: <Star className="h-4 w-4" />, color: 'bg-brand-light-blue text-brand-navy' };
       case 'customer_callout':
         return { label: 'Customer Call-Out', icon: <Award className="h-4 w-4" />, color: 'bg-green-100 text-green-800' };
       case 'crew_callout':
-        return { label: 'Crew Call-Out', icon: <Users className="h-4 w-4" />, color: 'bg-blue-100 text-blue-800' };
+        return { label: 'Crew Call-Out', icon: <Users className="h-4 w-4" />, color: 'bg-secondary text-primary' };
     }
   }
 
@@ -118,8 +118,8 @@ export default function PerformancePage() {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Performance</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-foreground">Performance</h1>
+          <p className="text-muted-foreground mt-1">
             Track 5-star reviews, customer call-outs, and crew recognition
           </p>
         </div>
@@ -212,7 +212,7 @@ export default function PerformancePage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Award className="h-5 w-5 text-yellow-500" />
+              <Award className="h-5 w-5 text-brand-red" />
               Leaderboard
             </CardTitle>
             <CardDescription>Top performers by recognition count</CardDescription>
@@ -222,15 +222,15 @@ export default function PerformancePage() {
               {leaderboard.map((emp, index) => (
                 <div
                   key={emp.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
+                  className="flex items-center justify-between p-3 rounded-lg bg-muted"
                 >
                   <div className="flex items-center gap-3">
                     <span className={`
                       w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold
-                      ${index === 0 ? 'bg-yellow-400 text-white' : ''}
-                      ${index === 1 ? 'bg-gray-300 text-gray-700' : ''}
+                      ${index === 0 ? 'bg-brand-red text-primary-foreground' : ''}
+                      ${index === 1 ? 'bg-brand-light-blue text-brand-navy' : ''}
                       ${index === 2 ? 'bg-orange-300 text-white' : ''}
-                      ${index > 2 ? 'bg-gray-200 text-gray-600' : ''}
+                      ${index > 2 ? 'bg-muted text-muted-foreground' : ''}
                     `}>
                       {index + 1}
                     </span>
@@ -240,7 +240,7 @@ export default function PerformancePage() {
                 </div>
               ))}
               {leaderboard.length === 0 && (
-                <p className="text-gray-500 text-sm text-center py-4">
+                <p className="text-muted-foreground text-sm text-center py-4">
                   No performance events yet
                 </p>
               )}
@@ -283,7 +283,7 @@ export default function PerformancePage() {
                             </span>
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-gray-500 max-w-[200px] truncate">
+                        <TableCell className="text-muted-foreground max-w-[200px] truncate">
                           {event.description || '-'}
                         </TableCell>
                       </TableRow>
@@ -291,7 +291,7 @@ export default function PerformancePage() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                       No recognition events yet. Start logging great work!
                     </TableCell>
                   </TableRow>

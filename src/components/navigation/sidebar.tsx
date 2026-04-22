@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
@@ -96,12 +97,19 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       {/* Logo */}
-      <div className="flex h-16 items-center border-b px-6">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <span className="text-xl font-bold text-blue-600">Good</span>
-          <span className="text-xl font-bold text-yellow-500">Guys</span>
+      <div className="flex h-20 items-center border-b border-sidebar-border px-6">
+        <Link href="/dashboard" className="flex items-center">
+          <Image
+            src="/brand/goodguys-wordmark.png"
+            alt="GoodGuys Concierge Moving & Storage"
+            width={6933}
+            height={1766}
+            priority
+            sizes="200px"
+            className="h-9 w-auto"
+          />
         </Link>
       </div>
 
@@ -109,7 +117,7 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
       <nav className="flex-1 overflow-y-auto p-4">
         {/* Employee Section */}
         <div className="space-y-1">
-          <p className="px-3 text-xs font-semibold uppercase text-gray-500">
+          <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
             {t('nav.my_dashboard')}
           </p>
           {employeeNavItems.map((item) => (
@@ -119,8 +127,8 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
               className={cn(
                 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 pathname === item.href
-                  ? 'bg-blue-50 text-blue-600'
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+                  : 'text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
               )}
             >
               {item.icon}
@@ -132,7 +140,7 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
         {/* Admin Section */}
         {isAdmin && (
           <div className="mt-6 space-y-1">
-            <p className="px-3 text-xs font-semibold uppercase text-gray-500">
+            <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
               Admin
             </p>
             {adminNavItems.map((item) => (
@@ -142,8 +150,8 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
                 className={cn(
                   'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                   pathname === item.href
-                    ? 'bg-blue-50 text-blue-600'
-                    : 'text-gray-700 hover:bg-gray-100'
+                    ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+                    : 'text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                 )}
               >
                 {item.icon}
@@ -155,14 +163,14 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
       </nav>
 
       {/* Language Toggle + User Section */}
-      <div className="border-t p-4 space-y-3">
+      <div className="border-t border-sidebar-border p-4 space-y-3">
         {/* Language Toggle */}
-        <div className="flex items-center justify-center gap-1 rounded-lg bg-gray-100 p-1">
+        <div className="flex items-center justify-center gap-1 rounded-lg bg-sidebar-accent p-1">
           <button
             onClick={() => setLocale('en')}
             className={cn(
               'flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-              locale === 'en' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+              locale === 'en' ? 'bg-sidebar text-sidebar-foreground shadow' : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'
             )}
           >
             English
@@ -171,7 +179,7 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
             onClick={() => setLocale('es')}
             className={cn(
               'flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-              locale === 'es' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+              locale === 'es' ? 'bg-sidebar text-sidebar-foreground shadow' : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'
             )}
           >
             Español
@@ -181,16 +189,22 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
         {/* User */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-600 font-medium">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-light-blue text-brand-navy font-semibold">
               {userName.charAt(0).toUpperCase()}
             </div>
             <div>
-              <p className="text-sm font-medium">{userName}</p>
-              <p className="text-xs text-gray-500">{isAdmin ? 'Admin' : t('nav.crew')}</p>
+              <p className="text-sm font-medium text-sidebar-foreground">{userName}</p>
+              <p className="text-xs text-sidebar-foreground/60">{isAdmin ? 'Admin' : t('nav.crew')}</p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={onLogout}>
-            <LogOut className="h-5 w-5 text-gray-500" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onLogout}
+            aria-label="Sign out"
+            className="text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          >
+            <LogOut className="h-5 w-5" />
           </Button>
         </div>
       </div>
@@ -209,25 +223,36 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
   return (
     <>
       {/* Mobile Menu */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 flex h-16 items-center justify-between border-b bg-white px-4">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <span className="text-xl font-bold text-blue-600">Good</span>
-          <span className="text-xl font-bold text-yellow-500">Guys</span>
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 flex h-16 items-center justify-between border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground">
+        <Link href="/dashboard" className="flex items-center">
+          <Image
+            src="/brand/goodguys-wordmark.png"
+            alt="GoodGuys Concierge Moving & Storage"
+            width={6933}
+            height={1766}
+            priority
+            sizes="160px"
+            className="h-7 w-auto"
+          />
         </Link>
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            >
               <Menu className="h-6 w-6" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-64 p-0">
+          <SheetContent side="left" className="w-64 p-0 bg-sidebar border-sidebar-border">
             <NavContent isAdmin={isAdmin} userName={userName} onLogout={handleLogout} />
           </SheetContent>
         </Sheet>
       </div>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block lg:w-64 lg:border-r lg:bg-white">
+      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block lg:w-64 lg:border-r lg:border-sidebar-border">
         <NavContent isAdmin={isAdmin} userName={userName} onLogout={handleLogout} />
       </aside>
     </>

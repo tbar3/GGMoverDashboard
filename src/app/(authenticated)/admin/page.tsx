@@ -48,88 +48,88 @@ export default async function AdminDashboardPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-        <p className="text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
+        <p className="text-muted-foreground mt-1">
           Overview for {format(now, 'MMMM yyyy')}
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <Link href="/admin/employees">
-          <Card className="cursor-pointer hover:bg-gray-50 transition-colors h-full">
+          <Card className="cursor-pointer hover:bg-muted transition-colors h-full">
             <CardHeader className="pb-2">
               <CardDescription>Active Employees</CardDescription>
               <CardTitle className="text-3xl">{employeeCount}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-blue-600">Manage Employees &rarr;</p>
+              <p className="text-sm text-primary">Manage Employees &rarr;</p>
             </CardContent>
           </Card>
         </Link>
 
         <Link href="/admin/jobs">
-          <Card className="cursor-pointer hover:bg-gray-50 transition-colors h-full">
+          <Card className="cursor-pointer hover:bg-muted transition-colors h-full">
             <CardHeader className="pb-2">
               <CardDescription>Jobs This Month</CardDescription>
               <CardTitle className="text-3xl">{jobCount}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-blue-600">View Jobs &rarr;</p>
+              <p className="text-sm text-primary">View Jobs &rarr;</p>
             </CardContent>
           </Card>
         </Link>
 
         <Link href="/admin/attendance">
-          <Card className="cursor-pointer hover:bg-gray-50 transition-colors h-full">
+          <Card className="cursor-pointer hover:bg-muted transition-colors h-full">
             <CardHeader className="pb-2">
               <CardDescription>Tardies This Month</CardDescription>
               <CardTitle className="text-3xl">
-                <span className={tardyCount === 0 ? 'text-green-600' : 'text-yellow-600'}>
+                <span className={tardyCount === 0 ? 'text-green-600' : 'text-destructive'}>
                   {tardyCount}
                 </span>
-                <span className="text-lg text-gray-400">/{totalAttendance}</span>
+                <span className="text-lg text-muted-foreground/70">/{totalAttendance}</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-blue-600">View Attendance &rarr;</p>
+              <p className="text-sm text-primary">View Attendance &rarr;</p>
             </CardContent>
           </Card>
         </Link>
 
         <Link href="/admin/damages">
-          <Card className="cursor-pointer hover:bg-gray-50 transition-colors h-full">
+          <Card className="cursor-pointer hover:bg-muted transition-colors h-full">
             <CardHeader className="pb-2">
               <CardDescription>Damages (Pool Impact)</CardDescription>
-              <CardTitle className="text-3xl text-red-600">
+              <CardTitle className="text-3xl text-destructive">
                 ${totalDamages.toFixed(2)}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-blue-600">View Damages &rarr;</p>
+              <p className="text-sm text-primary">View Damages &rarr;</p>
             </CardContent>
           </Card>
         </Link>
 
         <Link href="/admin/performance">
-          <Card className="cursor-pointer hover:bg-gray-50 transition-colors h-full">
+          <Card className="cursor-pointer hover:bg-muted transition-colors h-full">
             <CardHeader className="pb-2">
               <CardDescription>Performance Events</CardDescription>
               <CardTitle className="text-3xl text-green-600">{performanceCount}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-blue-600">View Performance &rarr;</p>
+              <p className="text-sm text-primary">View Performance &rarr;</p>
             </CardContent>
           </Card>
         </Link>
 
         <Link href="/admin/mileage">
-          <Card className="cursor-pointer hover:bg-gray-50 transition-colors h-full">
+          <Card className="cursor-pointer hover:bg-muted transition-colors h-full">
             <CardHeader className="pb-2">
               <CardDescription>Mileage Owed</CardDescription>
               <CardTitle className="text-3xl">${totalMileage.toFixed(2)}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-blue-600">View Mileage &rarr;</p>
+              <p className="text-sm text-primary">View Mileage &rarr;</p>
             </CardContent>
           </Card>
         </Link>
@@ -144,12 +144,12 @@ export default async function AdminDashboardPage() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {quickActions.map((action) => (
               <Link key={action.href} href={action.href}>
-                <div className="flex flex-col items-center p-4 rounded-lg border hover:bg-gray-50 transition-colors">
-                  <div className="p-2 rounded-full bg-blue-100 text-blue-600 mb-2">
+                <div className="flex flex-col items-center p-4 rounded-lg border hover:bg-muted transition-colors">
+                  <div className="p-2 rounded-full bg-secondary text-primary mb-2">
                     {action.icon}
                   </div>
                   <span className="text-sm font-medium">{action.title}</span>
-                  <span className="text-xs text-gray-500">{action.description}</span>
+                  <span className="text-xs text-muted-foreground">{action.description}</span>
                 </div>
               </Link>
             ))}
@@ -157,10 +157,10 @@ export default async function AdminDashboardPage() {
         </CardContent>
       </Card>
 
-      <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+      <Card className="bg-gradient-to-r from-brand-navy to-[#01405F] text-primary-foreground">
         <CardHeader>
           <CardTitle className="text-white">Monthly Bonus Calculator</CardTitle>
-          <CardDescription className="text-blue-100">
+          <CardDescription className="text-primary-foreground/80">
             Calculate and preview bonus payouts for the current month
           </CardDescription>
         </CardHeader>

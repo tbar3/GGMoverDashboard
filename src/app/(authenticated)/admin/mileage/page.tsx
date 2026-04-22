@@ -126,8 +126,8 @@ export default function MileagePage() {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Mileage</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-foreground">Mileage</h1>
+          <p className="text-muted-foreground mt-1">
             Track personal vehicle mileage at ${CONFIG.MILEAGE_RATE}/mile
           </p>
         </div>
@@ -146,12 +146,12 @@ export default function MileagePage() {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="p-3 bg-blue-50 rounded-lg text-sm">
-                <div className="flex items-center gap-2 text-blue-700">
+              <div className="p-3 bg-secondary/40 rounded-lg text-sm">
+                <div className="flex items-center gap-2 text-primary">
                   <MapPin className="h-4 w-4" />
                   <span className="font-medium">Warehouse:</span>
                 </div>
-                <p className="text-blue-600 mt-1">{CONFIG.WAREHOUSE_ADDRESS}</p>
+                <p className="text-primary mt-1">{CONFIG.WAREHOUSE_ADDRESS}</p>
               </div>
 
               <div className="space-y-2">
@@ -240,9 +240,9 @@ export default function MileagePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+        <Card className="bg-gradient-to-br from-brand-navy to-[#01405F] text-primary-foreground">
           <CardHeader>
-            <CardDescription className="text-blue-100">
+            <CardDescription className="text-primary-foreground/80">
               {format(now, 'MMMM yyyy')} Total
             </CardDescription>
             <CardTitle className="text-3xl text-white">
@@ -250,7 +250,7 @@ export default function MileagePage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-blue-100">
+            <p className="text-primary-foreground/80">
               {currentMonthEntries.reduce((sum, e) => sum + Number(e.miles), 0).toFixed(1)} miles total
             </p>
           </CardContent>
@@ -268,11 +268,11 @@ export default function MileagePage() {
               {employeeTotals.map((emp) => (
                 <div
                   key={emp.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
+                  className="flex items-center justify-between p-3 rounded-lg bg-muted"
                 >
                   <div>
                     <p className="font-medium">{emp.name}</p>
-                    <p className="text-sm text-gray-500">{emp.totalMiles.toFixed(1)} miles</p>
+                    <p className="text-sm text-muted-foreground">{emp.totalMiles.toFixed(1)} miles</p>
                   </div>
                   <Badge variant="secondary" className="text-lg">
                     ${emp.totalAmount.toFixed(2)}
@@ -280,7 +280,7 @@ export default function MileagePage() {
                 </div>
               ))}
               {employeeTotals.length === 0 && (
-                <p className="text-gray-500 text-sm text-center py-4">
+                <p className="text-muted-foreground text-sm text-center py-4">
                   No mileage recorded this month
                 </p>
               )}
@@ -319,7 +319,7 @@ export default function MileagePage() {
                     <TableCell className="text-green-600 font-medium">
                       ${Number(entry.amount).toFixed(2)}
                     </TableCell>
-                    <TableCell className="text-gray-500">
+                    <TableCell className="text-muted-foreground">
                       {entry.job_id
                         ? jobs.find(j => j.id === entry.job_id)?.customer_name || 'Unknown'
                         : '-'}
@@ -328,7 +328,7 @@ export default function MileagePage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                     No mileage entries yet
                   </TableCell>
                 </TableRow>

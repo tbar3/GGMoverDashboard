@@ -116,8 +116,8 @@ export default function DamagesPage() {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Damages</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-foreground">Damages</h1>
+          <p className="text-muted-foreground mt-1">
             Track damages that affect the bonus pool. Unreported damages cost {CONFIG.UNREPORTED_DAMAGE_MULTIPLIER}x.
           </p>
         </div>
@@ -196,7 +196,7 @@ export default function DamagesPage() {
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2 p-4 bg-yellow-50 rounded-lg">
+              <div className="flex items-center space-x-2 p-4 bg-destructive/10 rounded-lg">
                 <Checkbox
                   id="reported"
                   checked={formData.was_reported}
@@ -210,7 +210,7 @@ export default function DamagesPage() {
               </div>
 
               {!formData.was_reported && formData.amount && (
-                <div className="flex items-center gap-2 text-red-600 text-sm">
+                <div className="flex items-center gap-2 text-destructive text-sm">
                   <AlertTriangle className="h-4 w-4" />
                   Pool impact will be ${(parseFloat(formData.amount) * CONFIG.UNREPORTED_DAMAGE_MULTIPLIER).toFixed(2)} (2x penalty for unreported)
                 </div>
@@ -229,13 +229,13 @@ export default function DamagesPage() {
 
       <Card className="bg-red-50 border-red-200">
         <CardHeader className="pb-2">
-          <CardDescription className="text-red-600">Total Pool Impact</CardDescription>
-          <CardTitle className="text-3xl text-red-600">
+          <CardDescription className="text-destructive">Total Pool Impact</CardDescription>
+          <CardTitle className="text-3xl text-destructive">
             ${totalPoolImpact.toFixed(2)}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-red-600">This amount will be deducted from the bonus pool</p>
+          <p className="text-sm text-destructive">This amount will be deducted from the bonus pool</p>
         </CardContent>
       </Card>
 
@@ -272,7 +272,7 @@ export default function DamagesPage() {
                         {damage.was_reported ? 'Yes' : 'No (2x)'}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-red-600 font-medium">
+                    <TableCell className="text-destructive font-medium">
                       -${getPoolImpact(damage).toFixed(2)}
                     </TableCell>
                     <TableCell className="text-sm">
@@ -284,7 +284,7 @@ export default function DamagesPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     No damages recorded. Great job protecting customer property!
                   </TableCell>
                 </TableRow>

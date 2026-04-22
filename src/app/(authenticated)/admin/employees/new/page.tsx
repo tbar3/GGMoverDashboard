@@ -62,8 +62,8 @@ export default function NewEmployeePage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Add Employee</h1>
-          <p className="text-gray-500 mt-1">Create a new crew member record</p>
+          <h1 className="text-2xl font-bold text-foreground">Add Employee</h1>
+          <p className="text-muted-foreground mt-1">Create a new crew member record</p>
         </div>
       </div>
 
@@ -98,7 +98,7 @@ export default function NewEmployeePage() {
                   placeholder="john@example.com"
                   required
                 />
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Must match the email they use to sign in with Clerk
                 </p>
               </div>
@@ -128,7 +128,7 @@ export default function NewEmployeePage() {
                   onChange={(e) => setStartDate(e.target.value)}
                   required
                 />
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Used to calculate tenure shares
                 </p>
               </div>

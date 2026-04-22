@@ -138,8 +138,8 @@ export default function AdminPayrollPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Payroll</h1>
-        <p className="text-gray-500 mt-1">Enter weekly payroll data for each employee</p>
+        <h1 className="text-2xl font-bold text-foreground">Payroll</h1>
+        <p className="text-muted-foreground mt-1">Enter weekly payroll data for each employee</p>
       </div>
 
       {/* Week Selector */}
@@ -153,7 +153,7 @@ export default function AdminPayrollPage() {
               <p className="text-lg font-semibold">
                 {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d, yyyy')}
               </p>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground">
                 Pay Date: <span className="font-medium">{format(payDate, 'EEEE, MMM d, yyyy')}</span>
               </p>
             </div>
@@ -166,7 +166,7 @@ export default function AdminPayrollPage() {
 
       {/* Payroll Entry Per Employee */}
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-12 text-gray-500">
+        <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading...
         </div>
       ) : (
@@ -201,8 +201,8 @@ export default function AdminPayrollPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Employee</TableHead>
-                  <TableHead className="text-right text-blue-600">Exp. Hrs</TableHead>
-                  <TableHead className="text-right text-blue-600">Exp. Pay</TableHead>
+                  <TableHead className="text-right text-primary">Exp. Hrs</TableHead>
+                  <TableHead className="text-right text-primary">Exp. Pay</TableHead>
                   <TableHead className="text-right">Travel</TableHead>
                   <TableHead className="text-right">Job</TableHead>
                   <TableHead className="text-right">Warehouse</TableHead>
@@ -221,8 +221,8 @@ export default function AdminPayrollPage() {
                   return (
                     <TableRow key={entry.id}>
                       <TableCell className="font-medium">{entry.employee_name}</TableCell>
-                      <TableCell className="text-right text-blue-600">{exp ? exp.expected_hours.toFixed(1) : '—'}</TableCell>
-                      <TableCell className="text-right text-blue-600">{exp ? `$${exp.expected_pay.toFixed(2)}` : '—'}</TableCell>
+                      <TableCell className="text-right text-primary">{exp ? exp.expected_hours.toFixed(1) : '—'}</TableCell>
+                      <TableCell className="text-right text-primary">{exp ? `$${exp.expected_pay.toFixed(2)}` : '—'}</TableCell>
                       <TableCell className="text-right">{Number(entry.travel_hours).toFixed(1)}</TableCell>
                       <TableCell className="text-right">{Number(entry.job_hours).toFixed(1)}</TableCell>
                       <TableCell className="text-right">{Number(entry.warehouse_hours).toFixed(1)}</TableCell>
@@ -235,12 +235,12 @@ export default function AdminPayrollPage() {
                   );
                 })}
                 {/* Totals row */}
-                <TableRow className="bg-gray-50 font-bold">
+                <TableRow className="bg-muted font-bold">
                   <TableCell>TOTALS</TableCell>
-                  <TableCell className="text-right text-blue-600">
+                  <TableCell className="text-right text-primary">
                     {Array.from(expectedMap.values()).reduce((s, e) => s + e.expected_hours, 0).toFixed(1)}
                   </TableCell>
-                  <TableCell className="text-right text-blue-600">
+                  <TableCell className="text-right text-primary">
                     ${Array.from(expectedMap.values()).reduce((s, e) => s + e.expected_pay, 0).toFixed(2)}
                   </TableCell>
                   <TableCell className="text-right">
@@ -345,7 +345,7 @@ function EmployeePayrollRow({
             {entry && <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">Saved</Badge>}
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-lg font-bold text-gray-900">${total.toFixed(2)}</span>
+            <span className="text-lg font-bold text-foreground">${total.toFixed(2)}</span>
             <Button size="sm" onClick={handleSave} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
               Save
@@ -356,12 +356,12 @@ function EmployeePayrollRow({
       <CardContent>
         {/* Expected from jobs */}
         {expected && expected.job_count > 0 && (
-          <div className="mb-3 p-2 rounded-lg bg-blue-50 flex items-center gap-4 text-sm">
-            <span className="text-blue-700 font-medium">Expected:</span>
-            <span className="text-blue-600">{expected.job_count} job{expected.job_count !== 1 ? 's' : ''}</span>
-            <span className="text-blue-600">{expected.expected_hours.toFixed(1)} hrs</span>
-            <span className="text-blue-600 font-medium">${expected.expected_pay.toFixed(2)}</span>
-            <span className="text-blue-400 text-xs">
+          <div className="mb-3 p-2 rounded-lg bg-secondary/40 flex items-center gap-4 text-sm">
+            <span className="text-primary font-medium">Expected:</span>
+            <span className="text-primary">{expected.job_count} job{expected.job_count !== 1 ? 's' : ''}</span>
+            <span className="text-primary">{expected.expected_hours.toFixed(1)} hrs</span>
+            <span className="text-primary font-medium">${expected.expected_pay.toFixed(2)}</span>
+            <span className="text-primary/70 text-xs">
               ({expected.jobs.map(j => j.job_number || j.customer_name).join(', ')})
             </span>
           </div>
@@ -401,16 +401,16 @@ function EmployeePayrollRow({
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Total Hrs</Label>
-            <div className="h-9 flex items-center px-3 rounded-md border bg-gray-50 text-sm font-medium">
+            <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm font-medium">
               {totalHours.toFixed(1)}
             </div>
           </div>
         </div>
         {/* Gross pay summary */}
-        <div className="mt-2 flex items-center gap-4 text-sm text-gray-500">
-          <span>Gross: <span className="font-medium text-gray-700">${grossPay.toFixed(2)}</span></span>
-          {totalReimb > 0 && <span>Reimb: <span className="font-medium text-gray-700">${totalReimb.toFixed(2)}</span></span>}
-          {(parseFloat(tip) || 0) > 0 && <span>Tip: <span className="font-medium text-gray-700">${(parseFloat(tip) || 0).toFixed(2)}</span></span>}
+        <div className="mt-2 flex items-center gap-4 text-sm text-muted-foreground">
+          <span>Gross: <span className="font-medium text-foreground">${grossPay.toFixed(2)}</span></span>
+          {totalReimb > 0 && <span>Reimb: <span className="font-medium text-foreground">${totalReimb.toFixed(2)}</span></span>}
+          {(parseFloat(tip) || 0) > 0 && <span>Tip: <span className="font-medium text-foreground">${(parseFloat(tip) || 0).toFixed(2)}</span></span>}
         </div>
       </CardContent>
     </Card>

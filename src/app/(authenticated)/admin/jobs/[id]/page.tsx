@@ -83,7 +83,7 @@ export default function JobDetailPage() {
 
   if (loading) {
     return (
-      <div className="p-6 flex items-center gap-2 text-gray-500">
+      <div className="p-6 flex items-center gap-2 text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" /> Loading job...
       </div>
     );
@@ -92,7 +92,7 @@ export default function JobDetailPage() {
   if (!job) {
     return (
       <div className="p-6">
-        <p className="text-gray-500">Job not found.</p>
+        <p className="text-muted-foreground">Job not found.</p>
       </div>
     );
   }
@@ -106,11 +106,11 @@ export default function JobDetailPage() {
         </Button>
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">{job.customer_name}</h1>
+            <h1 className="text-2xl font-bold text-foreground">{job.customer_name}</h1>
             {job.job_number && <Badge variant="outline">{job.job_number}</Badge>}
             {job.service_type && <Badge>{job.service_type}</Badge>}
           </div>
-          <p className="text-gray-500 mt-1">
+          <p className="text-muted-foreground mt-1">
             {format(new Date(job.date), 'EEEE, MMMM d, yyyy')}
             {job.start_time && job.end_time && ` \u00B7 ${job.start_time} \u2013 ${job.end_time}`}
           </p>
@@ -128,12 +128,12 @@ export default function JobDetailPage() {
             <CardContent className="space-y-4">
               {job.pickup_address && (
                 <div className="flex items-start gap-3">
-                  <MapPin className="h-5 w-5 text-gray-400 mt-0.5 shrink-0" />
+                  <MapPin className="h-5 w-5 text-muted-foreground/70 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Origin Address</p>
+                    <p className="text-sm font-medium text-muted-foreground">Origin Address</p>
                     <p>{job.pickup_address}</p>
                     {job.property_type && (
-                      <p className="text-sm text-gray-500">{job.property_type}</p>
+                      <p className="text-sm text-muted-foreground">{job.property_type}</p>
                     )}
                   </div>
                 </div>
@@ -141,9 +141,9 @@ export default function JobDetailPage() {
 
               {job.arrival_window && (
                 <div className="flex items-start gap-3">
-                  <Clock className="h-5 w-5 text-gray-400 mt-0.5 shrink-0" />
+                  <Clock className="h-5 w-5 text-muted-foreground/70 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Arrival Window</p>
+                    <p className="text-sm font-medium text-muted-foreground">Arrival Window</p>
                     <p>{job.arrival_window}</p>
                   </div>
                 </div>
@@ -151,9 +151,9 @@ export default function JobDetailPage() {
 
               {job.customer_phone && (
                 <div className="flex items-start gap-3">
-                  <Phone className="h-5 w-5 text-gray-400 mt-0.5 shrink-0" />
+                  <Phone className="h-5 w-5 text-muted-foreground/70 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Customer Phone</p>
+                    <p className="text-sm font-medium text-muted-foreground">Customer Phone</p>
                     <p>{job.customer_phone}</p>
                   </div>
                 </div>
@@ -161,9 +161,9 @@ export default function JobDetailPage() {
 
               {job.customer_email && (
                 <div className="flex items-start gap-3">
-                  <Mail className="h-5 w-5 text-gray-400 mt-0.5 shrink-0" />
+                  <Mail className="h-5 w-5 text-muted-foreground/70 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Customer Email</p>
+                    <p className="text-sm font-medium text-muted-foreground">Customer Email</p>
                     <p>{job.customer_email}</p>
                   </div>
                 </div>
@@ -179,27 +179,27 @@ export default function JobDetailPage() {
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {job.estimated_hours && (
-                  <div className="text-center p-3 rounded-lg bg-gray-50">
+                  <div className="text-center p-3 rounded-lg bg-muted">
                     <p className="text-2xl font-bold">{job.estimated_hours}</p>
-                    <p className="text-xs text-gray-500">Est. Hours</p>
+                    <p className="text-xs text-muted-foreground">Est. Hours</p>
                   </div>
                 )}
                 {job.volume_cuft && (
-                  <div className="text-center p-3 rounded-lg bg-gray-50">
+                  <div className="text-center p-3 rounded-lg bg-muted">
                     <p className="text-2xl font-bold">{Number(job.volume_cuft).toLocaleString()}</p>
-                    <p className="text-xs text-gray-500">Cu. Ft.</p>
+                    <p className="text-xs text-muted-foreground">Cu. Ft.</p>
                   </div>
                 )}
                 {job.weight_lbs && (
-                  <div className="text-center p-3 rounded-lg bg-gray-50">
+                  <div className="text-center p-3 rounded-lg bg-muted">
                     <p className="text-2xl font-bold">{Number(job.weight_lbs).toLocaleString()}</p>
-                    <p className="text-xs text-gray-500">Lbs.</p>
+                    <p className="text-xs text-muted-foreground">Lbs.</p>
                   </div>
                 )}
                 {job.revenue && (
-                  <div className="text-center p-3 rounded-lg bg-blue-50">
-                    <p className="text-2xl font-bold text-blue-600">${Number(job.revenue).toFixed(0)}</p>
-                    <p className="text-xs text-gray-500">{job.pricing_type || 'Revenue'}</p>
+                  <div className="text-center p-3 rounded-lg bg-secondary/40">
+                    <p className="text-2xl font-bold text-primary">${Number(job.revenue).toFixed(0)}</p>
+                    <p className="text-xs text-muted-foreground">{job.pricing_type || 'Revenue'}</p>
                   </div>
                 )}
               </div>
@@ -207,25 +207,25 @@ export default function JobDetailPage() {
               <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
                 {job.job_details && (
                   <div>
-                    <span className="text-gray-500">Details:</span>{' '}
+                    <span className="text-muted-foreground">Details:</span>{' '}
                     <span className="font-medium">{job.job_details}</span>
                   </div>
                 )}
                 {job.lead_source && (
                   <div>
-                    <span className="text-gray-500">Source:</span>{' '}
+                    <span className="text-muted-foreground">Source:</span>{' '}
                     <span className="font-medium">{job.lead_source}</span>
                   </div>
                 )}
                 {job.branch && (
                   <div>
-                    <span className="text-gray-500">Branch:</span>{' '}
+                    <span className="text-muted-foreground">Branch:</span>{' '}
                     <span className="font-medium">{job.branch}</span>
                   </div>
                 )}
                 {job.quoted_trucks && (
                   <div>
-                    <span className="text-gray-500">Quoted:</span>{' '}
+                    <span className="text-muted-foreground">Quoted:</span>{' '}
                     <span className="font-medium">{job.quoted_trucks} truck(s), {job.quoted_crew} crew</span>
                   </div>
                 )}
@@ -245,25 +245,25 @@ export default function JobDetailPage() {
               <CardContent className="space-y-3">
                 {job.dispatch_notes && (
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Dispatch Notes</p>
+                    <p className="text-sm font-medium text-muted-foreground">Dispatch Notes</p>
                     <p className="text-sm">{job.dispatch_notes}</p>
                   </div>
                 )}
                 {job.internal_notes && (
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Internal Notes</p>
+                    <p className="text-sm font-medium text-muted-foreground">Internal Notes</p>
                     <p className="text-sm">{job.internal_notes}</p>
                   </div>
                 )}
                 {job.crew_notes && (
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Crew Notes</p>
+                    <p className="text-sm font-medium text-muted-foreground">Crew Notes</p>
                     <p className="text-sm">{job.crew_notes}</p>
                   </div>
                 )}
                 {job.customer_notes && (
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Customer Notes</p>
+                    <p className="text-sm font-medium text-muted-foreground">Customer Notes</p>
                     <p className="text-sm">{job.customer_notes}</p>
                   </div>
                 )}
@@ -288,7 +288,7 @@ export default function JobDetailPage() {
                   {job.crew_manifest.map((member, i) => (
                     <div key={i} className="flex items-center justify-between py-2 border-b last:border-0">
                       <span className="font-medium">{member.name}</span>
-                      <span className="text-sm text-gray-500">{member.phone}</span>
+                      <span className="text-sm text-muted-foreground">{member.phone}</span>
                     </div>
                   ))}
                 </div>
@@ -327,13 +327,13 @@ export default function JobDetailPage() {
               ))}
 
               {employees.length === 0 && (
-                <p className="text-sm text-gray-500">No active employees found.</p>
+                <p className="text-sm text-muted-foreground">No active employees found.</p>
               )}
 
               <Separator className="my-3" />
 
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-muted-foreground">
                   {selectedCrewIds.length} assigned
                 </span>
                 <Button
@@ -381,13 +381,13 @@ export default function JobDetailPage() {
               <CardContent className="space-y-2">
                 {job.volume_cuft && (
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-500">Volume</span>
+                    <span className="text-sm text-muted-foreground">Volume</span>
                     <span className="font-medium">{Number(job.volume_cuft).toLocaleString()} cu ft</span>
                   </div>
                 )}
                 {job.weight_lbs && (
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-500">Weight</span>
+                    <span className="text-sm text-muted-foreground">Weight</span>
                     <span className="font-medium">{Number(job.weight_lbs).toLocaleString()} lbs</span>
                   </div>
                 )}

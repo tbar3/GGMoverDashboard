@@ -98,8 +98,8 @@ export default function CalendarSyncPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Calendar Sync</h1>
-        <p className="text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-foreground">Calendar Sync</h1>
+        <p className="text-muted-foreground mt-1">
           Import jobs from Google Calendar (SmartMoving)
         </p>
       </div>
@@ -117,7 +117,7 @@ export default function CalendarSyncPage() {
         </CardHeader>
         <CardContent>
           {connected === null ? (
-            <div className="flex items-center gap-2 text-gray-500">
+            <div className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Checking connection...
             </div>
@@ -129,11 +129,11 @@ export default function CalendarSyncPage() {
                   Connected
                 </Badge>
                 {calendarFound ? (
-                  <span className="text-sm text-gray-500">
-                    Syncing from: <span className="font-medium text-gray-700">{calendarName}</span>
+                  <span className="text-sm text-muted-foreground">
+                    Syncing from: <span className="font-medium text-foreground">{calendarName}</span>
                   </span>
                 ) : (
-                  <span className="text-sm text-red-500">
+                  <span className="text-sm text-destructive">
                     &quot;SmartMoving Jobs&quot; calendar not found. Make sure it exists in your Google Calendar.
                   </span>
                 )}
@@ -141,7 +141,7 @@ export default function CalendarSyncPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 Click below to authorize access to your Google Calendar. This allows the dashboard
                 to read your SmartMoving job events.
               </p>
@@ -196,28 +196,28 @@ export default function CalendarSyncPage() {
             </div>
 
             {lastSyncResult && (
-              <div className="rounded-lg border p-4 bg-gray-50 space-y-1">
+              <div className="rounded-lg border p-4 bg-muted space-y-1">
                 <p className="text-sm font-medium">Sync Results</p>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   Found {lastSyncResult.total_events} calendar events &middot;
                   Synced {lastSyncResult.synced} jobs &middot;
                   Skipped {lastSyncResult.skipped} non-job events
                 </p>
                 {lastSyncResult.unmatched_crew.length > 0 && (
                   <div className="mt-2">
-                    <p className="text-sm text-yellow-700 font-medium">
+                    <p className="text-sm text-destructive font-medium">
                       Unmatched crew (not in dashboard — add them under Employees):
                     </p>
-                    <p className="text-sm text-yellow-600">
+                    <p className="text-sm text-destructive">
                       {lastSyncResult.unmatched_crew.join(', ')}
                     </p>
                   </div>
                 )}
                 {lastSyncResult.errors.length > 0 && (
                   <div className="mt-2">
-                    <p className="text-sm text-red-600 font-medium">Errors:</p>
+                    <p className="text-sm text-destructive font-medium">Errors:</p>
                     {lastSyncResult.errors.map((err, i) => (
-                      <p key={i} className="text-sm text-red-500">{err}</p>
+                      <p key={i} className="text-sm text-destructive">{err}</p>
                     ))}
                   </div>
                 )}
@@ -237,7 +237,7 @@ export default function CalendarSyncPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex items-center gap-2 py-8 justify-center text-gray-500">
+            <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading...
             </div>
@@ -266,7 +266,7 @@ export default function CalendarSyncPage() {
                         <div>
                           <p className="font-medium">{job.customer_name}</p>
                           {job.customer_phone && (
-                            <p className="text-xs text-gray-500">{job.customer_phone}</p>
+                            <p className="text-xs text-muted-foreground">{job.customer_phone}</p>
                           )}
                         </div>
                       </TableCell>
@@ -274,7 +274,7 @@ export default function CalendarSyncPage() {
                         <div>
                           <p className="text-sm">{job.service_type || '-'}</p>
                           {job.estimated_hours && (
-                            <p className="text-xs text-gray-500">{job.estimated_hours} hrs est.</p>
+                            <p className="text-xs text-muted-foreground">{job.estimated_hours} hrs est.</p>
                           )}
                         </div>
                       </TableCell>
@@ -288,7 +288,7 @@ export default function CalendarSyncPage() {
                             ))}
                           </div>
                         ) : (
-                          <span className="text-gray-400 text-sm">-</span>
+                          <span className="text-muted-foreground/70 text-sm">-</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -303,7 +303,7 @@ export default function CalendarSyncPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       No synced jobs yet. Connect your calendar and sync to get started.
                     </TableCell>
                   </TableRow>

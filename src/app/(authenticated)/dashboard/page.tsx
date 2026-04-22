@@ -19,7 +19,7 @@ export default async function DashboardPage() {
       <div className="p-6">
         <Card>
           <CardContent className="p-6">
-            <p className="text-gray-500">Employee profile not found. Please contact your administrator.</p>
+            <p className="text-muted-foreground">Employee profile not found. Please contact your administrator.</p>
           </CardContent>
         </Card>
       </div>

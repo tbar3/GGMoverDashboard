@@ -51,8 +51,8 @@ export function StatsContent({
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t('stats.title')}</h1>
-        <p className="text-gray-500 mt-1">{t('stats.subtitle')}</p>
+        <h1 className="text-2xl font-bold text-foreground">{t('stats.title')}</h1>
+        <p className="text-muted-foreground mt-1">{t('stats.subtitle')}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -62,7 +62,7 @@ export function StatsContent({
             <CardTitle className="text-3xl">{tenureMonths}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               {tenureMonths === 1 ? t('dash.month_share') : t('dash.months_shares', { count: tenureMonths })}
             </p>
           </CardContent>
@@ -71,12 +71,12 @@ export function StatsContent({
         <Card>
           <CardHeader className="pb-2">
             <CardDescription className="flex items-center gap-2"><CalendarCheck className="h-4 w-4" />{t('stats.on_time_rate')}</CardDescription>
-            <CardTitle className={`text-3xl ${onTimePercentage >= 90 ? 'text-green-600' : onTimePercentage >= 75 ? 'text-yellow-600' : 'text-red-600'}`}>
+            <CardTitle className={`text-3xl ${onTimePercentage >= 90 ? 'text-green-600' : onTimePercentage >= 75 ? 'text-destructive' : 'text-destructive'}`}>
               {onTimePercentage}%
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-500">{t('stats.days_this_month', { ontime: daysWorked - tardyCount, total: daysWorked })}</p>
+            <p className="text-sm text-muted-foreground">{t('stats.days_this_month', { ontime: daysWorked - tardyCount, total: daysWorked })}</p>
           </CardContent>
         </Card>
 
@@ -86,7 +86,7 @@ export function StatsContent({
             <CardTitle className="text-3xl text-green-600">{perfectWeeksThisMonth}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-500">{t('stats.this_month_total', { total: perfectWeeks.length })}</p>
+            <p className="text-sm text-muted-foreground">{t('stats.this_month_total', { total: perfectWeeks.length })}</p>
           </CardContent>
         </Card>
 
@@ -96,7 +96,7 @@ export function StatsContent({
             <CardTitle className="text-3xl">{perfEventsThisMonth}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-500">{t('stats.events_this_month')}</p>
+            <p className="text-sm text-muted-foreground">{t('stats.events_this_month')}</p>
           </CardContent>
         </Card>
       </div>
@@ -137,7 +137,7 @@ export function StatsContent({
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-gray-500">{t('stats.no_attendance')}</TableCell>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t('stats.no_attendance')}</TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -154,19 +154,19 @@ export function StatsContent({
             {performanceEvents.length > 0 ? (
               <div className="space-y-3">
                 {performanceEvents.map((event) => (
-                  <div key={event.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div key={event.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
                     <div className="flex items-center gap-3">
                       <Badge variant={event.type === 'five_star_review' ? 'default' : event.type === 'customer_callout' ? 'secondary' : 'outline'}>
                         {event.type === 'five_star_review' ? t('dash.five_star') : event.type === 'customer_callout' ? t('dash.customer') : t('dash.crew')}
                       </Badge>
                       <span className="text-sm">{event.description || t('dash.great_work')}</span>
                     </div>
-                    <span className="text-xs text-gray-500">{format(new Date(event.date), 'MMM d')}</span>
+                    <span className="text-xs text-muted-foreground">{format(new Date(event.date), 'MMM d')}</span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500 text-sm text-center py-8">{t('stats.no_attendance')}</p>
+              <p className="text-muted-foreground text-sm text-center py-8">{t('stats.no_attendance')}</p>
             )}
           </CardContent>
         </Card>
@@ -179,10 +179,10 @@ export function StatsContent({
             <CardDescription>{t('stats.mileage_desc')}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-secondary/40 rounded-lg">
               <div>
-                <p className="text-2xl font-bold text-blue-600">${totalMileageAmount.toFixed(2)}</p>
-                <p className="text-sm text-blue-500">{totalMiles.toFixed(1)} miles @ ${CONFIG.MILEAGE_RATE}/mi</p>
+                <p className="text-2xl font-bold text-primary">${totalMileageAmount.toFixed(2)}</p>
+                <p className="text-sm text-primary">{totalMiles.toFixed(1)} miles @ ${CONFIG.MILEAGE_RATE}/mi</p>
               </div>
               <Badge variant="outline" className="bg-white">{monthLabel}</Badge>
             </div>
@@ -196,24 +196,24 @@ export function StatsContent({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">{t('dash.role')}</span>
+              <span className="text-sm text-muted-foreground">{t('dash.role')}</span>
               <Badge variant="outline" className="capitalize">{employee.role}</Badge>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">{t('dash.start_date')}</span>
+              <span className="text-sm text-muted-foreground">{t('dash.start_date')}</span>
               <span className="font-medium">{format(new Date(employee.start_date), 'MMM d, yyyy')}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">{t('stats.tenure_shares')}</span>
+              <span className="text-sm text-muted-foreground">{t('stats.tenure_shares')}</span>
               <span className="font-medium">{tenureMonths}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">{t('dash.checklists_completed')}</span>
+              <span className="text-sm text-muted-foreground">{t('dash.checklists_completed')}</span>
               <span className="font-medium">{checklistsCompleted} {t('stats.this_month')}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">{t('stats.uniform_violations')}</span>
-              <span className={`font-medium ${uniformCount === 0 ? 'text-green-600' : 'text-red-600'}`}>{uniformCount} {t('stats.this_month')}</span>
+              <span className="text-sm text-muted-foreground">{t('stats.uniform_violations')}</span>
+              <span className={`font-medium ${uniformCount === 0 ? 'text-green-600' : 'text-destructive'}`}>{uniformCount} {t('stats.this_month')}</span>
             </div>
           </CardContent>
         </Card>

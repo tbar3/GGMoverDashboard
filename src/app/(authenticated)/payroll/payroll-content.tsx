@@ -28,15 +28,15 @@ export function PayrollContent({ employee, entries, thisWeekJobs, expectedHours,
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t('pay.title')}</h1>
-        <p className="text-gray-500 mt-1">{t('pay.subtitle')}</p>
+        <h1 className="text-2xl font-bold text-foreground">{t('pay.title')}</h1>
+        <p className="text-muted-foreground mt-1">{t('pay.subtitle')}</p>
       </div>
 
       {/* This Week Expected */}
       {thisWeekJobs.length > 0 && (
-        <Card className="border-blue-200 bg-blue-50/30">
+        <Card className="border-blue-200 bg-secondary/40/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-blue-800">{t('pay.this_week')}</CardTitle>
+            <CardTitle className="text-base text-primary">{t('pay.this_week')}</CardTitle>
             <CardDescription>
               {currentMondayStr} &ndash; {currentSundayStr} &middot; {thisWeekJobs.length === 1 ? t('pay.job_count') : t('pay.jobs_count', { count: thisWeekJobs.length })}
             </CardDescription>
@@ -44,12 +44,12 @@ export function PayrollContent({ employee, entries, thisWeekJobs, expectedHours,
           <CardContent>
             <div className="flex items-center gap-6">
               <div>
-                <p className="text-2xl font-bold text-blue-700">{expectedHours.toFixed(1)} hrs</p>
-                <p className="text-xs text-blue-500">{t('pay.expected_hours')}</p>
+                <p className="text-2xl font-bold text-primary">{expectedHours.toFixed(1)} hrs</p>
+                <p className="text-xs text-primary">{t('pay.expected_hours')}</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-blue-700">${expectedPay.toFixed(2)}</p>
-                <p className="text-xs text-blue-500">{t('pay.expected_pay')}</p>
+                <p className="text-2xl font-bold text-primary">${expectedPay.toFixed(2)}</p>
+                <p className="text-xs text-primary">{t('pay.expected_pay')}</p>
               </div>
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -70,7 +70,7 @@ export function PayrollContent({ employee, entries, thisWeekJobs, expectedHours,
             <CardDescription>{t('pay.hourly_rate')}</CardDescription>
             <CardTitle className="text-3xl">${employee.hourly_rate ? Number(employee.hourly_rate).toFixed(2) : '—'}</CardTitle>
           </CardHeader>
-          <CardContent><p className="text-sm text-gray-500">{t('pay.per_hour')}</p></CardContent>
+          <CardContent><p className="text-sm text-muted-foreground">{t('pay.per_hour')}</p></CardContent>
         </Card>
 
         {latestEntry && (
@@ -82,7 +82,7 @@ export function PayrollContent({ employee, entries, thisWeekJobs, expectedHours,
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground">
                 {format(new Date(latestEntry.week_start), 'MMM d')} – {format(new Date(latestEntry.week_end), 'MMM d')}
               </p>
             </CardContent>
@@ -94,7 +94,7 @@ export function PayrollContent({ employee, entries, thisWeekJobs, expectedHours,
             <CardDescription>{t('pay.total_hours_recent')}</CardDescription>
             <CardTitle className="text-3xl">{totalHours.toFixed(1)}</CardTitle>
           </CardHeader>
-          <CardContent><p className="text-sm text-gray-500">{t('pay.across_periods', { count: entries.length })}</p></CardContent>
+          <CardContent><p className="text-sm text-muted-foreground">{t('pay.across_periods', { count: entries.length })}</p></CardContent>
         </Card>
       </div>
 
@@ -110,50 +110,50 @@ export function PayrollContent({ employee, entries, thisWeekJobs, expectedHours,
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center p-3 rounded-lg bg-gray-50">
+              <div className="text-center p-3 rounded-lg bg-muted">
                 <p className="text-2xl font-bold">{Number(latestEntry.travel_hours).toFixed(1)}</p>
-                <p className="text-xs text-gray-500">{t('pay.travel_hours')}</p>
+                <p className="text-xs text-muted-foreground">{t('pay.travel_hours')}</p>
               </div>
-              <div className="text-center p-3 rounded-lg bg-gray-50">
+              <div className="text-center p-3 rounded-lg bg-muted">
                 <p className="text-2xl font-bold">{Number(latestEntry.job_hours).toFixed(1)}</p>
-                <p className="text-xs text-gray-500">{t('pay.job_hours')}</p>
+                <p className="text-xs text-muted-foreground">{t('pay.job_hours')}</p>
               </div>
-              <div className="text-center p-3 rounded-lg bg-gray-50">
+              <div className="text-center p-3 rounded-lg bg-muted">
                 <p className="text-2xl font-bold">{Number(latestEntry.warehouse_hours).toFixed(1)}</p>
-                <p className="text-xs text-gray-500">{t('pay.warehouse_hours')}</p>
+                <p className="text-xs text-muted-foreground">{t('pay.warehouse_hours')}</p>
               </div>
-              <div className="text-center p-3 rounded-lg bg-blue-50">
-                <p className="text-2xl font-bold text-blue-600">{Number(latestEntry.total_hours).toFixed(1)}</p>
-                <p className="text-xs text-gray-500">{t('pay.total_hours')}</p>
+              <div className="text-center p-3 rounded-lg bg-secondary/40">
+                <p className="text-2xl font-bold text-primary">{Number(latestEntry.total_hours).toFixed(1)}</p>
+                <p className="text-xs text-muted-foreground">{t('pay.total_hours')}</p>
               </div>
             </div>
             <Separator className="my-4" />
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">{t('pay.gross_pay')} ({Number(latestEntry.total_hours).toFixed(1)} hrs &times; ${Number(latestEntry.hourly_rate).toFixed(2)})</span>
+                <span className="text-sm text-muted-foreground">{t('pay.gross_pay')} ({Number(latestEntry.total_hours).toFixed(1)} hrs &times; ${Number(latestEntry.hourly_rate).toFixed(2)})</span>
                 <span className="font-medium">${Number(latestEntry.gross_pay).toFixed(2)}</span>
               </div>
               {Number(latestEntry.lunch_reimbursement) > 0 && (
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">{t('pay.lunch_reimb')}</span>
+                  <span className="text-sm text-muted-foreground">{t('pay.lunch_reimb')}</span>
                   <span className="font-medium">${Number(latestEntry.lunch_reimbursement).toFixed(2)}</span>
                 </div>
               )}
               {Number(latestEntry.mileage_reimbursement) > 0 && (
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">{t('pay.mileage_reimb')}</span>
+                  <span className="text-sm text-muted-foreground">{t('pay.mileage_reimb')}</span>
                   <span className="font-medium">${Number(latestEntry.mileage_reimbursement).toFixed(2)}</span>
                 </div>
               )}
               {Number(latestEntry.other_reimbursement) > 0 && (
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">{t('pay.other_reimb')}</span>
+                  <span className="text-sm text-muted-foreground">{t('pay.other_reimb')}</span>
                   <span className="font-medium">${Number(latestEntry.other_reimbursement).toFixed(2)}</span>
                 </div>
               )}
               {Number(latestEntry.tip) > 0 && (
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">{t('pay.tips')}</span>
+                  <span className="text-sm text-muted-foreground">{t('pay.tips')}</span>
                   <span className="font-medium">${Number(latestEntry.tip).toFixed(2)}</span>
                 </div>
               )}
@@ -214,7 +214,7 @@ export function PayrollContent({ employee, entries, thisWeekJobs, expectedHours,
               </TableBody>
             </Table>
           ) : (
-            <p className="text-center text-gray-500 py-8">{t('pay.no_records')}</p>
+            <p className="text-center text-muted-foreground py-8">{t('pay.no_records')}</p>
           )}
         </CardContent>
       </Card>

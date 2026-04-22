@@ -118,8 +118,8 @@ export default function JobsPage() {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Jobs</h1>
-          <p className="text-gray-500 mt-1">Manage moving jobs and crew assignments</p>
+          <h1 className="text-2xl font-bold text-foreground">Jobs</h1>
+          <p className="text-muted-foreground mt-1">Manage moving jobs and crew assignments</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -243,12 +243,12 @@ export default function JobsPage() {
             <TableBody>
               {jobs.length > 0 ? (
                 jobs.map((job) => (
-                  <TableRow key={job.id} className="cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/admin/jobs/${job.id}`)}>
+                  <TableRow key={job.id} className="cursor-pointer hover:bg-muted" onClick={() => router.push(`/admin/jobs/${job.id}`)}>
                     <TableCell>
                       {job.job_number ? (
                         <Badge variant="outline">{job.job_number}</Badge>
                       ) : (
-                        <span className="text-gray-400 text-xs">Manual</span>
+                        <span className="text-muted-foreground/70 text-xs">Manual</span>
                       )}
                     </TableCell>
                     <TableCell>{format(new Date(job.date), 'MMM d, yyyy')}</TableCell>
@@ -258,9 +258,9 @@ export default function JobsPage() {
                       {job.crew_ids && job.crew_ids.length > 0 ? (
                         <span className="text-sm">{getCrewNames(job.crew_ids)}</span>
                       ) : job.crew_manifest && job.crew_manifest.length > 0 ? (
-                        <span className="text-sm text-gray-500">{job.crew_manifest.map(m => m.name).join(', ')}</span>
+                        <span className="text-sm text-muted-foreground">{job.crew_manifest.map(m => m.name).join(', ')}</span>
                       ) : (
-                        <span className="text-gray-400 text-sm">No crew</span>
+                        <span className="text-muted-foreground/70 text-sm">No crew</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
@@ -275,7 +275,7 @@ export default function JobsPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No jobs found. Add your first job to get started.
                   </TableCell>
                 </TableRow>

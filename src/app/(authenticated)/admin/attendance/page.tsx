@@ -111,8 +111,8 @@ export default function AttendancePage() {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Attendance</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-foreground">Attendance</h1>
+          <p className="text-muted-foreground mt-1">
             Log daily attendance. Tardy cutoff: {cutoffTime} AM
           </p>
         </div>
@@ -176,7 +176,7 @@ export default function AttendancePage() {
                           {record.is_tardy ? 'Tardy' : 'On Time'}
                         </Badge>
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span className="text-muted-foreground/70">-</span>
                       )}
                     </TableCell>
                     <TableCell>

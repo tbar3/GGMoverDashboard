@@ -103,8 +103,8 @@ export default function ImportPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Import Data</h1>
-        <p className="text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-foreground">Import Data</h1>
+        <p className="text-muted-foreground mt-1">
           Upload CSV or Excel files to import data from SmartMoving or other sources
         </p>
       </div>
@@ -132,7 +132,7 @@ export default function ImportPage() {
                 {IMPORT_TYPES.map((type) => (
                   <SelectItem key={type.value} value={type.value}>
                     <span className="font-medium">{type.label}</span>
-                    <span className="text-gray-500 ml-2 text-xs">— {type.description}</span>
+                    <span className="text-muted-foreground ml-2 text-xs">— {type.description}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -141,17 +141,17 @@ export default function ImportPage() {
 
           {/* Column hints */}
           {importType && COLUMN_HINTS[importType] && (
-            <div className="rounded-lg border p-3 bg-blue-50">
+            <div className="rounded-lg border p-3 bg-secondary/40">
               <div className="flex items-start gap-2">
-                <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-blue-800">Expected columns for {selectedType?.label}:</p>
+                  <p className="text-sm font-medium text-primary">Expected columns for {selectedType?.label}:</p>
                   <div className="flex flex-wrap gap-1.5 mt-1">
                     {COLUMN_HINTS[importType].map((col) => (
                       <Badge key={col} variant="secondary" className="text-xs font-mono">{col}</Badge>
                     ))}
                   </div>
-                  <p className="text-xs text-blue-600 mt-1">
+                  <p className="text-xs text-primary mt-1">
                     Column names are flexible — spaces, caps, and slight variations are handled automatically.
                   </p>
                 </div>
@@ -169,7 +169,7 @@ export default function ImportPage() {
                   type="file"
                   accept=".csv,.xlsx,.xls"
                   onChange={handleFileChange}
-                  className="block text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  className="block text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-secondary/40 file:text-primary hover:file:bg-secondary"
                 />
                 {file && (
                   <Badge variant="outline">
@@ -207,30 +207,30 @@ export default function ImportPage() {
               {result.imported > 0 ? (
                 <CheckCircle className="h-5 w-5 text-green-600" />
               ) : (
-                <AlertCircle className="h-5 w-5 text-red-600" />
+                <AlertCircle className="h-5 w-5 text-destructive" />
               )}
               Import Results
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
-              <div className="text-center p-3 rounded-lg bg-gray-50">
+              <div className="text-center p-3 rounded-lg bg-muted">
                 <p className="text-2xl font-bold">{result.total_rows}</p>
-                <p className="text-xs text-gray-500">Total Rows</p>
+                <p className="text-xs text-muted-foreground">Total Rows</p>
               </div>
               <div className="text-center p-3 rounded-lg bg-green-50">
                 <p className="text-2xl font-bold text-green-600">{result.imported}</p>
-                <p className="text-xs text-gray-500">Imported</p>
+                <p className="text-xs text-muted-foreground">Imported</p>
               </div>
               <div className="text-center p-3 rounded-lg bg-red-50">
-                <p className="text-2xl font-bold text-red-600">{result.errors.length}</p>
-                <p className="text-xs text-gray-500">Errors</p>
+                <p className="text-2xl font-bold text-destructive">{result.errors.length}</p>
+                <p className="text-xs text-muted-foreground">Errors</p>
               </div>
             </div>
 
             {result.columns.length > 0 && (
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Detected columns:</p>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Detected columns:</p>
                 <div className="flex flex-wrap gap-1.5">
                   {result.columns.map((col) => (
                     <Badge key={col} variant="outline" className="text-xs font-mono">{col}</Badge>
@@ -241,7 +241,7 @@ export default function ImportPage() {
 
             {result.errors.length > 0 && (
               <div>
-                <p className="text-sm font-medium text-red-600 mb-1">Errors ({result.errors.length}):</p>
+                <p className="text-sm font-medium text-destructive mb-1">Errors ({result.errors.length}):</p>
                 <div className="max-h-48 overflow-y-auto space-y-1 bg-red-50 rounded-lg p-3">
                   {result.errors.map((err, i) => (
                     <p key={i} className="text-sm text-red-700">{err}</p>

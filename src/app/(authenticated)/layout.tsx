@@ -28,7 +28,7 @@ export default async function AuthenticatedLayout({
 
   return (
     <I18nWrapper>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-muted">
         <Sidebar isAdmin={isAdmin} userName={userName} />
         <main className="lg:pl-64">
           <div className="pt-16 lg:pt-0">

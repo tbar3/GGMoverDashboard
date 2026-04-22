@@ -27,8 +27,8 @@ export default async function EmployeesPage() {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Employees</h1>
-          <p className="text-gray-500 mt-1">Manage your crew members</p>
+          <h1 className="text-2xl font-bold text-foreground">Employees</h1>
+          <p className="text-muted-foreground mt-1">Manage your crew members</p>
         </div>
         <Link href="/admin/employees/new">
           <Button>
@@ -73,7 +73,7 @@ export default async function EmployeesPage() {
                       </TableCell>
                       <TableCell>
                         {tenureMonths} {tenureMonths === 1 ? 'month' : 'months'}
-                        <span className="text-gray-400 text-xs ml-1">
+                        <span className="text-muted-foreground/70 text-xs ml-1">
                           ({tenureMonths} shares)
                         </span>
                       </TableCell>
@@ -84,7 +84,7 @@ export default async function EmployeesPage() {
                       </TableCell>
                       <TableCell>
                         {employee.is_admin && (
-                          <Badge variant="outline" className="bg-blue-50">
+                          <Badge variant="outline" className="bg-secondary/40">
                             Admin
                           </Badge>
                         )}
@@ -101,7 +101,7 @@ export default async function EmployeesPage() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No employees found. Add your first employee to get started.
                   </TableCell>
                 </TableRow>

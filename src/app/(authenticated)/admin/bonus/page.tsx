@@ -85,8 +85,8 @@ export default function BonusCalculatorPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Bonus Calculator</h1>
-        <p className="text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-foreground">Bonus Calculator</h1>
+        <p className="text-muted-foreground mt-1">
           Calculate monthly bonus pool distribution for {format(now, 'MMMM yyyy')}
         </p>
       </div>
@@ -135,19 +135,19 @@ export default function BonusCalculatorPage() {
 
           <Separator />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div className="p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-2 text-gray-500">
+            <div className="p-3 bg-muted rounded-lg">
+              <div className="flex items-center gap-2 text-muted-foreground">
                 <Users className="h-4 w-4" />
                 Active Employees
               </div>
               <p className="text-xl font-bold mt-1">{employees.length}</p>
             </div>
             <div className="p-3 bg-red-50 rounded-lg">
-              <div className="flex items-center gap-2 text-red-600">
+              <div className="flex items-center gap-2 text-destructive">
                 <TrendingDown className="h-4 w-4" />
                 Damages Impact
               </div>
-              <p className="text-xl font-bold mt-1 text-red-600">-${totalDamages.toFixed(2)}</p>
+              <p className="text-xl font-bold mt-1 text-destructive">-${totalDamages.toFixed(2)}</p>
             </div>
             <div className="p-3 bg-green-50 rounded-lg">
               <div className="flex items-center gap-2 text-green-600">
@@ -156,12 +156,12 @@ export default function BonusCalculatorPage() {
               </div>
               <p className="text-xl font-bold mt-1 text-green-600">{performanceEvents.length}</p>
             </div>
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <div className="flex items-center gap-2 text-blue-600">
+            <div className="p-3 bg-secondary/40 rounded-lg">
+              <div className="flex items-center gap-2 text-primary">
                 <Car className="h-4 w-4" />
                 Mileage Entries
               </div>
-              <p className="text-xl font-bold mt-1 text-blue-600">{mileageEntries.length}</p>
+              <p className="text-xl font-bold mt-1 text-primary">{mileageEntries.length}</p>
             </div>
           </div>
         </CardContent>
@@ -170,15 +170,15 @@ export default function BonusCalculatorPage() {
       {calculated && result && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+            <Card className="bg-gradient-to-br from-brand-navy to-[#01405F] text-primary-foreground">
               <CardHeader className="pb-2">
-                <CardDescription className="text-blue-100">Gross Pool</CardDescription>
+                <CardDescription className="text-primary-foreground/80">Gross Pool</CardDescription>
                 <CardTitle className="text-2xl text-white">
                   ${result.grossPool.toFixed(2)}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-blue-100 text-sm">
+                <p className="text-primary-foreground/80 text-sm">
                   {result.poolPercentage}% of ${result.totalRevenue.toLocaleString()}
                 </p>
               </CardContent>
@@ -186,13 +186,13 @@ export default function BonusCalculatorPage() {
 
             <Card className="bg-red-50 border-red-200">
               <CardHeader className="pb-2">
-                <CardDescription className="text-red-600">Damages Deducted</CardDescription>
-                <CardTitle className="text-2xl text-red-600">
+                <CardDescription className="text-destructive">Damages Deducted</CardDescription>
+                <CardTitle className="text-2xl text-destructive">
                   -${result.damagesDeducted.toFixed(2)}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-red-500 text-sm">{damages.length} damage incidents</p>
+                <p className="text-destructive text-sm">{damages.length} damage incidents</p>
               </CardContent>
             </Card>
 
@@ -252,7 +252,7 @@ export default function BonusCalculatorPage() {
                         <TableCell className="font-medium">{payout.employeeName}</TableCell>
                         <TableCell className="text-right">
                           {payout.tenureMonths} mo
-                          <span className="text-gray-400 text-xs ml-1">
+                          <span className="text-muted-foreground/70 text-xs ml-1">
                             ({payout.tenureShares} shares)
                           </span>
                         </TableCell>
@@ -261,28 +261,28 @@ export default function BonusCalculatorPage() {
                           {payout.performanceScore > 0 ? (
                             <Badge variant="secondary">{payout.performanceScore}</Badge>
                           ) : (
-                            <span className="text-gray-400">0</span>
+                            <span className="text-muted-foreground/70">0</span>
                           )}
                         </TableCell>
                         <TableCell className="text-right">${payout.performanceAmount.toFixed(2)}</TableCell>
-                        <TableCell className="text-right text-blue-600">${payout.mileageAmount.toFixed(2)}</TableCell>
+                        <TableCell className="text-right text-primary">${payout.mileageAmount.toFixed(2)}</TableCell>
                         <TableCell className="text-right">
                           {payout.perfectWeekHours > 0 ? (
                             <Badge variant="default">{payout.perfectWeekHours}hr</Badge>
                           ) : (
-                            <span className="text-gray-400">-</span>
+                            <span className="text-muted-foreground/70">-</span>
                           )}
                         </TableCell>
                         <TableCell className="text-right font-bold text-green-600">${payout.totalAmount.toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
-                  <TableRow className="bg-gray-50 font-bold">
+                  <TableRow className="bg-muted font-bold">
                     <TableCell>TOTAL</TableCell>
                     <TableCell className="text-right">{result.totalTenureShares} shares</TableCell>
                     <TableCell className="text-right">${result.tenurePool.toFixed(2)}</TableCell>
                     <TableCell className="text-right">{result.totalPerformanceScore}</TableCell>
                     <TableCell className="text-right">${result.performancePool.toFixed(2)}</TableCell>
-                    <TableCell className="text-right text-blue-600">
+                    <TableCell className="text-right text-primary">
                       ${result.payouts.reduce((sum, p) => sum + p.mileageAmount, 0).toFixed(2)}
                     </TableCell>
                     <TableCell className="text-right">
@@ -303,9 +303,9 @@ export default function BonusCalculatorPage() {
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <h4 className="font-medium text-blue-700">Tenure Pool (50%)</h4>
-                  <p className="text-blue-600 mt-1">
+                <div className="p-4 bg-secondary/40 rounded-lg">
+                  <h4 className="font-medium text-primary">Tenure Pool (50%)</h4>
+                  <p className="text-primary mt-1">
                     Split based on months of service. 1 month = 1 share.
                     The more months you've worked, the larger your share.
                   </p>
@@ -318,12 +318,12 @@ export default function BonusCalculatorPage() {
                   </p>
                 </div>
               </div>
-              <div className="p-4 bg-yellow-50 rounded-lg">
+              <div className="p-4 bg-destructive/10 rounded-lg">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                  <h4 className="font-medium text-yellow-700">Damages</h4>
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  <h4 className="font-medium text-destructive">Damages</h4>
                 </div>
-                <p className="text-yellow-600 mt-1">
+                <p className="text-destructive mt-1">
                   Damages are deducted from the pool before distribution.
                   Unreported damages cost 2x the actual amount.
                 </p>

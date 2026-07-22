@@ -3,10 +3,9 @@ import { query } from '@/lib/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Users, Briefcase, AlertTriangle, Star, Car, CalendarCheck, CalendarSync } from 'lucide-react';
+import { LIVE_AREAS, PLANNED_AREAS } from '@/lib/nav';
 
-export default async function AdminDashboardPage() {
+export default async function CompanyHubPage() {
   const user = await currentUser();
   if (!user) return null;
 
@@ -35,22 +34,12 @@ export default async function AdminDashboardPage() {
   const tardyCount = attendance.filter(a => a.is_tardy).length;
   const totalAttendance = attendance.length;
 
-  const quickActions = [
-    { title: 'Employees', href: '/admin/employees', icon: <Users className="h-5 w-5" />, description: 'Manage crew' },
-    { title: 'Jobs', href: '/admin/jobs', icon: <Briefcase className="h-5 w-5" />, description: 'View moves' },
-    { title: 'Attendance', href: '/admin/attendance', icon: <CalendarCheck className="h-5 w-5" />, description: 'Log attendance' },
-    { title: 'Damages', href: '/admin/damages', icon: <AlertTriangle className="h-5 w-5" />, description: 'Log damages' },
-    { title: 'Performance', href: '/admin/performance', icon: <Star className="h-5 w-5" />, description: 'Log reviews' },
-    { title: 'Mileage', href: '/admin/mileage', icon: <Car className="h-5 w-5" />, description: 'Log mileage' },
-    { title: 'Calendar Sync', href: '/admin/calendar', icon: <CalendarSync className="h-5 w-5" />, description: 'Import jobs' },
-  ];
-
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
+        <h1 className="text-2xl font-bold text-foreground">Company Hub</h1>
         <p className="text-muted-foreground mt-1">
-          Overview for {format(now, 'MMMM yyyy')}
+          Everything GoodGuys, in one place — {format(now, 'MMMM yyyy')}
         </p>
       </div>
 
@@ -135,39 +124,72 @@ export default async function AdminDashboardPage() {
         </Link>
       </div>
 
+      {/* One section per live area — same config the sidebar renders from. */}
+      {LIVE_AREAS.map((area) => {
+        const AreaIcon = area.icon;
+        return (
+          <Card key={area.key}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AreaIcon className="h-5 w-5 text-primary" />
+                {area.label}
+              </CardTitle>
+              <CardDescription>{area.description}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {area.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link key={item.href} href={item.href}>
+                      <div className="flex items-start gap-3 p-4 h-full rounded-lg border hover:bg-muted transition-colors">
+                        <div className="p-2 rounded-full bg-secondary text-primary shrink-0">
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">{item.title}</p>
+                          <p className="text-xs text-muted-foreground">{item.description}</p>
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+
+      {/* Modules still to come. Not links — these routes don't exist yet. */}
       <Card>
         <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Common admin tasks</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {quickActions.map((action) => (
-              <Link key={action.href} href={action.href}>
-                <div className="flex flex-col items-center p-4 rounded-lg border hover:bg-muted transition-colors">
-                  <div className="p-2 rounded-full bg-secondary text-primary mb-2">
-                    {action.icon}
-                  </div>
-                  <span className="text-sm font-medium">{action.title}</span>
-                  <span className="text-xs text-muted-foreground">{action.description}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="bg-gradient-to-r from-brand-navy to-[#01405F] text-primary-foreground">
-        <CardHeader>
-          <CardTitle className="text-white">Monthly Bonus Calculator</CardTitle>
-          <CardDescription className="text-primary-foreground/80">
-            Calculate and preview bonus payouts for the current month
+          <CardTitle>Coming to the hub</CardTitle>
+          <CardDescription>
+            Modules being consolidated into this dashboard
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Link href="/admin/bonus">
-            <Button variant="secondary">Open Bonus Calculator →</Button>
-          </Link>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {PLANNED_AREAS.map((area) => {
+              const Icon = area.icon;
+              return (
+                <div
+                  key={area.key}
+                  className="flex items-start gap-3 p-4 h-full rounded-lg border border-dashed bg-muted/40"
+                >
+                  <div className="p-2 rounded-full bg-secondary text-muted-foreground shrink-0">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-muted-foreground">
+                      {area.label}
+                    </p>
+                    <p className="text-xs text-muted-foreground/80">{area.description}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </CardContent>
       </Card>
     </div>

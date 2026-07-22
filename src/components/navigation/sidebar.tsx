@@ -6,18 +6,10 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
-  Users,
   ClipboardList,
-  CalendarCheck,
-  CalendarSync,
-  Car,
-  AlertTriangle,
-  Star,
-  Calculator,
   BarChart3,
   Briefcase,
   DollarSign,
-  FileSpreadsheet,
   LogOut,
   Menu,
 } from 'lucide-react';
@@ -25,7 +17,8 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useState } from 'react';
 import { useClerk } from '@clerk/nextjs';
-import { useI18n, Locale } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
+import { LIVE_AREAS } from '@/lib/nav';
 
 interface NavItem {
   titleKey: string;
@@ -34,6 +27,13 @@ interface NavItem {
   icon: React.ReactNode;
   adminOnly?: boolean;
 }
+
+/** Shared nav-link styling, so crew and back-office links stay visually identical. */
+const linkClass =
+  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors';
+const activeClass = 'bg-sidebar-primary text-sidebar-primary-foreground';
+const idleClass =
+  'text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground';
 
 const employeeNavItems: NavItem[] = [
   {
@@ -68,19 +68,12 @@ const employeeNavItems: NavItem[] = [
   },
 ];
 
-const adminNavItems: NavItem[] = [
-  { titleKey: '', fallback: 'Admin Dashboard', href: '/admin', icon: <LayoutDashboard className="h-5 w-5" />, adminOnly: true },
-  { titleKey: '', fallback: 'Employees', href: '/admin/employees', icon: <Users className="h-5 w-5" />, adminOnly: true },
-  { titleKey: '', fallback: 'Jobs', href: '/admin/jobs', icon: <Briefcase className="h-5 w-5" />, adminOnly: true },
-  { titleKey: '', fallback: 'Attendance', href: '/admin/attendance', icon: <CalendarCheck className="h-5 w-5" />, adminOnly: true },
-  { titleKey: '', fallback: 'Damages', href: '/admin/damages', icon: <AlertTriangle className="h-5 w-5" />, adminOnly: true },
-  { titleKey: '', fallback: 'Performance', href: '/admin/performance', icon: <Star className="h-5 w-5" />, adminOnly: true },
-  { titleKey: '', fallback: 'Mileage', href: '/admin/mileage', icon: <Car className="h-5 w-5" />, adminOnly: true },
-  { titleKey: '', fallback: 'Payroll', href: '/admin/payroll', icon: <DollarSign className="h-5 w-5" />, adminOnly: true },
-  { titleKey: '', fallback: 'Calendar Sync', href: '/admin/calendar', icon: <CalendarSync className="h-5 w-5" />, adminOnly: true },
-  { titleKey: '', fallback: 'Import Data', href: '/admin/import', icon: <FileSpreadsheet className="h-5 w-5" />, adminOnly: true },
-  { titleKey: '', fallback: 'Bonus Calculator', href: '/admin/bonus', icon: <Calculator className="h-5 w-5" />, adminOnly: true },
-];
+/** The hub home — the back-office landing page that sits above the grouped areas. */
+const hubHome = {
+  title: 'Company Hub',
+  href: '/admin',
+  icon: <LayoutDashboard className="h-5 w-5" />,
+};
 
 interface SidebarProps {
   isAdmin: boolean;
@@ -124,12 +117,7 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
             <Link
               key={item.href}
               href={item.href}
-              className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                pathname === item.href
-                  ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                  : 'text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-              )}
+              className={cn(linkClass, pathname === item.href ? activeClass : idleClass)}
             >
               {item.icon}
               {getTitle(item)}
@@ -137,28 +125,43 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
           ))}
         </div>
 
-        {/* Admin Section */}
+        {/* Back-office Sections — one group per live area, from the shared nav config. */}
         {isAdmin && (
-          <div className="mt-6 space-y-1">
-            <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
-              Admin
-            </p>
-            {adminNavItems.map((item) => (
+          <>
+            <div className="mt-6 space-y-1">
               <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                  pathname === item.href
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                    : 'text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-                )}
+                href={hubHome.href}
+                className={cn(linkClass, pathname === hubHome.href ? activeClass : idleClass)}
               >
-                {item.icon}
-                {getTitle(item)}
+                {hubHome.icon}
+                {hubHome.title}
               </Link>
+            </div>
+
+            {LIVE_AREAS.map((area) => (
+              <div key={area.key} className="mt-6 space-y-1">
+                <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
+                  {area.label}
+                </p>
+                {area.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        linkClass,
+                        pathname === item.href ? activeClass : idleClass
+                      )}
+                    >
+                      <Icon className="h-5 w-5" />
+                      {item.title}
+                    </Link>
+                  );
+                })}
+              </div>
             ))}
-          </div>
+          </>
         )}
       </nav>
 

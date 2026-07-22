@@ -1,12 +1,12 @@
-import { currentUser } from '@clerk/nextjs/server';
 import { getCalendarClient } from '@/lib/google';
 import { parseCalendarEvent } from '@/lib/calendar-parser';
 import { query } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireBackOffice } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const guard = await requireBackOffice();
+  if (!guard.ok) return guard.response;
 
   const body = await request.json();
   const { startDate, endDate } = body;

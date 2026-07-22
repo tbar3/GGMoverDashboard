@@ -1,12 +1,12 @@
-import { currentUser } from '@clerk/nextjs/server';
 import { query } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireBackOffice } from '@/lib/auth';
 
 // Returns expected hours and pay per employee for a given week,
 // based on jobs they're assigned to in that date range.
 export async function GET(request: NextRequest) {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const guard = await requireBackOffice();
+  if (!guard.ok) return guard.response;
 
   const weekStart = request.nextUrl.searchParams.get('week_start');
   const weekEnd = request.nextUrl.searchParams.get('week_end');

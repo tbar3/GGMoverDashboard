@@ -1,10 +1,11 @@
-import { currentUser } from '@clerk/nextjs/server';
 import { getTokensFromCode, storeTokens } from '@/lib/google';
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentEmployee, isBackOffice } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
-  const user = await currentUser();
-  if (!user) return NextResponse.redirect(new URL('/login', request.url));
+  const employee = await getCurrentEmployee();
+  if (!employee) return NextResponse.redirect(new URL('/login', request.url));
+  if (!isBackOffice(employee)) return NextResponse.redirect(new URL('/dashboard', request.url));
 
   const code = request.nextUrl.searchParams.get('code');
   if (!code) {

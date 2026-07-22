@@ -1,23 +1,31 @@
-import { currentUser } from '@clerk/nextjs/server';
 import { query, queryOne } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireEmployee, requireBackOffice, isBackOffice } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const guard = await requireEmployee();
+  if (!guard.ok) return guard.response;
 
+  const bo = isBackOffice(guard.employee);
   const date = request.nextUrl.searchParams.get('date');
-  const employeeId = request.nextUrl.searchParams.get('employee_id');
   const limit = request.nextUrl.searchParams.get('limit');
+  // Crew are locked to jobs they're assigned to; back office may query anyone / all.
+  const employeeId = bo ? request.nextUrl.searchParams.get('employee_id') : guard.employee.id;
 
   if (date && employeeId) {
-    const rows = await query(
+    return NextResponse.json(await query(
       'SELECT * FROM jobs WHERE date = $1 AND $2 = ANY(crew_ids)',
       [date, employeeId]
-    );
-    return NextResponse.json(rows);
+    ));
   }
 
+  if (employeeId) {
+    let sql = 'SELECT * FROM jobs WHERE $1 = ANY(crew_ids) ORDER BY date DESC';
+    if (limit) sql += ` LIMIT ${parseInt(limit)}`;
+    return NextResponse.json(await query(sql, [employeeId]));
+  }
+
+  // Back office, no filter → all jobs.
   let sql = 'SELECT * FROM jobs ORDER BY date DESC';
   if (limit) sql += ` LIMIT ${parseInt(limit)}`;
 
@@ -25,8 +33,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const guard = await requireBackOffice();
+  if (!guard.ok) return guard.response;
 
   const body = await request.json();
   const row = await queryOne(

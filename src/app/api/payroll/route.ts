@@ -1,12 +1,13 @@
-import { currentUser } from '@clerk/nextjs/server';
 import { query, queryOne } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireEmployee, requireBackOffice, scopedEmployeeId } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const guard = await requireEmployee();
+  if (!guard.ok) return guard.response;
 
-  const employeeId = request.nextUrl.searchParams.get('employee_id');
+  // Crew are always locked to their own payroll; back office may filter or see all.
+  const employeeId = scopedEmployeeId(guard.employee, request.nextUrl.searchParams.get('employee_id'));
   const weekStart = request.nextUrl.searchParams.get('week_start');
   const limit = request.nextUrl.searchParams.get('limit');
 
@@ -42,8 +43,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const guard = await requireBackOffice();
+  if (!guard.ok) return guard.response;
 
   const body = await request.json();
   const {

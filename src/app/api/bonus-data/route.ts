@@ -1,11 +1,11 @@
-import { currentUser } from '@clerk/nextjs/server';
 import { query } from '@/lib/db';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { requireBackOffice } from '@/lib/auth';
 
 export async function GET() {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const guard = await requireBackOffice();
+  if (!guard.ok) return guard.response;
 
   const now = new Date();
   const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');

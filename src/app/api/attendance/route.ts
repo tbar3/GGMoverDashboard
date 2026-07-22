@@ -1,37 +1,46 @@
-import { currentUser } from '@clerk/nextjs/server';
 import { query } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireEmployee, requireBackOffice, isBackOffice } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const guard = await requireEmployee();
+  if (!guard.ok) return guard.response;
 
+  const bo = isBackOffice(guard.employee);
   const date = request.nextUrl.searchParams.get('date');
-  const employeeId = request.nextUrl.searchParams.get('employee_id');
   const dateGte = request.nextUrl.searchParams.get('date_gte');
   const dateLte = request.nextUrl.searchParams.get('date_lte');
+  // Crew are always locked to their own attendance; back office may query anyone.
+  const employeeId = bo ? request.nextUrl.searchParams.get('employee_id') : guard.employee.id;
 
-  if (date) {
+  // Back-office "everyone on a given date" view.
+  if (bo && date) {
     return NextResponse.json(await query('SELECT * FROM attendance WHERE date = $1', [date]));
   }
 
-  if (employeeId && dateGte) {
-    let sql = 'SELECT * FROM attendance WHERE employee_id = $1 AND date >= $2';
-    const params: unknown[] = [employeeId, dateGte];
+  // Scoped to one employee (always the caller for crew; the requested id for back office).
+  if (employeeId) {
+    let sql = 'SELECT * FROM attendance WHERE employee_id = $1';
+    const params: unknown[] = [employeeId];
+    if (dateGte) {
+      sql += ` AND date >= $${params.length + 1}`;
+      params.push(dateGte);
+    }
     if (dateLte) {
-      sql += ' AND date <= $3';
+      sql += ` AND date <= $${params.length + 1}`;
       params.push(dateLte);
     }
     sql += ' ORDER BY date DESC';
     return NextResponse.json(await query(sql, params));
   }
 
+  // Back office, no filter → everyone.
   return NextResponse.json(await query('SELECT * FROM attendance ORDER BY date DESC'));
 }
 
 export async function POST(request: NextRequest) {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const guard = await requireBackOffice();
+  if (!guard.ok) return guard.response;
 
   const body = await request.json();
   const records = Array.isArray(body) ? body : [body];

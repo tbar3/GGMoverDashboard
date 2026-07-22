@@ -1,13 +1,13 @@
-import { currentUser } from '@clerk/nextjs/server';
-import { query, queryOne } from '@/lib/db';
+import { queryOne } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireBackOffice } from '@/lib/auth';
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const guard = await requireBackOffice();
+  if (!guard.ok) return guard.response;
 
   const { id } = await params;
   const job = await queryOne('SELECT * FROM jobs WHERE id = $1', [id]);
@@ -20,8 +20,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const guard = await requireBackOffice();
+  if (!guard.ok) return guard.response;
 
   const { id } = await params;
   const body = await request.json();

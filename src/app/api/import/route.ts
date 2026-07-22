@@ -1,11 +1,11 @@
-import { currentUser } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { IMPORT_HANDLERS } from '@/lib/import-handlers';
+import { requireBackOffice } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const guard = await requireBackOffice();
+  if (!guard.ok) return guard.response;
 
   const formData = await request.formData();
   const file = formData.get('file') as File | null;

@@ -1,10 +1,10 @@
-import { currentUser } from '@clerk/nextjs/server';
 import { getAuthUrl } from '@/lib/google';
 import { NextResponse } from 'next/server';
+import { requireBackOffice } from '@/lib/auth';
 
 export async function GET() {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const guard = await requireBackOffice();
+  if (!guard.ok) return guard.response;
 
   const url = getAuthUrl();
   return NextResponse.redirect(url);

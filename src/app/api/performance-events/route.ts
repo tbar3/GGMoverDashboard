@@ -1,10 +1,10 @@
-import { currentUser } from '@clerk/nextjs/server';
 import { query, queryOne } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireBackOffice } from '@/lib/auth';
 
 export async function GET() {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const guard = await requireBackOffice();
+  if (!guard.ok) return guard.response;
 
   return NextResponse.json(
     await query('SELECT * FROM performance_events ORDER BY date DESC')
@@ -12,8 +12,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  const guard = await requireBackOffice();
+  if (!guard.ok) return guard.response;
 
   const body = await request.json();
   const row = await queryOne(

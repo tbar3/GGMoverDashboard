@@ -4,6 +4,7 @@ import { queryOne } from '@/lib/db';
 import { Sidebar } from '@/components/navigation/sidebar';
 import { I18nWrapper } from '@/components/providers/i18n-provider';
 import { Employee } from '@/types';
+import { isBackOffice } from '@/lib/auth';
 
 export default async function AuthenticatedLayout({
   children,
@@ -23,7 +24,7 @@ export default async function AuthenticatedLayout({
     [email]
   );
 
-  const isAdmin = employee?.is_admin || employee?.role === 'owner' || employee?.role === 'manager';
+  const isAdmin = isBackOffice(employee);
   const userName = employee?.name || email?.split('@')[0] || 'User';
 
   return (

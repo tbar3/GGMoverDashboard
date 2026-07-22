@@ -1,5 +1,6 @@
 import {
   Users,
+  UserPlus,
   CalendarCheck,
   CalendarSync,
   Car,
@@ -119,6 +120,12 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         href: '/admin/mileage',
         description: 'Reimbursement at $0.60/mi',
         icon: Car,
+      },
+      {
+        title: 'Hiring',
+        href: '/admin/hiring',
+        description: 'Interview scorecards and candidates',
+        icon: UserPlus,
       },
     ],
   },

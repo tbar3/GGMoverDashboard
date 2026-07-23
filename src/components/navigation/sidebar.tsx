@@ -10,6 +10,7 @@ import {
   BarChart3,
   Briefcase,
   DollarSign,
+  Package,
   LogOut,
   Menu,
 } from 'lucide-react';
@@ -65,6 +66,12 @@ const employeeNavItems: NavItem[] = [
     fallback: 'My Stats',
     href: '/stats',
     icon: <BarChart3 className="h-5 w-5" />,
+  },
+  {
+    titleKey: 'nav.materials',
+    fallback: 'Materials',
+    href: '/materials',
+    icon: <Package className="h-5 w-5" />,
   },
 ];
 

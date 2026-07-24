@@ -7,16 +7,17 @@ import { query, queryOne } from '@/lib/db';
 
 const REAL_JOB = "opportunity_status NOT IN ('Lost', 'Bad lead', 'Cancelled')";
 
+// Today's jobs come from the calendar-synced `jobs` table (the live source, as
+// fresh as the last SmartMoving-calendar sync) — not the trailing report.
 export interface TodayJob {
   job_number: string | null;
   customer_name: string | null;
-  opportunity_status: string | null;
-  job_type: string | null;
-  est_trucks: number | null;
-  est_crew: number | null;
-  crew_member_names: string | null;
-  truck_names: string | null;
-  total_estimated_cost: number | null;
+  service_type: string | null;
+  start_time: string | null;
+  quoted_trucks: number | null;
+  quoted_crew: number | null;
+  truck_name: string | null;
+  crew_names: string[] | null;
 }
 
 export interface TruckDay {
@@ -101,12 +102,14 @@ export async function getAdminDashboard(
       [today]
     ),
     query<TodayJob>(
-      // Confirmed work only — Booked/Closed, not open Opportunities (leads).
-      `SELECT job_number, customer_name, opportunity_status, job_type,
-              est_trucks, est_crew, crew_member_names, truck_names, total_estimated_cost
-         FROM smartmoving_jobs
-        WHERE job_date = $1 AND opportunity_status IN ('Booked', 'Closed')
-        ORDER BY total_estimated_cost DESC NULLS LAST`,
+      // Live source: the calendar-synced jobs table. crew_ids are matched to
+      // employees, so we resolve their names.
+      `SELECT j.job_number, j.customer_name, j.service_type, j.start_time,
+              j.quoted_trucks, j.quoted_crew, j.truck_name,
+              (SELECT array_agg(e.name) FROM employees e WHERE e.id = ANY(j.crew_ids)) AS crew_names
+         FROM jobs j
+        WHERE j.date = $1
+        ORDER BY j.start_time NULLS LAST`,
       [today]
     ),
     query<TruckDay>(

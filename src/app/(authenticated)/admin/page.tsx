@@ -43,7 +43,7 @@ export default async function AdminDashboardPage() {
     { count: d.alerts.damagesThisWeek, label: 'new damages this week', href: '/admin/damages' },
   ].filter((a) => a.count > 0);
 
-  const trucksToday = d.todaysJobs.reduce((s, j) => s + Number(j.est_trucks ?? 0), 0);
+  const trucksToday = d.todaysJobs.reduce((s, j) => s + Number(j.quoted_trucks ?? 0), 0);
   const hasAlerts = alertItems.length > 0 || d.alerts.rentalDays.length > 0;
 
   return (
@@ -137,7 +137,7 @@ export default async function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* Today's operations */}
+      {/* Today's operations — from the live SmartMoving Google Calendar sync */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -147,15 +147,21 @@ export default async function AdminDashboardPage() {
                 Today&apos;s Operations
               </CardTitle>
               <CardDescription>
-                {d.todaysJobs.length} {d.todaysJobs.length === 1 ? 'job' : 'jobs'} · {trucksToday}{' '}
-                trucks needed
+                {d.todaysJobs.length} {d.todaysJobs.length === 1 ? 'job' : 'jobs'}
+                {trucksToday > 0 && ` · ${trucksToday} trucks needed`} · from Google Calendar
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           {d.todaysJobs.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-2">No jobs scheduled for today.</p>
+            <p className="text-sm text-muted-foreground py-2">
+              No jobs on the calendar today. Connect and sync your SmartMoving calendar under{' '}
+              <Link href="/admin/calendar" className="text-primary">
+                Calendar Sync
+              </Link>
+              .
+            </p>
           ) : (
             <div className="space-y-2">
               {d.todaysJobs.map((j, i) => (
@@ -168,22 +174,24 @@ export default async function AdminDashboardPage() {
                           {j.job_number}
                         </Badge>
                       )}
-                      <Badge variant="secondary" className="text-xs">
-                        {j.opportunity_status}
-                      </Badge>
+                      {j.start_time && (
+                        <Badge variant="secondary" className="text-xs">
+                          {j.start_time}
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                      {j.job_type}
-                      {j.crew_member_names ? ` · ${j.crew_member_names}` : ''}
+                      {j.service_type ?? 'Job'}
+                      {j.crew_names && j.crew_names.length > 0
+                        ? ` · ${j.crew_names.join(', ')}`
+                        : ''}
                     </p>
                   </div>
-                  <div className="shrink-0 text-right text-sm">
-                    <div className="text-muted-foreground">
-                      {Number(j.est_trucks ?? 0)} trk · {Number(j.est_crew ?? 0)} crew
+                  <div className="shrink-0 text-right text-sm text-muted-foreground">
+                    {j.truck_name && <div className="font-medium text-foreground">{j.truck_name}</div>}
+                    <div>
+                      {Number(j.quoted_trucks ?? 0)} trk · {Number(j.quoted_crew ?? 0)} crew
                     </div>
-                    {j.total_estimated_cost != null && (
-                      <div className="font-medium">{money(j.total_estimated_cost)}</div>
-                    )}
                   </div>
                 </div>
               ))}

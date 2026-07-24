@@ -162,8 +162,12 @@ export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
          FROM write_ups WHERE week_start = $1`,
       [weekStart]
     ),
-    query<{ employee_id: string; total_hours: number | null }>(
-      `SELECT employee_id, total_hours FROM payroll_entries WHERE week_start = $1`,
+    query<{ employee_id: string; bonus_hours: number | null }>(
+      // Bonus hours = billable + warehouse (excludes marketing/office time), per
+      // Trent's call — the bonus rewards field & warehouse work, not desk hours.
+      `SELECT employee_id,
+              COALESCE(billable_hours, 0) + COALESCE(warehouse_hours, 0) AS bonus_hours
+         FROM payroll_entries WHERE week_start = $1`,
       [weekStart]
     ),
   ]);
@@ -171,7 +175,7 @@ export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
   const forEmp = <T extends { employee_id: string }>(rows: T[], id: string) =>
     rows.filter((r) => r.employee_id === id);
   // A payroll row for the week means we have this person's hours/attendance for it.
-  const hoursByEmployee = new Map(payroll.map((p) => [p.employee_id, Number(p.total_hours) || 0]));
+  const hoursByEmployee = new Map(payroll.map((p) => [p.employee_id, Number(p.bonus_hours) || 0]));
   const hasPayroll = new Set(payroll.map((p) => p.employee_id));
 
   return employees.map((e) => {

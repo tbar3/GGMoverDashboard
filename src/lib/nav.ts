@@ -1,7 +1,6 @@
 import {
   Users,
   UserPlus,
-  CalendarCheck,
   CalendarSync,
   Car,
   AlertTriangle,
@@ -61,12 +60,6 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         icon: Briefcase,
       },
       {
-        title: 'Attendance',
-        href: '/admin/attendance',
-        description: 'Who showed up, and who was late',
-        icon: CalendarCheck,
-      },
-      {
         title: 'Calendar Sync',
         href: '/admin/calendar',
         description: 'Pull jobs in from SmartMoving',
@@ -108,7 +101,7 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
       {
         title: 'Performance',
         href: '/admin/performance',
-        description: 'Reviews, call-outs, and recognition',
+        description: 'Attendance, strikes, and positives that drive the weekly bonus',
         icon: Star,
       },
       {

@@ -1,5 +1,4 @@
 import { query } from '@/lib/db';
-import { CONFIG } from '@/types';
 
 export interface Skill {
   id: string;
@@ -25,6 +24,13 @@ export async function getSkills(): Promise<Skill[]> {
   );
 }
 
+/** All skills including inactive — for the pay-scale admin panel. */
+export async function getAllSkills(): Promise<Skill[]> {
+  return query<Skill>(
+    'SELECT id, name, raise_amount, sort_order, active FROM skills ORDER BY sort_order, name'
+  );
+}
+
 export async function getEmployeeSkills(employeeId: string): Promise<EarnedSkill[]> {
   return query<EarnedSkill>(
     `SELECT es.id, es.skill_id, s.name, s.raise_amount, s.sort_order,
@@ -39,10 +45,15 @@ export async function getEmployeeSkills(employeeId: string): Promise<EarnedSkill
 
 /**
  * Effective hourly rate: the manual override if set, otherwise the pay-scale
- * rate (base + the raise from every earned skill).
+ * rate (base + the raise from every earned skill). Base comes from settings
+ * (getBaseRate) so it can be changed in the pay-scale admin panel.
  */
-export function effectiveRate(override: number | null, earnedRaiseSum: number): number {
-  return override != null ? override : CONFIG.BASE_HOURLY_RATE + earnedRaiseSum;
+export function effectiveRate(
+  override: number | null,
+  earnedRaiseSum: number,
+  baseRate: number
+): number {
+  return override != null ? override : baseRate + earnedRaiseSum;
 }
 
 export function sumRaises(earned: Pick<EarnedSkill, 'raise_amount'>[]): number {

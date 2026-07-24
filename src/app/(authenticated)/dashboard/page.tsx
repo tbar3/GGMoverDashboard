@@ -11,6 +11,7 @@ import {
 } from '@/types';
 import { getMessages, type Message } from '@/lib/messages';
 import { getEmployeeSkills, effectiveRate, sumRaises } from '@/lib/skills';
+import { getBaseRate } from '@/lib/settings';
 import { DashboardContent, type WeekJob } from './dashboard-content';
 
 export const dynamic = 'force-dynamic';
@@ -70,8 +71,9 @@ export default async function DashboardPage() {
     ]);
 
   // Skill-driven pay: effective rate = override ?? base + earned skills.
+  const baseRate = await getBaseRate();
   const earnedRaiseSum = sumRaises(earnedSkills);
-  const hourlyRate = effectiveRate(employee.hourly_rate ?? null, earnedRaiseSum);
+  const hourlyRate = effectiveRate(employee.hourly_rate ?? null, earnedRaiseSum, baseRate);
 
   // Newly-granted skills the employee hasn't acknowledged → celebration.
   const unacknowledged = earnedSkills.filter((s) => !s.acknowledged);

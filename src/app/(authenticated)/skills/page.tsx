@@ -1,6 +1,6 @@
 import { getCurrentEmployee } from '@/lib/auth';
 import { getSkills, getEmployeeSkills, effectiveRate, sumRaises } from '@/lib/skills';
-import { CONFIG } from '@/types';
+import { getBaseRate } from '@/lib/settings';
 import { Card, CardContent } from '@/components/ui/card';
 import { SkillsContent } from './skills-content';
 
@@ -22,16 +22,20 @@ export default async function SkillsPage() {
     );
   }
 
-  const [skills, earned] = await Promise.all([getSkills(), getEmployeeSkills(employee.id)]);
+  const [skills, earned, baseRate] = await Promise.all([
+    getSkills(),
+    getEmployeeSkills(employee.id),
+    getBaseRate(),
+  ]);
   const earnedRaiseSum = sumRaises(earned);
-  const currentRate = effectiveRate(employee.hourly_rate ?? null, earnedRaiseSum);
+  const currentRate = effectiveRate(employee.hourly_rate ?? null, earnedRaiseSum, baseRate);
 
   return (
     <SkillsContent
       skills={skills}
       earnedSkillIds={earned.map((e) => e.skill_id)}
       currentRate={currentRate}
-      baseRate={CONFIG.BASE_HOURLY_RATE}
+      baseRate={baseRate}
       isOverride={employee.hourly_rate != null}
     />
   );

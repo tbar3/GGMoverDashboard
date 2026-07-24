@@ -1,10 +1,11 @@
 import { queryOne } from '@/lib/db';
-import { Employee, CONFIG } from '@/types';
+import { Employee } from '@/types';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getSkills, getEmployeeSkills, sumRaises } from '@/lib/skills';
+import { getBaseRate } from '@/lib/settings';
 import { EditEmployeeForm } from './edit-form';
 import { SkillsManager } from './skills-manager';
 
@@ -19,8 +20,12 @@ export default async function EditEmployeePage({
   const employee = await queryOne<Employee>('SELECT * FROM employees WHERE id = $1', [id]);
   if (!employee) notFound();
 
-  const [skills, earned] = await Promise.all([getSkills(), getEmployeeSkills(id)]);
-  const derivedRate = CONFIG.BASE_HOURLY_RATE + sumRaises(earned);
+  const [skills, earned, baseRate] = await Promise.all([
+    getSkills(),
+    getEmployeeSkills(id),
+    getBaseRate(),
+  ]);
+  const derivedRate = baseRate + sumRaises(earned);
 
   return (
     <div className="p-6 space-y-6">

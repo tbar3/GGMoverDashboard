@@ -50,7 +50,7 @@ export function SkillsContent({
           </p>
           <p className="mt-3 text-sm opacity-80">
             {t('skills.earned_summary', { earned: earnedCount })} ·{' '}
-            {t('skills.base_rate', { rate: baseRate.toFixed(0) })}
+            {t('skills.base_rate', { rate: baseRate.toFixed(2) })}
           </p>
           {isOverride && (
             <p className="mt-2 text-xs opacity-70">

@@ -14,6 +14,7 @@ import {
   BookOpen,
   Target,
   MessageSquare,
+  Award,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -127,6 +128,12 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         href: '/admin/hiring',
         description: 'Interview scorecards and candidates',
         icon: UserPlus,
+      },
+      {
+        title: 'Pay Scale & Skills',
+        href: '/admin/skills',
+        description: 'Base rate and the skills that raise it',
+        icon: Award,
       },
       {
         title: 'Message Board',

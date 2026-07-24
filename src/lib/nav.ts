@@ -146,10 +146,17 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
   {
     key: 'materials',
     label: 'Materials',
-    description: 'Inventory, truck stock, and job counts — moving over from the crew materials app.',
+    description: 'Trucks, warehouses, and the supply catalog.',
     icon: Package,
-    status: 'planned',
-    items: [],
+    status: 'live',
+    items: [
+      {
+        title: 'Materials Settings',
+        href: '/admin/materials',
+        description: 'Trucks, warehouses, materials, equipment, routines, crew',
+        icon: Package,
+      },
+    ],
   },
   {
     key: 'policies',

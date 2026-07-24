@@ -25,7 +25,6 @@ export default async function SkillsPage() {
   const [skills, earned] = await Promise.all([getSkills(), getEmployeeSkills(employee.id)]);
   const earnedRaiseSum = sumRaises(earned);
   const currentRate = effectiveRate(employee.hourly_rate ?? null, earnedRaiseSum);
-  const maxRate = CONFIG.BASE_HOURLY_RATE + sumRaises(skills);
 
   return (
     <SkillsContent
@@ -33,7 +32,6 @@ export default async function SkillsPage() {
       earnedSkillIds={earned.map((e) => e.skill_id)}
       currentRate={currentRate}
       baseRate={CONFIG.BASE_HOURLY_RATE}
-      maxRate={maxRate}
       isOverride={employee.hourly_rate != null}
     />
   );

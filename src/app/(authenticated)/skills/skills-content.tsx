@@ -10,7 +10,6 @@ interface SkillsContentProps {
   earnedSkillIds: string[];
   currentRate: number;
   baseRate: number;
-  maxRate: number;
   isOverride: boolean;
 }
 
@@ -28,13 +27,11 @@ export function SkillsContent({
   earnedSkillIds,
   currentRate,
   baseRate,
-  maxRate,
   isOverride,
 }: SkillsContentProps) {
   const { t } = useI18n();
   const earned = new Set(earnedSkillIds);
   const earnedCount = skills.filter((s) => earned.has(s.id)).length;
-  const pct = maxRate > baseRate ? ((currentRate - baseRate) / (maxRate - baseRate)) * 100 : 0;
 
   return (
     <div className="p-6 space-y-6">
@@ -51,19 +48,12 @@ export function SkillsContent({
             ${currentRate.toFixed(2)}
             <span className="text-xl font-normal opacity-70">{t('skills.per_hr')}</span>
           </p>
-          <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-cream-50/20">
-            <div
-              className="h-full rounded-full bg-green-400 transition-all"
-              style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
-            />
-          </div>
-          <div className="mt-2 flex justify-between text-xs opacity-80">
-            <span>{t('skills.base_rate', { rate: baseRate.toFixed(0) })}</span>
-            <span>{t('skills.progress', { earned: earnedCount, total: skills.length })}</span>
-            <span>{t('skills.max_rate', { rate: maxRate.toFixed(0) })}</span>
-          </div>
+          <p className="mt-3 text-sm opacity-80">
+            {t('skills.earned_summary', { earned: earnedCount })} ·{' '}
+            {t('skills.base_rate', { rate: baseRate.toFixed(0) })}
+          </p>
           {isOverride && (
-            <p className="mt-3 text-xs opacity-70">
+            <p className="mt-2 text-xs opacity-70">
               * {t('skills.current_rate')} set manually by the office.
             </p>
           )}

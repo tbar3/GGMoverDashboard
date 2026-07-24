@@ -18,6 +18,7 @@ import {
   User,
   Megaphone,
   Pin,
+  Award,
 } from 'lucide-react';
 import { format, differenceInMonths } from 'date-fns';
 import { useI18n } from '@/lib/i18n';
@@ -31,6 +32,7 @@ import {
 } from '@/types';
 import type { Message } from '@/lib/messages';
 import { respondToJob } from '@/lib/crew-actions';
+import { SkillCelebration, type CelebrationSkill } from '@/components/crew/skill-celebration';
 
 export type WeekJob = Job & {
   response: 'accepted' | 'declined' | null;
@@ -39,6 +41,8 @@ export type WeekJob = Job & {
 
 interface DashboardContentProps {
   employee: Employee;
+  hourlyRate: number;
+  celebration: { skills: CelebrationSkill[]; newRate: number } | null;
   weekJobs: WeekJob[];
   mileage: MileageEntry[];
   performanceEvents: PerformanceEvent[];
@@ -50,6 +54,8 @@ interface DashboardContentProps {
 
 export function DashboardContent({
   employee,
+  hourlyRate,
+  celebration,
   weekJobs,
   mileage,
   performanceEvents,
@@ -67,11 +73,11 @@ export function DashboardContent({
   // Estimated hours/pay this week — count only the jobs they haven't declined.
   const workingJobs = weekJobs.filter((j) => j.response !== 'declined');
   const estHours = workingJobs.reduce((s, j) => s + Number(j.estimated_hours ?? 0), 0);
-  const rate = employee.hourly_rate;
-  const estPay = rate != null ? estHours * rate : null;
+  const estPay = estHours * hourlyRate;
 
   const quickLinks = [
     { title: t('nav.materials'), desc: t('dash.link_materials_desc'), href: '/materials', icon: Package },
+    { title: t('skills.title'), desc: t('skills.link_desc'), href: '/skills', icon: Award },
     { title: t('dash.link_handbook'), desc: t('dash.link_handbook_desc'), href: '/policies', icon: BookOpen },
     { title: t('dash.link_training'), desc: t('dash.link_training_desc'), href: '/training', icon: GraduationCap },
     { title: t('dash.link_profile'), desc: t('dash.link_profile_desc'), href: '/profile', icon: User },
@@ -79,6 +85,9 @@ export function DashboardContent({
 
   return (
     <div className="p-6 space-y-6">
+      {celebration && (
+        <SkillCelebration skills={celebration.skills} newRate={celebration.newRate} />
+      )}
       <div>
         <h1 className="text-2xl font-bold text-foreground">
           {t('dash.welcome', { name: firstName })}
@@ -113,15 +122,11 @@ export function DashboardContent({
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>{t('dash.est_pay')}</CardDescription>
-            <CardTitle className="text-3xl">
-              {estPay != null ? `$${estPay.toFixed(2)}` : '—'}
-            </CardTitle>
+            <CardTitle className="text-3xl">${estPay.toFixed(2)}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              {rate != null
-                ? t('dash.hrs_rate', { hrs: estHours.toFixed(1), rate: rate.toFixed(2) })
-                : t('dash.pay_not_set')}
+              {t('dash.hrs_rate', { hrs: estHours.toFixed(1), rate: hourlyRate.toFixed(2) })}
             </p>
           </CardContent>
         </Card>

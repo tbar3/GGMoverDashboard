@@ -1,10 +1,12 @@
 import { queryOne } from '@/lib/db';
-import { Employee } from '@/types';
+import { Employee, CONFIG } from '@/types';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getSkills, getEmployeeSkills, sumRaises } from '@/lib/skills';
 import { EditEmployeeForm } from './edit-form';
+import { SkillsManager } from './skills-manager';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +18,9 @@ export default async function EditEmployeePage({
   const { id } = await params;
   const employee = await queryOne<Employee>('SELECT * FROM employees WHERE id = $1', [id]);
   if (!employee) notFound();
+
+  const [skills, earned] = await Promise.all([getSkills(), getEmployeeSkills(id)]);
+  const derivedRate = CONFIG.BASE_HOURLY_RATE + sumRaises(earned);
 
   return (
     <div className="p-6 space-y-6">
@@ -31,6 +36,13 @@ export default async function EditEmployeePage({
         </div>
       </div>
       <EditEmployeeForm employee={employee} />
+      <SkillsManager
+        employeeId={employee.id}
+        skills={skills}
+        earnedSkillIds={earned.map((e) => e.skill_id)}
+        derivedRate={derivedRate}
+        hasOverride={employee.hourly_rate != null}
+      />
     </div>
   );
 }

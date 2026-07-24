@@ -4,6 +4,21 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Skill-celebration animations (the fireworks/confetti moment). */
+@keyframes gg-confetti-fall {
+  0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0.85; }
+}
+@keyframes gg-pop-in {
+  0% { transform: scale(0.7); opacity: 0; }
+  60% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes gg-burst {
+  0% { transform: scale(0); opacity: 0.9; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

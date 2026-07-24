@@ -227,5 +227,7 @@ export const CONFIG = {
   TARDY_CUTOFF_MINUTE: 15,
   DEFAULT_POOL_PERCENTAGE: 4.5,
   UNREPORTED_DAMAGE_MULTIPLIER: 2,
+  // Pay scale: base rate + each earned skill's raise (see the skills catalog).
+  BASE_HOURLY_RATE: 18.0,
 } as const;
 

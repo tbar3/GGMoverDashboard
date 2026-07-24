@@ -10,6 +10,7 @@ import {
   Job,
 } from '@/types';
 import { getMessages, type Message } from '@/lib/messages';
+import { getEmployeeSkills, effectiveRate, sumRaises } from '@/lib/skills';
 import { DashboardContent, type WeekJob } from './dashboard-content';
 
 export const dynamic = 'force-dynamic';
@@ -41,7 +42,7 @@ export default async function DashboardPage() {
   const weekEnd = format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
   const today = format(now, 'yyyy-MM-dd');
 
-  const [weekJobsRaw, responses, mileage, performanceEvents, attendance, messages] =
+  const [weekJobsRaw, responses, mileage, performanceEvents, attendance, messages, earnedSkills] =
     await Promise.all([
       query<Job>(
         `SELECT * FROM jobs WHERE $1 = ANY(crew_ids) AND date >= $2 AND date <= $3
@@ -65,7 +66,22 @@ export default async function DashboardPage() {
         [employee.id, monthStart, monthEnd]
       ),
       getMessages(5),
+      getEmployeeSkills(employee.id),
     ]);
+
+  // Skill-driven pay: effective rate = override ?? base + earned skills.
+  const earnedRaiseSum = sumRaises(earnedSkills);
+  const hourlyRate = effectiveRate(employee.hourly_rate ?? null, earnedRaiseSum);
+
+  // Newly-granted skills the employee hasn't acknowledged → celebration.
+  const unacknowledged = earnedSkills.filter((s) => !s.acknowledged);
+  const celebration =
+    unacknowledged.length > 0
+      ? {
+          skills: unacknowledged.map((s) => ({ name: s.name, raise_amount: Number(s.raise_amount) })),
+          newRate: hourlyRate,
+        }
+      : null;
 
   // Attach each job's response (for this employee) to the job.
   const responseByJob = new Map(responses.map((r) => [r.job_id, r]));
@@ -81,6 +97,8 @@ export default async function DashboardPage() {
   return (
     <DashboardContent
       employee={employee}
+      hourlyRate={hourlyRate}
+      celebration={celebration}
       weekJobs={weekJobs}
       mileage={mileage}
       performanceEvents={performanceEvents}

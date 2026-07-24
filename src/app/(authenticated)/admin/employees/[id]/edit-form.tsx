@@ -68,8 +68,9 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
       <CardHeader>
         <CardTitle>Employee Details</CardTitle>
         <CardDescription>
-          Set this crew member&apos;s role, tenure, and pay rate. The pay rate drives their
-          weekly-pay estimate — only back office can change it.
+          Set this crew member&apos;s role and tenure. Pay is driven by the skills below (base +
+          each skill); the rate field here is an optional <strong>override</strong> — leave it
+          blank to use the skill-based rate.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -109,11 +110,11 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="rate">Hourly Rate ($/hr)</Label>
+              <Label htmlFor="rate">Rate Override ($/hr)</Label>
               <Input
                 id="rate"
                 inputMode="decimal"
-                placeholder="e.g. 18.00"
+                placeholder="blank = use skill-based rate"
                 value={hourlyRate}
                 onChange={(e) => setHourlyRate(e.target.value)}
               />

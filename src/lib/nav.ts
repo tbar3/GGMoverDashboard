@@ -136,6 +136,12 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         icon: Award,
       },
       {
+        title: 'Tenure Bonus',
+        href: '/admin/tenure-bonus',
+        description: 'Bi-annual pool split by months worked',
+        icon: DollarSign,
+      },
+      {
         title: 'Message Board',
         href: '/admin/messages',
         description: 'Post announcements to the crew',

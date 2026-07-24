@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -14,251 +13,197 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Checkbox } from '@/components/ui/checkbox';
 import { format } from 'date-fns';
-import { Plus, Eye } from 'lucide-react';
-import { toast } from 'sonner';
+import { Eye, ArrowUp, ArrowDown, ChevronsUpDown, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Job, Employee } from '@/types';
+
+type SortKey =
+  | 'job_number'
+  | 'date'
+  | 'service_type'
+  | 'customer_name'
+  | 'pickup_address'
+  | 'crew'
+  | 'revenue';
 
 export default function JobsPage() {
   const router = useRouter();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
-    customer_name: '',
-    pickup_address: '',
-    dropoff_address: '',
-    revenue: '',
-    crew_ids: [] as string[],
-  });
+  const [filter, setFilter] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
-    fetchData();
+    (async () => {
+      const [jobsRes, employeesRes] = await Promise.all([
+        fetch('/api/jobs'),
+        fetch('/api/employees?active=true'),
+      ]);
+      if (jobsRes.ok) setJobs(await jobsRes.json());
+      if (employeesRes.ok) setEmployees(await employeesRes.json());
+      setLoading(false);
+    })();
   }, []);
 
-  async function fetchData() {
-    const [jobsRes, employeesRes] = await Promise.all([
-      fetch('/api/jobs'),
-      fetch('/api/employees?active=true'),
-    ]);
+  const empById = useMemo(() => new Map(employees.map((e) => [e.id, e.name])), [employees]);
 
-    if (jobsRes.ok) setJobs(await jobsRes.json());
-    if (employeesRes.ok) setEmployees(await employeesRes.json());
-    setLoading(false);
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
-    const res = await fetch('/api/jobs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        date: formData.date,
-        customer_name: formData.customer_name,
-        pickup_address: formData.pickup_address,
-        dropoff_address: formData.dropoff_address,
-        revenue: formData.revenue ? parseFloat(formData.revenue) : null,
-        crew_ids: formData.crew_ids,
-      }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      toast.error(err.error || 'Failed to create job');
-      return;
+  function crewNames(job: Job): string {
+    if (job.crew_ids && job.crew_ids.length > 0) {
+      return job.crew_ids
+        .map((id) => empById.get(id))
+        .filter(Boolean)
+        .join(', ');
     }
+    if (job.crew_manifest && job.crew_manifest.length > 0) {
+      return job.crew_manifest.map((m) => m.name).join(', ');
+    }
+    return '';
+  }
 
-    toast.success('Job created successfully');
-    setDialogOpen(false);
-    setFormData({
-      date: new Date().toISOString().split('T')[0],
-      customer_name: '',
-      pickup_address: '',
-      dropoff_address: '',
-      revenue: '',
-      crew_ids: [],
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+
+  const visible = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    const filtered = q
+      ? jobs.filter((j) =>
+          [j.job_number, j.customer_name, j.pickup_address, j.service_type, crewNames(j)]
+            .filter(Boolean)
+            .some((v) => String(v).toLowerCase().includes(q))
+        )
+      : jobs;
+
+    const val = (j: Job): string | number => {
+      switch (sortKey) {
+        case 'date':
+          return new Date(j.date).getTime();
+        case 'revenue':
+          return Number(j.revenue ?? 0);
+        case 'crew':
+          return crewNames(j).toLowerCase();
+        default:
+          return String(j[sortKey] ?? '').toLowerCase();
+      }
+    };
+
+    return [...filtered].sort((a, b) => {
+      const av = val(a);
+      const bv = val(b);
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return sortDir === 'asc' ? cmp : -cmp;
     });
-    fetchData();
-  }
-
-  function toggleCrewMember(employeeId: string) {
-    setFormData(prev => ({
-      ...prev,
-      crew_ids: prev.crew_ids.includes(employeeId)
-        ? prev.crew_ids.filter(id => id !== employeeId)
-        : [...prev.crew_ids, employeeId],
-    }));
-  }
-
-  function getCrewNames(crewIds: string[]) {
-    return crewIds
-      .map(id => employees.find(e => e.id === id)?.name)
-      .filter(Boolean)
-      .join(', ');
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobs, filter, sortKey, sortDir, empById]);
 
   if (loading) {
-    return <div className="p-6">Loading...</div>;
+    return <div className="p-6">Loading…</div>;
   }
+
+  const SortHeader = ({
+    label,
+    col,
+    className,
+  }: {
+    label: string;
+    col: SortKey;
+    className?: string;
+  }) => (
+    <TableHead className={className}>
+      <button
+        type="button"
+        onClick={() => toggleSort(col)}
+        className="inline-flex items-center gap-1 hover:text-foreground select-none"
+      >
+        {label}
+        {sortKey === col ? (
+          sortDir === 'asc' ? (
+            <ArrowUp className="h-3.5 w-3.5" />
+          ) : (
+            <ArrowDown className="h-3.5 w-3.5" />
+          )
+        ) : (
+          <ChevronsUpDown className="h-3.5 w-3.5 opacity-40" />
+        )}
+      </button>
+    </TableHead>
+  );
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Jobs</h1>
-          <p className="text-muted-foreground mt-1">Manage moving jobs and crew assignments</p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Job
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Create New Job</DialogTitle>
-              <DialogDescription>
-                Add a new moving job with crew assignments
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="date">Date</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="customer">Customer Name</Label>
-                  <Input
-                    id="customer"
-                    value={formData.customer_name}
-                    onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
-                    placeholder="Mr./Mrs. Smith"
-                    required
-                  />
-                </div>
-                <div className="space-y-2 col-span-2">
-                  <Label htmlFor="pickup">Pickup Address</Label>
-                  <Input
-                    id="pickup"
-                    value={formData.pickup_address}
-                    onChange={(e) => setFormData({ ...formData, pickup_address: e.target.value })}
-                    placeholder="123 Main St, Atlanta, GA"
-                    required
-                  />
-                </div>
-                <div className="space-y-2 col-span-2">
-                  <Label htmlFor="dropoff">Dropoff Address</Label>
-                  <Input
-                    id="dropoff"
-                    value={formData.dropoff_address}
-                    onChange={(e) => setFormData({ ...formData, dropoff_address: e.target.value })}
-                    placeholder="456 Oak Ave, Atlanta, GA"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="revenue">Revenue (optional)</Label>
-                  <Input
-                    id="revenue"
-                    type="number"
-                    step="0.01"
-                    value={formData.revenue}
-                    onChange={(e) => setFormData({ ...formData, revenue: e.target.value })}
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Assign Crew</Label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 border rounded-lg p-4">
-                  {employees.map((employee) => (
-                    <div key={employee.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`crew-${employee.id}`}
-                        checked={formData.crew_ids.includes(employee.id)}
-                        onCheckedChange={() => toggleCrewMember(employee.id)}
-                      />
-                      <Label htmlFor={`crew-${employee.id}`} className="font-normal text-sm">
-                        {employee.name}
-                        <Badge variant="outline" className="ml-2 capitalize text-xs">
-                          {employee.role}
-                        </Badge>
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-4 pt-4">
-                <Button type="submit">Create Job</Button>
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Jobs</h1>
+        <p className="text-muted-foreground mt-1">
+          Synced from your SmartMoving calendar — managed in SmartMoving.
+        </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>All Jobs</CardTitle>
-          <CardDescription>{jobs.length} jobs total</CardDescription>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle>All Jobs</CardTitle>
+              <CardDescription>
+                {visible.length} of {jobs.length} jobs
+              </CardDescription>
+            </div>
+            <div className="relative w-full max-w-xs">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Filter by customer, job #, address…"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Job #</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Address</TableHead>
-                <TableHead>Crew</TableHead>
-                <TableHead className="text-right">Revenue</TableHead>
+                <SortHeader label="Job #" col="job_number" />
+                <SortHeader label="Date" col="date" />
+                <SortHeader label="Service" col="service_type" />
+                <SortHeader label="Customer" col="customer_name" />
+                <SortHeader label="Address" col="pickup_address" />
+                <SortHeader label="Crew" col="crew" />
+                <SortHeader label="Revenue" col="revenue" className="text-right" />
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {jobs.length > 0 ? (
-                jobs.map((job) => (
-                  <TableRow key={job.id} className="cursor-pointer hover:bg-muted" onClick={() => router.push(`/admin/jobs/${job.id}`)}>
+              {visible.length > 0 ? (
+                visible.map((job) => (
+                  <TableRow
+                    key={job.id}
+                    className="cursor-pointer hover:bg-muted"
+                    onClick={() => router.push(`/admin/jobs/${job.id}`)}
+                  >
                     <TableCell>
                       {job.job_number ? (
                         <Badge variant="outline">{job.job_number}</Badge>
                       ) : (
-                        <span className="text-muted-foreground/70 text-xs">Manual</span>
+                        <span className="text-muted-foreground/70 text-xs">—</span>
                       )}
                     </TableCell>
                     <TableCell>{format(new Date(job.date), 'MMM d, yyyy')}</TableCell>
+                    <TableCell>{job.service_type || '-'}</TableCell>
                     <TableCell className="font-medium">{job.customer_name}</TableCell>
-                    <TableCell className="max-w-[200px] truncate">{job.pickup_address || '-'}</TableCell>
+                    <TableCell className="max-w-[200px] truncate">
+                      {job.pickup_address || '-'}
+                    </TableCell>
                     <TableCell>
-                      {job.crew_ids && job.crew_ids.length > 0 ? (
-                        <span className="text-sm">{getCrewNames(job.crew_ids)}</span>
-                      ) : job.crew_manifest && job.crew_manifest.length > 0 ? (
-                        <span className="text-sm text-muted-foreground">{job.crew_manifest.map(m => m.name).join(', ')}</span>
+                      {crewNames(job) ? (
+                        <span className="text-sm">{crewNames(job)}</span>
                       ) : (
                         <span className="text-muted-foreground/70 text-sm">No crew</span>
                       )}
@@ -267,7 +212,14 @@ export default function JobsPage() {
                       {job.revenue ? `$${Number(job.revenue).toFixed(2)}` : '-'}
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); router.push(`/admin/jobs/${job.id}`); }}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/admin/jobs/${job.id}`);
+                        }}
+                      >
                         <Eye className="h-4 w-4" />
                       </Button>
                     </TableCell>
@@ -275,8 +227,10 @@ export default function JobsPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    No jobs found. Add your first job to get started.
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    {jobs.length === 0
+                      ? 'No jobs yet — they sync from your SmartMoving calendar (Calendar Sync).'
+                      : 'No jobs match your filter.'}
                   </TableCell>
                 </TableRow>
               )}

@@ -23,6 +23,7 @@ const IMPORT_TYPES = [
   { value: 'damages', label: 'Damages', description: 'Description, amount, reported status' },
   { value: 'performance', label: 'Performance Events', description: 'Employee, date, type (5-star, customer, crew), description' },
   { value: 'mileage', label: 'Mileage', description: 'Employee, date, miles' },
+  { value: 'smartmoving_jobs', label: 'SmartMoving Jobs Report', description: 'SmartMoving "all jobs" export — status, trucks, financials (back office)' },
 ];
 
 const COLUMN_HINTS: Record<string, string[]> = {
@@ -33,6 +34,7 @@ const COLUMN_HINTS: Record<string, string[]> = {
   damages: ['description', 'amount', 'was_reported'],
   performance: ['employee', 'date', 'type', 'description'],
   mileage: ['employee', 'date', 'miles'],
+  smartmoving_jobs: ['Job Id', 'Job Number', 'Opportunity Status', 'Job Type', 'Job Date', 'Estimated Number of Trucks', 'Estimated Materials Cost', 'Total Actual Cost'],
 };
 
 export default function ImportPage() {

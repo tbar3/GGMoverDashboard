@@ -1,25 +1,33 @@
 import { currentUser } from '@clerk/nextjs/server';
 import { query, queryOne } from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/card';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
-import { Employee, Attendance, PerfectWeek, MileageEntry, PerformanceEvent, ChecklistCompletion, Job } from '@/types';
-import { DashboardContent } from './dashboard-content';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
+import {
+  Employee,
+  Attendance,
+  MileageEntry,
+  PerformanceEvent,
+  Job,
+} from '@/types';
+import { getMessages, type Message } from '@/lib/messages';
+import { DashboardContent, type WeekJob } from './dashboard-content';
+
+export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
   const user = await currentUser();
   const email = user?.emailAddresses[0]?.emailAddress;
 
-  const employee = await queryOne<Employee>(
-    'SELECT * FROM employees WHERE email = $1',
-    [email]
-  );
+  const employee = await queryOne<Employee>('SELECT * FROM employees WHERE email = $1', [email]);
 
   if (!employee) {
     return (
       <div className="p-6">
         <Card>
           <CardContent className="p-6">
-            <p className="text-muted-foreground">Employee profile not found. Please contact your administrator.</p>
+            <p className="text-muted-foreground">
+              Employee profile not found. Please contact your administrator.
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -29,28 +37,60 @@ export default async function DashboardPage() {
   const now = new Date();
   const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
   const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
+  const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  const weekEnd = format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
   const today = format(now, 'yyyy-MM-dd');
 
-  const [attendance, perfectWeeks, mileage, performanceEvents, checklistCompletions, upcomingJobs] = await Promise.all([
-    query<Attendance>('SELECT * FROM attendance WHERE employee_id = $1 AND date >= $2 AND date <= $3', [employee.id, monthStart, monthEnd]),
-    query<PerfectWeek>('SELECT * FROM perfect_weeks WHERE employee_id = $1 AND achieved = true AND week_start >= $2 AND week_end <= $3', [employee.id, monthStart, monthEnd]),
-    query<MileageEntry>('SELECT miles, amount FROM mileage_entries WHERE employee_id = $1 AND date >= $2 AND date <= $3', [employee.id, monthStart, monthEnd]),
-    query<PerformanceEvent>('SELECT * FROM performance_events WHERE employee_id = $1 AND date >= $2 AND date <= $3 ORDER BY date DESC LIMIT 5', [employee.id, monthStart, monthEnd]),
-    query<ChecklistCompletion>('SELECT * FROM checklist_completions WHERE employee_id = $1 AND completed_at >= $2 AND completed_at <= $3', [employee.id, monthStart, monthEnd]),
-    query<Job>('SELECT * FROM jobs WHERE $1 = ANY(crew_ids) AND date >= $2 ORDER BY date ASC, start_time ASC LIMIT 5', [employee.id, today]),
-  ]);
+  const [weekJobsRaw, responses, mileage, performanceEvents, attendance, messages] =
+    await Promise.all([
+      query<Job>(
+        `SELECT * FROM jobs WHERE $1 = ANY(crew_ids) AND date >= $2 AND date <= $3
+         ORDER BY date ASC, start_time ASC`,
+        [employee.id, weekStart, weekEnd]
+      ),
+      query<{ job_id: string; response: string; decline_reason: string | null }>(
+        'SELECT job_id, response, decline_reason FROM job_responses WHERE employee_id = $1',
+        [employee.id]
+      ),
+      query<MileageEntry>(
+        'SELECT miles, amount FROM mileage_entries WHERE employee_id = $1 AND date >= $2 AND date <= $3',
+        [employee.id, monthStart, monthEnd]
+      ),
+      query<PerformanceEvent>(
+        'SELECT * FROM performance_events WHERE employee_id = $1 AND date >= $2 AND date <= $3 ORDER BY date DESC LIMIT 5',
+        [employee.id, monthStart, monthEnd]
+      ),
+      query<Attendance>(
+        'SELECT * FROM attendance WHERE employee_id = $1 AND date >= $2 AND date <= $3',
+        [employee.id, monthStart, monthEnd]
+      ),
+      getMessages(5),
+    ]);
+
+  // Attach each job's response (for this employee) to the job.
+  const responseByJob = new Map(responses.map((r) => [r.job_id, r]));
+  const weekJobs: WeekJob[] = weekJobsRaw.map((j) => {
+    const r = responseByJob.get(j.id);
+    return {
+      ...j,
+      response: (r?.response as 'accepted' | 'declined' | undefined) ?? null,
+      decline_reason: r?.decline_reason ?? null,
+    };
+  });
 
   return (
     <DashboardContent
       employee={employee}
-      attendance={attendance}
-      perfectWeeks={perfectWeeks}
+      weekJobs={weekJobs}
       mileage={mileage}
       performanceEvents={performanceEvents}
-      checklistCompletions={checklistCompletions}
-      upcomingJobs={upcomingJobs}
+      attendance={attendance}
+      messages={messages as Message[]}
       today={today}
-      monthLabel={format(now, 'MMMM yyyy')}
+      weekLabel={`${format(startOfWeek(now, { weekStartsOn: 1 }), 'MMM d')} – ${format(
+        endOfWeek(now, { weekStartsOn: 1 }),
+        'MMM d'
+      )}`}
     />
   );
 }

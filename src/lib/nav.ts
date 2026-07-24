@@ -13,6 +13,7 @@ import {
   Package,
   BookOpen,
   Target,
+  MessageSquare,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -126,6 +127,12 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         href: '/admin/hiring',
         description: 'Interview scorecards and candidates',
         icon: UserPlus,
+      },
+      {
+        title: 'Message Board',
+        href: '/admin/messages',
+        description: 'Post announcements to the crew',
+        icon: MessageSquare,
       },
     ],
   },

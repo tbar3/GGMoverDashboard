@@ -47,24 +47,5 @@ export async function respondToJob(
   return { ok: true };
 }
 
-/**
- * Update the signed-in employee's own hourly pay rate — feeds their personal
- * weekly-pay estimate (not payroll). Scoped to their own row only.
- */
-export async function updateMyRate(
-  formData: FormData
-): Promise<{ ok: boolean; error?: string }> {
-  const employee = await getCurrentEmployee();
-  if (!employee || !employee.is_active) return { ok: false, error: 'Not authorized' };
-
-  const raw = String(formData.get('hourly_rate') ?? '').trim();
-  const rate = raw === '' ? null : parseFloat(raw.replace(/[$,]/g, ''));
-  if (rate !== null && (isNaN(rate) || rate < 0 || rate > 1000)) {
-    return { ok: false, error: 'Enter a valid hourly rate.' };
-  }
-
-  await query('UPDATE employees SET hourly_rate = $2 WHERE id = $1', [employee.id, rate]);
-  revalidatePath('/dashboard');
-  revalidatePath('/profile');
-  return { ok: true };
-}
+// Pay rate is set by back office (see admin/employees/[id]), never self-service —
+// crew cannot change their own rate.

@@ -18,9 +18,9 @@ import {
   User,
   Megaphone,
   Pin,
-  DollarSign,
 } from 'lucide-react';
 import { format, differenceInMonths } from 'date-fns';
+import { useI18n } from '@/lib/i18n';
 import {
   CONFIG,
   Employee,
@@ -48,13 +48,6 @@ interface DashboardContentProps {
   weekLabel: string;
 }
 
-const QUICK_LINKS = [
-  { title: 'Materials', href: '/materials', icon: Package, desc: 'Truck count sheets' },
-  { title: 'Handbook & Policies', href: '/policies', icon: BookOpen, desc: 'Company handbook' },
-  { title: 'Training', href: '/training', icon: GraduationCap, desc: 'Certifications' },
-  { title: 'My Profile', href: '/profile', icon: User, desc: 'Set your pay rate' },
-];
-
 export function DashboardContent({
   employee,
   weekJobs,
@@ -65,65 +58,71 @@ export function DashboardContent({
   today,
   weekLabel,
 }: DashboardContentProps) {
+  const { t } = useI18n();
   const firstName = employee.name.split(' ')[0];
   const tenureMonths = differenceInMonths(new Date(), new Date(employee.start_date));
   const tardyCount = attendance.filter((a) => a.is_tardy).length;
   const totalMileageAmount = mileage.reduce((sum, m) => sum + Number(m.amount), 0);
 
-  // Estimated hours/pay this week — count jobs they haven't declined.
+  // Estimated hours/pay this week — count only the jobs they haven't declined.
   const workingJobs = weekJobs.filter((j) => j.response !== 'declined');
   const estHours = workingJobs.reduce((s, j) => s + Number(j.estimated_hours ?? 0), 0);
   const rate = employee.hourly_rate;
   const estPay = rate != null ? estHours * rate : null;
 
+  const quickLinks = [
+    { title: t('nav.materials'), desc: t('dash.link_materials_desc'), href: '/materials', icon: Package },
+    { title: t('dash.link_handbook'), desc: t('dash.link_handbook_desc'), href: '/policies', icon: BookOpen },
+    { title: t('dash.link_training'), desc: t('dash.link_training_desc'), href: '/training', icon: GraduationCap },
+    { title: t('dash.link_profile'), desc: t('dash.link_profile_desc'), href: '/profile', icon: User },
+  ];
+
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Welcome back, {firstName}!</h1>
-        <p className="text-muted-foreground mt-1">Your week of {weekLabel}</p>
+        <h1 className="text-2xl font-bold text-foreground">
+          {t('dash.welcome', { name: firstName })}
+        </h1>
+        <p className="text-muted-foreground mt-1">{t('dash.your_week', { week: weekLabel })}</p>
       </div>
 
       {/* This Week */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Jobs This Week</CardDescription>
+            <CardDescription>{t('dash.jobs_this_week')}</CardDescription>
             <CardTitle className="text-3xl">{weekJobs.length}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              {workingJobs.length} you&apos;re working
+              {t('dash.youre_working', { count: workingJobs.length })}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Estimated Hours</CardDescription>
+            <CardDescription>{t('dash.est_hours')}</CardDescription>
             <CardTitle className="text-3xl">{estHours.toFixed(1)}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">across this week&apos;s jobs</p>
+            <p className="text-sm text-muted-foreground">{t('dash.across_jobs')}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Estimated Pay</CardDescription>
+            <CardDescription>{t('dash.est_pay')}</CardDescription>
             <CardTitle className="text-3xl">
               {estPay != null ? `$${estPay.toFixed(2)}` : '—'}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {rate != null ? (
-              <p className="text-sm text-muted-foreground">
-                {estHours.toFixed(1)} hrs × ${rate.toFixed(2)}/hr
-              </p>
-            ) : (
-              <Link href="/profile" className="text-sm text-primary inline-flex items-center gap-1">
-                <DollarSign className="h-3 w-3" /> Set your pay rate
-              </Link>
-            )}
+            <p className="text-sm text-muted-foreground">
+              {rate != null
+                ? t('dash.hrs_rate', { hrs: estHours.toFixed(1), rate: rate.toFixed(2) })
+                : t('dash.pay_not_set')}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -131,13 +130,13 @@ export function DashboardContent({
       {/* Schedule with accept/decline */}
       <Card>
         <CardHeader>
-          <CardTitle>Your Schedule</CardTitle>
-          <CardDescription>Accept or decline the jobs you&apos;re assigned to</CardDescription>
+          <CardTitle>{t('dash.your_schedule')}</CardTitle>
+          <CardDescription>{t('dash.schedule_desc')}</CardDescription>
         </CardHeader>
         <CardContent>
           {weekJobs.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
-              No jobs assigned this week yet.
+              {t('dash.no_jobs_week')}
             </p>
           ) : (
             <div className="space-y-3">
@@ -154,13 +153,15 @@ export function DashboardContent({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Megaphone className="h-5 w-5 text-primary" />
-            Message Board
+            {t('dash.message_board')}
           </CardTitle>
-          <CardDescription>Announcements from the office</CardDescription>
+          <CardDescription>{t('dash.announcements')}</CardDescription>
         </CardHeader>
         <CardContent>
           {messages.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">No announcements.</p>
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              {t('dash.no_announcements')}
+            </p>
           ) : (
             <div className="space-y-3">
               {messages.map((m) => (
@@ -182,7 +183,7 @@ export function DashboardContent({
 
       {/* Quick links */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {QUICK_LINKS.map((link) => {
+        {quickLinks.map((link) => {
           const Icon = link.icon;
           return (
             <Link key={link.href} href={link.href}>
@@ -206,8 +207,8 @@ export function DashboardContent({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Recognition</CardTitle>
-            <CardDescription>5-star reviews, call-outs, and crew recognition</CardDescription>
+            <CardTitle>{t('dash.recognition')}</CardTitle>
+            <CardDescription>{t('dash.recognition_desc')}</CardDescription>
           </CardHeader>
           <CardContent>
             {performanceEvents.length > 0 ? (
@@ -228,12 +229,12 @@ export function DashboardContent({
                         }
                       >
                         {event.type === 'five_star_review'
-                          ? '5-Star'
+                          ? t('dash.five_star')
                           : event.type === 'customer_callout'
-                            ? 'Customer'
-                            : 'Crew'}
+                            ? t('dash.customer')
+                            : t('dash.crew')}
                       </Badge>
-                      <span className="text-sm">{event.description || 'Great work!'}</span>
+                      <span className="text-sm">{event.description || t('dash.great_work')}</span>
                     </div>
                     <span className="text-xs text-muted-foreground">
                       {format(new Date(event.date), 'MMM d')}
@@ -242,38 +243,42 @@ export function DashboardContent({
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground text-sm">No recognition events yet this month.</p>
+              <p className="text-muted-foreground text-sm">{t('dash.no_recognition')}</p>
             )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>This Month at a Glance</CardTitle>
-            <CardDescription>Your metrics</CardDescription>
+            <CardTitle>{t('dash.at_a_glance')}</CardTitle>
+            <CardDescription>{t('dash.your_metrics')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-1">
             <div className="flex justify-between items-center p-2">
-              <span className="text-sm text-muted-foreground">Tenure</span>
+              <span className="text-sm text-muted-foreground">{t('dash.tenure')}</span>
               <span className="font-medium">
-                {tenureMonths} {tenureMonths === 1 ? 'month · 1 share' : `months · ${tenureMonths} shares`}
+                {tenureMonths === 1
+                  ? t('dash.month_share_dot')
+                  : t('dash.months_shares_dot', { count: tenureMonths })}
               </span>
             </div>
             <Link
               href="/payroll"
               className="flex justify-between items-center p-2 rounded-md hover:bg-muted transition-colors"
             >
-              <span className="text-sm text-muted-foreground">Mileage earnings</span>
+              <span className="text-sm text-muted-foreground">{t('dash.mileage_earnings')}</span>
               <span className="font-medium">${totalMileageAmount.toFixed(2)} &rarr;</span>
             </Link>
             <div className="flex justify-between items-center p-2">
-              <span className="text-sm text-muted-foreground">Tardies</span>
-              <span className={`font-medium ${tardyCount === 0 ? 'text-green-600' : 'text-destructive'}`}>
+              <span className="text-sm text-muted-foreground">{t('dash.tardies')}</span>
+              <span
+                className={`font-medium ${tardyCount === 0 ? 'text-green-600' : 'text-destructive'}`}
+              >
                 {tardyCount}
               </span>
             </div>
             <div className="flex justify-between items-center p-2">
-              <span className="text-sm text-muted-foreground">Mileage rate</span>
+              <span className="text-sm text-muted-foreground">{t('dash.mileage_rate')}</span>
               <span className="font-medium">${CONFIG.MILEAGE_RATE}/mi</span>
             </div>
           </CardContent>
@@ -285,6 +290,7 @@ export function DashboardContent({
 
 // One job row with accept/decline. Declining opens a required-reason input.
 function JobRow({ job, isToday }: { job: WeekJob; isToday: boolean }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [declining, setDeclining] = useState(false);
@@ -306,11 +312,7 @@ function JobRow({ job, isToday }: { job: WeekJob; isToday: boolean }) {
   }
 
   return (
-    <div
-      className={`rounded-lg border p-3 ${
-        isToday ? 'bg-secondary/40 border-blue-200' : 'bg-muted'
-      }`}
-    >
+    <div className={`rounded-lg border p-3 ${isToday ? 'bg-secondary/40 border-blue-200' : 'bg-muted'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -320,12 +322,12 @@ function JobRow({ job, isToday }: { job: WeekJob; isToday: boolean }) {
                 {job.job_number}
               </Badge>
             )}
-            {isToday && <Badge className="bg-primary text-xs">Today</Badge>}
+            {isToday && <Badge className="bg-primary text-xs">{t('dash.today')}</Badge>}
             {job.response === 'accepted' && (
-              <Badge className="bg-green-600 text-xs">Accepted</Badge>
+              <Badge className="bg-green-600 text-xs">{t('dash.accepted')}</Badge>
             )}
             {job.response === 'declined' && (
-              <Badge className="bg-destructive text-xs">Declined</Badge>
+              <Badge className="bg-destructive text-xs">{t('dash.declined')}</Badge>
             )}
           </div>
           <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
@@ -344,7 +346,9 @@ function JobRow({ job, isToday }: { job: WeekJob; isToday: boolean }) {
             )}
           </div>
           {job.response === 'declined' && job.decline_reason && (
-            <p className="text-xs text-destructive">Reason: {job.decline_reason}</p>
+            <p className="text-xs text-destructive">
+              {t('dash.reason', { reason: job.decline_reason })}
+            </p>
           )}
         </div>
 
@@ -353,23 +357,13 @@ function JobRow({ job, isToday }: { job: WeekJob; isToday: boolean }) {
           {!declining && (
             <div className="flex gap-2">
               {job.response !== 'accepted' && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={pending}
-                  onClick={() => respond('accepted')}
-                >
-                  <Check className="h-4 w-4 mr-1" /> Accept
+                <Button size="sm" variant="outline" disabled={pending} onClick={() => respond('accepted')}>
+                  <Check className="h-4 w-4 mr-1" /> {t('dash.accept')}
                 </Button>
               )}
               {job.response !== 'declined' && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={pending}
-                  onClick={() => setDeclining(true)}
-                >
-                  <X className="h-4 w-4 mr-1" /> Decline
+                <Button size="sm" variant="outline" disabled={pending} onClick={() => setDeclining(true)}>
+                  <X className="h-4 w-4 mr-1" /> {t('dash.decline')}
                 </Button>
               )}
             </div>
@@ -380,7 +374,7 @@ function JobRow({ job, isToday }: { job: WeekJob; isToday: boolean }) {
       {declining && (
         <div className="mt-3 space-y-2 border-t pt-3">
           <Input
-            placeholder="Reason for declining (required)"
+            placeholder={t('dash.decline_reason_ph')}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
           />
@@ -392,7 +386,7 @@ function JobRow({ job, isToday }: { job: WeekJob; isToday: boolean }) {
               disabled={pending || !reason.trim()}
               onClick={() => respond('declined', reason)}
             >
-              Confirm decline
+              {t('dash.confirm_decline')}
             </Button>
             <Button
               size="sm"
@@ -403,7 +397,7 @@ function JobRow({ job, isToday }: { job: WeekJob; isToday: boolean }) {
                 setError(null);
               }}
             >
-              Cancel
+              {t('dash.cancel')}
             </Button>
           </div>
         </div>

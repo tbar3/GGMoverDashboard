@@ -137,11 +137,13 @@ export interface BoardRow {
 
 /**
  * Every active employee's events + computed result for one week, for the admin
- * Performance board. Hours are 0 until the payroll import lands (Phase 2).
+ * Performance board. Hours come from the weekly payroll import (payroll_entries);
+ * having imported hours for the week is also what turns on Perfect Week — you
+ * can't be "perfect attendance" for a week we have no attendance/hours for.
  */
-export async function getWeekBoard(weekStart: string, hoursByEmployee?: Map<string, number>): Promise<BoardRow[]> {
+export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
   const config = await getBonusConfig();
-  const [employees, positives, strikes, writeUps] = await Promise.all([
+  const [employees, positives, strikes, writeUps, payroll] = await Promise.all([
     query<{ id: string; name: string }>(
       'SELECT id, name FROM employees WHERE is_active = TRUE ORDER BY name'
     ),
@@ -160,10 +162,17 @@ export async function getWeekBoard(weekStart: string, hoursByEmployee?: Map<stri
          FROM write_ups WHERE week_start = $1`,
       [weekStart]
     ),
+    query<{ employee_id: string; total_hours: number | null }>(
+      `SELECT employee_id, total_hours FROM payroll_entries WHERE week_start = $1`,
+      [weekStart]
+    ),
   ]);
 
   const forEmp = <T extends { employee_id: string }>(rows: T[], id: string) =>
     rows.filter((r) => r.employee_id === id);
+  // A payroll row for the week means we have this person's hours/attendance for it.
+  const hoursByEmployee = new Map(payroll.map((p) => [p.employee_id, Number(p.total_hours) || 0]));
+  const hasPayroll = new Set(payroll.map((p) => p.employee_id));
 
   return employees.map((e) => {
     const events: WeekEvents = {
@@ -171,7 +180,10 @@ export async function getWeekBoard(weekStart: string, hoursByEmployee?: Map<stri
       strikes: forEmp(strikes, e.id),
       writeUps: forEmp(writeUps, e.id),
     };
-    const hours = hoursByEmployee?.get(e.id) ?? 0;
-    return { employeeId: e.id, name: e.name, events, result: computeWeek(events, hours, config) };
+    const hours = hoursByEmployee.get(e.id) ?? 0;
+    const result = computeWeek(events, hours, config, {
+      attendanceComplete: hasPayroll.has(e.id) && hours > 0,
+    });
+    return { employeeId: e.id, name: e.name, events, result };
   });
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,9 +23,106 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { format, startOfWeek, endOfWeek, addDays, subWeeks } from 'date-fns';
-import { DollarSign, Loader2, Save, ChevronLeft, ChevronRight } from 'lucide-react';
+import { DollarSign, Loader2, Save, ChevronLeft, ChevronRight, Upload, CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Employee, PayrollEntry } from '@/types';
+
+interface ImportResult {
+  imported: number;
+  unmatched: string[];
+  total: number;
+  weekStart: string;
+  period: { start: string; end: string | null; payDate: string | null };
+  warnings: string[];
+}
+
+function PayrollUploadCard({ onImported }: { onImported: () => void }) {
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File) {
+    setUploading(true);
+    setResult(null);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await fetch('/api/payroll/import', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Import failed');
+        if (data.warnings?.length) setResult({ ...data, imported: 0, unmatched: [], total: 0 });
+        return;
+      }
+      setResult(data);
+      toast.success(`Imported ${data.imported} of ${data.total} employees for week of ${data.weekStart}`);
+      onImported();
+    } catch {
+      toast.error('Could not upload the file');
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Upload className="h-5 w-5" /> Upload Payroll Summary
+        </CardTitle>
+        <CardDescription>
+          Drop in the weekly <span className="font-medium">Payroll Summary</span> export (.csv or .xlsx).
+          The pay week and every employee&apos;s hours &amp; pay are read straight from the file and
+          matched by name — this also feeds the weekly bonus hours.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center gap-3">
+          <Input
+            ref={inputRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            disabled={uploading}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFile(f);
+            }}
+            className="max-w-sm"
+          />
+          {uploading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        </div>
+
+        {result && (
+          <div className="rounded-lg border p-3 text-sm space-y-2">
+            <div className="flex items-center gap-2 font-medium">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              {result.imported} imported
+              {result.period?.start && (
+                <span className="text-muted-foreground font-normal">
+                  · week of {result.period.start}
+                  {result.period.payDate ? ` · pay date ${result.period.payDate}` : ''}
+                </span>
+              )}
+            </div>
+            {result.unmatched?.length > 0 && (
+              <div className="flex items-start gap-2 text-amber-700">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>
+                  <span className="font-medium">Not matched to an employee:</span>{' '}
+                  {result.unmatched.join(', ')}. Add them under Employees (name must match exactly), then re-upload.
+                </span>
+              </div>
+            )}
+            {result.warnings?.length > 0 && (
+              <div className="text-muted-foreground">{result.warnings.join(' ')}</div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 interface ExpectedData {
   employee_id: string;
@@ -139,8 +236,12 @@ export default function AdminPayrollPage() {
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Payroll</h1>
-        <p className="text-muted-foreground mt-1">Enter weekly payroll data for each employee</p>
+        <p className="text-muted-foreground mt-1">
+          Upload the weekly Payroll Summary, or enter hours by hand below.
+        </p>
       </div>
+
+      <PayrollUploadCard onImported={fetchData} />
 
       {/* Week Selector */}
       <Card>

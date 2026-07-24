@@ -115,22 +115,25 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-4">
-        {/* Employee Section */}
-        <div className="space-y-1">
-          <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
-            {t('nav.my_dashboard')}
-          </p>
-          {employeeNavItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(linkClass, pathname === item.href ? activeClass : idleClass)}
-            >
-              {item.icon}
-              {getTitle(item)}
-            </Link>
-          ))}
-        </div>
+        {/* Crew section — crew only. Back office get the admin nav instead and
+            never see the crew "My Dashboard" surface. */}
+        {!isAdmin && (
+          <div className="space-y-1">
+            <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
+              {t('nav.my_dashboard')}
+            </p>
+            {employeeNavItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(linkClass, pathname === item.href ? activeClass : idleClass)}
+              >
+                {item.icon}
+                {getTitle(item)}
+              </Link>
+            ))}
+          </div>
+        )}
 
         {/* Back-office Sections — one group per live area, from the shared nav config. */}
         {isAdmin && (

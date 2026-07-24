@@ -1,5 +1,7 @@
 import { currentUser } from '@clerk/nextjs/server';
+import { redirect } from 'next/navigation';
 import { query, queryOne } from '@/lib/db';
+import { isBackOffice } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
 import {
@@ -35,6 +37,9 @@ export default async function DashboardPage() {
       </div>
     );
   }
+
+  // Back office land on the Company Hub, not the crew dashboard.
+  if (isBackOffice(employee)) redirect('/admin');
 
   const now = new Date();
   const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');

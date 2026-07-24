@@ -44,8 +44,10 @@ export function parseCalendarEvent(event: {
 }): ParsedJob | null {
   if (!event.summary || !event.id) return null;
 
-  // Parse title: "1369-1 – Moving – Charles Beck" or "1369-1 - Moving - Charles Beck"
-  const titleParts = event.summary.split(/\s*[–-]\s*/);
+  // Parse title: "1369-1 – Moving – Charles Beck" or "1369-1 - Moving - Charles Beck".
+  // Split ONLY on a dash/en-dash surrounded by whitespace — the real separator —
+  // so the hyphen inside a job number like "1369-1" is left intact.
+  const titleParts = event.summary.split(/\s+[–-]\s+/);
   if (titleParts.length < 3) return null;
 
   const job_number = titleParts[0].trim();

@@ -1,5 +1,5 @@
 // User roles
-export type UserRole = 'owner' | 'manager' | 'driver' | 'lead' | 'helper';
+export type UserRole = 'owner' | 'admin' | 'manager' | 'sales' | 'driver' | 'lead' | 'helper';
 
 // Employee
 export interface Employee {

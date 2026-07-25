@@ -7,11 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { UserRole } from '@/types';
+import { CREW_ROLES, roleLabel } from '@/lib/roles';
 import { createEmployee } from './actions';
 
 export default function NewEmployeePage() {
@@ -19,7 +19,6 @@ export default function NewEmployeePage() {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('helper');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const router = useRouter();
@@ -34,7 +33,6 @@ export default function NewEmployeePage() {
         email,
         role,
         startDate,
-        isAdmin,
       });
 
       if (result.error) {
@@ -110,13 +108,16 @@ export default function NewEmployeePage() {
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="owner">Owner</SelectItem>
-                    <SelectItem value="manager">Manager</SelectItem>
-                    <SelectItem value="driver">Driver</SelectItem>
-                    <SelectItem value="lead">Lead</SelectItem>
-                    <SelectItem value="helper">Helper</SelectItem>
+                    {CREW_ROLES.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {roleLabel(r)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Back-office roles are granted in Admin Settings.
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -128,22 +129,7 @@ export default function NewEmployeePage() {
                   onChange={(e) => setStartDate(e.target.value)}
                   required
                 />
-                <p className="text-xs text-muted-foreground">
-                  Used to calculate tenure shares
-                </p>
-              </div>
-
-              <div className="space-y-2 flex items-end">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="isAdmin"
-                    checked={isAdmin}
-                    onCheckedChange={(checked) => setIsAdmin(checked as boolean)}
-                  />
-                  <Label htmlFor="isAdmin" className="font-normal">
-                    Grant admin access
-                  </Label>
-                </div>
+                <p className="text-xs text-muted-foreground">Used to calculate tenure</p>
               </div>
             </div>
 

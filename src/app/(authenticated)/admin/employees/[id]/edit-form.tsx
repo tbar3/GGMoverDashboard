@@ -16,11 +16,12 @@ import {
 import { toast } from 'sonner';
 import { Employee, UserRole } from '@/types';
 import { updateEmployee } from '../new/actions';
-
-const ROLES: UserRole[] = ['owner', 'manager', 'lead', 'driver', 'helper'];
+import { CREW_ROLES, isBackOfficeRole, roleLabel } from '@/lib/roles';
 
 export function EditEmployeeForm({ employee }: { employee: Employee }) {
   const router = useRouter();
+  // Back-office roles are managed in Admin Settings — the Employees tab handles crew.
+  const backOffice = isBackOfficeRole(employee.role);
   const [name, setName] = useState(employee.name);
   const [role, setRole] = useState<UserRole>(employee.role);
   const [startDate, setStartDate] = useState(
@@ -29,7 +30,6 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
   const [hourlyRate, setHourlyRate] = useState(
     employee.hourly_rate != null ? String(employee.hourly_rate) : ''
   );
-  const [isAdmin, setIsAdmin] = useState(employee.is_admin);
   const [isActive, setIsActive] = useState(employee.is_active);
   const [phone, setPhone] = useState(employee.phone ?? '');
   const [loading, setLoading] = useState(false);
@@ -48,7 +48,6 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
         name,
         role,
         startDate,
-        isAdmin,
         isActive,
         hourlyRate: rate,
         phone: phone.trim() || null,
@@ -98,18 +97,25 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
-              <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ROLES.map((r) => (
-                    <SelectItem key={r} value={r} className="capitalize">
-                      {r}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {backOffice ? (
+                <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm">
+                  {roleLabel(employee.role)}
+                  <span className="text-muted-foreground ml-2 text-xs">· managed in Admin Settings</span>
+                </div>
+              ) : (
+                <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CREW_ROLES.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {roleLabel(r)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="start">Start Date</Label>
@@ -134,15 +140,6 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
           </div>
 
           <div className="space-y-3">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="h-4 w-4"
-                checked={isAdmin}
-                onChange={(e) => setIsAdmin(e.target.checked)}
-              />
-              Back-office admin access
-            </label>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"

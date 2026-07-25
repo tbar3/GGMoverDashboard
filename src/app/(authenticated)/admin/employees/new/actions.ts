@@ -11,7 +11,6 @@ interface CreateEmployeeInput {
   email: string;
   role: UserRole;
   startDate: string;
-  isAdmin: boolean;
   hourlyRate?: number | null;
 }
 
@@ -34,17 +33,12 @@ export async function createEmployee(input: CreateEmployeeInput) {
   }
 
   try {
+    // New records from the Employees tab are crew — admin access is granted only
+    // in Admin Settings, never here, so is_admin is always false on create.
     await query(
       `INSERT INTO employees (email, name, role, start_date, is_active, is_admin, hourly_rate)
-       VALUES ($1, $2, $3, $4, true, $5, $6)`,
-      [
-        input.email,
-        input.name,
-        input.role,
-        input.startDate,
-        input.isAdmin || input.role === 'owner' || input.role === 'manager',
-        input.hourlyRate ?? null,
-      ]
+       VALUES ($1, $2, $3, $4, true, false, $5)`,
+      [input.email, input.name, input.role, input.startDate, input.hourlyRate ?? null]
     );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to create employee';
@@ -59,7 +53,6 @@ interface UpdateEmployeeInput {
   name: string;
   role: UserRole;
   startDate: string;
-  isAdmin: boolean;
   isActive: boolean;
   hourlyRate: number | null;
   phone?: string | null;
@@ -74,17 +67,18 @@ export async function updateEmployee(input: UpdateEmployeeInput) {
   if (!guard.ok) return { error: 'Back office access required' };
 
   try {
+    // Note: is_admin and back-office roles are managed only in Admin Settings, so
+    // this update deliberately leaves is_admin untouched.
     await query(
       `UPDATE employees
-          SET name = $2, role = $3, start_date = $4, is_admin = $5,
-              is_active = $6, hourly_rate = $7, phone = $8
+          SET name = $2, role = $3, start_date = $4,
+              is_active = $5, hourly_rate = $6, phone = $7
         WHERE id = $1`,
       [
         input.id,
         input.name,
         input.role,
         input.startDate,
-        input.isAdmin || input.role === 'owner' || input.role === 'manager',
         input.isActive,
         input.hourlyRate,
         input.phone ?? null,

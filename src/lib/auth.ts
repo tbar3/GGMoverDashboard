@@ -2,6 +2,7 @@ import { currentUser } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
 import { Employee } from '@/types';
+import { isBackOfficeRole } from '@/lib/roles';
 
 /**
  * Central authorization helpers.
@@ -19,7 +20,7 @@ export function isBackOffice(
   emp: Pick<Employee, 'role' | 'is_admin'> | null | undefined
 ): boolean {
   if (!emp) return false;
-  return emp.is_admin === true || emp.role === 'owner' || emp.role === 'manager';
+  return emp.is_admin === true || isBackOfficeRole(emp.role);
 }
 
 /** The Employee row for the signed-in Clerk user, or null if not signed in / no match. */

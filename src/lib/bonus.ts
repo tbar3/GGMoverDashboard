@@ -97,6 +97,24 @@ async function roleAutoBonusFor(employeeId: string, config: BonusConfig): Promis
   return rows.reduce((b, r) => b + (r.name === 'Driver' ? config.driverWeekly : config.truckLeadWeekly), 0);
 }
 
+export interface RoleBonus {
+  label: string;
+  amount: number;
+}
+
+/** The itemized role add-ons (Driver / 2-Truck Lead) a crew member earns from their skills. */
+async function roleAutoBonusDetailFor(employeeId: string, config: BonusConfig): Promise<RoleBonus[]> {
+  const rows = await query<{ name: string }>(
+    `SELECT s.name FROM employee_skills es JOIN skills s ON s.id = es.skill_id
+      WHERE es.employee_id = $1 AND s.name IN ('Driver', '2-Truck Job Lead')`,
+    [employeeId]
+  );
+  return rows.map((r) => ({
+    label: r.name === 'Driver' ? 'Driver' : '2-Truck Lead',
+    amount: r.name === 'Driver' ? config.driverWeekly : config.truckLeadWeekly,
+  }));
+}
+
 export interface PositiveRow {
   id: string;
   type: string;
@@ -378,6 +396,7 @@ export interface EmployeeWeek {
   positives: (PositiveRow & { label: string })[];
   strikes: (StrikeRow & { label: string })[];
   writeUps: WriteUpRow[];
+  roleBonuses: RoleBonus[]; // Driver / 2-Truck Lead add-ons from skills
   config: BonusConfig;
 }
 
@@ -404,8 +423,9 @@ export async function getEmployeeWeek(employeeId: string, weekStart: string): Pr
   ]);
 
   const events: WeekEvents = { positives, strikes, writeUps };
+  const roleBonuses = await roleAutoBonusDetailFor(employeeId, config);
   const result = computeWeek(events, hoursInfo.hours, config, {
-    autoBonus: await roleAutoBonusFor(employeeId, config),
+    autoBonus: roleBonuses.reduce((s, r) => s + r.amount, 0),
   });
 
   return {
@@ -415,6 +435,7 @@ export async function getEmployeeWeek(employeeId: string, weekStart: string): Pr
     positives: positives.map((p) => ({ ...p, label: positiveLabel(p.type) })),
     strikes: strikes.map((s) => ({ ...s, label: strikeLabel(s.type) })),
     writeUps,
+    roleBonuses,
     config,
   };
 }

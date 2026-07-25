@@ -16,15 +16,20 @@ import { getNumberSetting } from '@/lib/settings';
  */
 
 export const POSITIVE_TYPES = [
-  { value: 'FIVE_STAR_REVIEW', label: '5-Star Review' },
-  { value: 'CUSTOMER_CALLOUT', label: 'Customer Call-out' },
-  { value: 'COMPLIANCE_PLUS', label: 'Compliance +' },
+  { value: 'FIVE_STAR_REVIEW', label: '5-Star Review (whole crew)' },
+  { value: 'CUSTOMER_CALLOUT', label: 'Customer Shoutout' },
+  { value: 'COMPLIANCE_PLUS', label: 'Compliance Plus (audit pass)' },
 ] as const;
 
 export const STRIKE_TYPES = [
   { value: 'LATE', label: 'Late' },
+  { value: 'CALL_OUT', label: 'Call-Out (after Sun 3PM)' },
   { value: 'NO_SHOW', label: 'No-Show' },
-  { value: 'TRUCK_NOT_READY', label: 'Truck Not Ready' },
+  { value: 'TOOLS', label: 'No Tools (lead/driver)' },
+  { value: 'UNIFORM', label: 'Uniform' },
+  { value: 'ARRIVAL_WINDOW', label: 'Missed Arrival Window' },
+  { value: 'NON_COMPLIANCE', label: 'Failed Audit (<70%)' },
+  { value: 'TRUCK_NOT_READY', label: 'Truck Not Ready (whole crew)' },
 ] as const;
 
 export type PositiveType = (typeof POSITIVE_TYPES)[number]['value'];
@@ -52,16 +57,44 @@ export interface BonusConfig {
   increment: number;
   baseMultiplier: number;
   forfeitThreshold: number; // strikes in a week that wipe even discretionary GG points
+  driverWeekly: number; // automatic +x for certified drivers
+  truckLeadWeekly: number; // automatic +x for 2-truck job leads
 }
 
 export async function getBonusConfig(): Promise<BonusConfig> {
-  const [baseRate, increment, baseMultiplier, forfeitThreshold] = await Promise.all([
-    getNumberSetting('bonus_base_rate', 1.0),
-    getNumberSetting('bonus_positive_increment', 0.5),
-    getNumberSetting('bonus_base_multiplier', 0.5),
-    getNumberSetting('bonus_strike_forfeit_threshold', 3),
-  ]);
-  return { baseRate, increment, baseMultiplier, forfeitThreshold };
+  const [baseRate, increment, baseMultiplier, forfeitThreshold, driverWeekly, truckLeadWeekly] =
+    await Promise.all([
+      getNumberSetting('bonus_base_rate', 1.0),
+      getNumberSetting('bonus_positive_increment', 0.5),
+      getNumberSetting('bonus_base_multiplier', 0.5),
+      getNumberSetting('bonus_strike_forfeit_threshold', 3),
+      getNumberSetting('bonus_driver_weekly', 0.25),
+      getNumberSetting('bonus_truck_lead_weekly', 0.25),
+    ]);
+  return { baseRate, increment, baseMultiplier, forfeitThreshold, driverWeekly, truckLeadWeekly };
+}
+
+// Automatic weekly role add-ons from a crew member's certifications.
+async function roleAutoBonusMap(config: BonusConfig): Promise<Map<string, number>> {
+  const rows = await query<{ employee_id: string; name: string }>(
+    `SELECT es.employee_id, s.name FROM employee_skills es JOIN skills s ON s.id = es.skill_id
+      WHERE s.name IN ('Driver', '2-Truck Job Lead')`
+  );
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const add = r.name === 'Driver' ? config.driverWeekly : config.truckLeadWeekly;
+    map.set(r.employee_id, (map.get(r.employee_id) ?? 0) + add);
+  }
+  return map;
+}
+
+async function roleAutoBonusFor(employeeId: string, config: BonusConfig): Promise<number> {
+  const rows = await query<{ name: string }>(
+    `SELECT s.name FROM employee_skills es JOIN skills s ON s.id = es.skill_id
+      WHERE es.employee_id = $1 AND s.name IN ('Driver', '2-Truck Job Lead')`,
+    [employeeId]
+  );
+  return rows.reduce((b, r) => b + (r.name === 'Driver' ? config.driverWeekly : config.truckLeadWeekly), 0);
 }
 
 export interface PositiveRow {
@@ -94,10 +127,11 @@ export interface WeekEvents {
 
 export interface WeekResult {
   hours: number;
-  positivesCount: number; // normal (non-discretionary) positives, excludes perfect week
+  positivesCount: number; // GG points logged (non-discretionary)
   discretionaryCount: number; // discretionary GG points
-  perfectWeek: boolean;
-  totalPositives: number; // positivesCount + (perfectWeek ? 1 : 0)
+  autoBonus: number; // automatic role add-ons (driver / 2-truck lead), in multiplier units
+  perfectWeek: boolean; // deprecated by policy; kept false
+  totalPositives: number;
   strikeCount: number;
   grossMultiplier: number; // what they'd earn with no strikes (normal + discretionary)
   multiplier: number; // EFFECTIVE multiplier after strike rules — drives the bonus
@@ -121,24 +155,23 @@ export function computeWeek(
   events: WeekEvents,
   hours: number,
   config: BonusConfig,
-  opts?: { attendanceComplete?: boolean }
+  opts?: { autoBonus?: number }
 ): WeekResult {
   const activeStrikes = events.strikes.filter((s) => !s.voided);
   const strikeCount = activeStrikes.length;
   const hasStrike = strikeCount > 0;
 
-  // Perfect Week (spec 1.3): perfect ATTENDANCE — every scheduled shift attended,
-  // none late — AND no no-shows AND no write-ups. Affirmative signal (needs the
-  // week's attendance/payroll), and any late/no-show breaks it.
-  const hasLateOrNoShow = activeStrikes.some((s) => s.type === 'LATE' || s.type === 'NO_SHOW');
-  const perfectWeek =
-    opts?.attendanceComplete === true && !hasLateOrNoShow && events.writeUps.length === 0;
+  // Perfect Week was dropped in the final policy — GG points + role add-ons only.
+  const perfectWeek = false;
 
   const positivesCount = events.positives.filter((p) => !p.discretionary).length;
   const discretionaryCount = events.positives.filter((p) => p.discretionary).length;
-  const totalPositives = positivesCount + (perfectWeek ? 1 : 0);
+  const totalPositives = positivesCount;
 
-  const normalMultiplier = config.baseMultiplier + config.increment * totalPositives;
+  // Automatic weekly role add-ons (Driver / 2-Truck Lead) count with the normal
+  // bonus — a strike forfeits them like everything else.
+  const autoBonus = Math.max(0, opts?.autoBonus ?? 0);
+  const normalMultiplier = config.baseMultiplier + config.increment * totalPositives + autoBonus;
   const discretionaryValue = config.increment * discretionaryCount;
   const grossMultiplier = normalMultiplier + discretionaryValue;
 
@@ -157,6 +190,7 @@ export function computeWeek(
     hours,
     positivesCount,
     discretionaryCount,
+    autoBonus,
     perfectWeek,
     totalPositives,
     strikeCount,
@@ -213,9 +247,8 @@ export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
 
   const forEmp = <T extends { employee_id: string }>(rows: T[], id: string) =>
     rows.filter((r) => r.employee_id === id);
-  // A payroll row for the week means we have this person's hours/attendance for it.
   const hoursByEmployee = new Map(payroll.map((p) => [p.employee_id, Number(p.bonus_hours) || 0]));
-  const hasPayroll = new Set(payroll.map((p) => p.employee_id));
+  const autoBonus = await roleAutoBonusMap(config);
 
   return employees.map((e) => {
     const events: WeekEvents = {
@@ -224,9 +257,7 @@ export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
       writeUps: forEmp(writeUps, e.id),
     };
     const hours = hoursByEmployee.get(e.id) ?? 0;
-    const result = computeWeek(events, hours, config, {
-      attendanceComplete: hasPayroll.has(e.id) && hours > 0,
-    });
+    const result = computeWeek(events, hours, config, { autoBonus: autoBonus.get(e.id) ?? 0 });
     return { employeeId: e.id, name: e.name, events, result };
   });
 }
@@ -374,7 +405,7 @@ export async function getEmployeeWeek(employeeId: string, weekStart: string): Pr
 
   const events: WeekEvents = { positives, strikes, writeUps };
   const result = computeWeek(events, hoursInfo.hours, config, {
-    attendanceComplete: hoursInfo.hasPayroll && hoursInfo.hours > 0,
+    autoBonus: await roleAutoBonusFor(employeeId, config),
   });
 
   return {
@@ -414,6 +445,7 @@ export async function getEmployeeBonusHistory(employeeId: string, limit = 12): P
   );
   if (weeks.length === 0) return [];
 
+  const autoBonus = await roleAutoBonusFor(employeeId, config);
   const weekStarts = weeks.map((w) => w.week_start);
   const [positives, strikes, writeUps] = await Promise.all([
     query<PositiveRow & { week_start: string }>(
@@ -440,7 +472,7 @@ export async function getEmployeeBonusHistory(employeeId: string, limit = 12): P
       writeUps: writeUps.filter((u) => u.week_start === w.week_start),
     };
     const hours = Number(w.hours) || 0;
-    const r = computeWeek(events, hours, config, { attendanceComplete: hours > 0 });
+    const r = computeWeek(events, hours, config, { autoBonus });
     return {
       weekStart: w.week_start,
       weekEnd: w.week_end,

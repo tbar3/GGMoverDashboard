@@ -44,13 +44,18 @@ import {
 // write-up all in one dropdown, so back office logs the whole spectrum from here.
 type Kind = 'positive' | 'discretionary' | 'strike' | 'writeup';
 const EVENT_OPTIONS: { value: string; label: string; kind: Kind }[] = [
-  { value: 'FIVE_STAR_REVIEW', label: '5-Star Review', kind: 'positive' },
-  { value: 'CUSTOMER_CALLOUT', label: 'Customer Call-out', kind: 'positive' },
-  { value: 'COMPLIANCE_PLUS', label: 'Compliance +', kind: 'positive' },
+  { value: 'FIVE_STAR_REVIEW', label: '5-Star Review (whole crew)', kind: 'positive' },
+  { value: 'CUSTOMER_CALLOUT', label: 'Customer Shoutout', kind: 'positive' },
+  { value: 'COMPLIANCE_PLUS', label: 'Compliance Plus (audit pass)', kind: 'positive' },
   { value: 'GG_POINT', label: 'GG Point (discretionary)', kind: 'discretionary' },
   { value: 'LATE', label: 'Late', kind: 'strike' },
+  { value: 'CALL_OUT', label: 'Call-Out (after Sun 3PM)', kind: 'strike' },
   { value: 'NO_SHOW', label: 'No-Show', kind: 'strike' },
-  { value: 'TRUCK_NOT_READY', label: 'Truck Not Ready', kind: 'strike' },
+  { value: 'TOOLS', label: 'No Tools (lead/driver)', kind: 'strike' },
+  { value: 'UNIFORM', label: 'Uniform', kind: 'strike' },
+  { value: 'ARRIVAL_WINDOW', label: 'Missed Arrival Window', kind: 'strike' },
+  { value: 'NON_COMPLIANCE', label: 'Failed Audit (<70%)', kind: 'strike' },
+  { value: 'TRUCK_NOT_READY', label: 'Truck Not Ready (whole crew)', kind: 'strike' },
   { value: 'WRITE_UP', label: 'Write-Up', kind: 'writeup' },
 ];
 const labelFor = (v: string) => EVENT_OPTIONS.find((o) => o.value === v)?.label ?? v;

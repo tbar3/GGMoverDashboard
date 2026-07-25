@@ -1,63 +1,68 @@
-import { currentUser } from '@clerk/nextjs/server';
-import { query, queryOne } from '@/lib/db';
+import { getCurrentEmployee } from '@/lib/auth';
+import { getEmployeeEvents, getEmployeeWeek, weekStartOf } from '@/lib/bonus';
 import { Card, CardContent } from '@/components/ui/card';
-import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
-import { Employee, Attendance, PerformanceEvent, PerfectWeek, MileageEntry, ChecklistCompletion } from '@/types';
-import { StatsContent } from './stats-content';
+import { EventsTable } from '@/components/crew/events-table';
+import { format } from 'date-fns';
 
-export default async function StatsPage() {
-  const user = await currentUser();
-  const email = user?.emailAddresses[0]?.emailAddress;
+export const dynamic = 'force-dynamic';
 
-  const employee = await queryOne<Employee>(
-    'SELECT * FROM employees WHERE email = $1',
-    [email]
+function StatCard({ label, value, negative }: { label: string; value: string | number; negative?: boolean }) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <p className="text-sm text-muted-foreground">{label}</p>
+        <p className={`text-2xl font-bold mt-1 ${negative && Number(value) > 0 ? 'text-destructive' : ''}`}>{value}</p>
+      </CardContent>
+    </Card>
   );
+}
 
+export default async function PerformancePage() {
+  const employee = await getCurrentEmployee();
   if (!employee) {
     return (
       <div className="p-6">
-        <Card><CardContent className="p-6"><p className="text-muted-foreground">Employee profile not found.</p></CardContent></Card>
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-muted-foreground">Employee profile not found.</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   const now = new Date();
-  const monthStart = startOfMonth(now);
-  const monthEnd = endOfMonth(now);
-  const monthStartStr = format(monthStart, 'yyyy-MM-dd');
-  const monthEndStr = format(monthEnd, 'yyyy-MM-dd');
-  const threeMonthsAgo = format(subMonths(now, 3), 'yyyy-MM-dd');
-
-  const [attendance, checklistCompletions, performanceEvents, perfectWeeks, mileage] = await Promise.all([
-    query<Attendance>('SELECT * FROM attendance WHERE employee_id = $1 AND date >= $2 ORDER BY date DESC', [employee.id, threeMonthsAgo]),
-    query<ChecklistCompletion>('SELECT * FROM checklist_completions WHERE employee_id = $1 AND completed_at >= $2', [employee.id, monthStartStr]),
-    query<PerformanceEvent>('SELECT * FROM performance_events WHERE employee_id = $1 ORDER BY date DESC LIMIT 10', [employee.id]),
-    query<PerfectWeek>('SELECT * FROM perfect_weeks WHERE employee_id = $1 AND achieved = true ORDER BY week_start DESC', [employee.id]),
-    query<MileageEntry>('SELECT miles, amount FROM mileage_entries WHERE employee_id = $1 AND date >= $2', [employee.id, monthStartStr]),
+  const [events, week] = await Promise.all([
+    getEmployeeEvents(employee.id, 200),
+    getEmployeeWeek(employee.id, weekStartOf(now)),
   ]);
 
-  const currentMonthAttendance = attendance.filter(a => {
-    const date = new Date(a.date);
-    return date >= monthStart && date <= monthEnd;
-  });
-
-  const totalMiles = mileage.reduce((sum, m) => sum + Number(m.miles), 0);
-  const totalMileageAmount = mileage.reduce((sum, m) => sum + Number(m.amount), 0);
+  const monthPrefix = format(now, 'yyyy-MM');
+  const month = events.filter((e) => e.date.startsWith(monthPrefix));
+  const positives = month.filter((e) => e.kind === 'positive' || e.kind === 'gg_point').length;
+  const strikes = month.filter((e) => e.kind === 'strike' && !e.voided).length;
+  const writeups = month.filter((e) => e.kind === 'writeup').length;
 
   return (
-    <StatsContent
-      employee={employee}
-      attendance={attendance}
-      performanceEvents={performanceEvents}
-      perfectWeeks={perfectWeeks}
-      currentMonthAttendance={currentMonthAttendance}
-      checklistsCompleted={checklistCompletions.length}
-      totalMiles={totalMiles}
-      totalMileageAmount={totalMileageAmount}
-      monthLabel={format(now, 'MMMM yyyy')}
-      monthStartStr={monthStartStr}
-      monthEndStr={monthEndStr}
-    />
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">My Performance</h1>
+        <p className="text-muted-foreground mt-1">Your event record and how it drives your bonus.</p>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="This week's multiplier" value={week.result.hasStrike && week.result.multiplier === 0 ? 'Forfeit' : `${week.result.multiplier}x`} />
+        <StatCard label="Positives this month" value={positives} />
+        <StatCard label="Strikes this month" value={strikes} negative />
+        <StatCard label="Write-ups this month" value={writeups} negative />
+      </div>
+
+      <EventsTable
+        events={events}
+        title="Your performance record"
+        description="Positives and GG Points lift your bonus; strikes forfeit it. Write-ups are formal notices."
+        empty="No events yet - keep it clean."
+      />
+    </div>
   );
 }

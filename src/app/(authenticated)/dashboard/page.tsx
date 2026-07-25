@@ -14,7 +14,8 @@ import {
 import { getMessages, type Message } from '@/lib/messages';
 import { getEmployeeSkills, effectiveRate, sumRaises } from '@/lib/skills';
 import { getBaseRate } from '@/lib/settings';
-import { getEmployeeWeek } from '@/lib/bonus';
+import { getEmployeeWeek, getEmployeeEvents } from '@/lib/bonus';
+import { EventsTable } from '@/components/crew/events-table';
 import { DashboardContent, type WeekJob } from './dashboard-content';
 
 export const dynamic = 'force-dynamic';
@@ -82,6 +83,7 @@ export default async function DashboardPage() {
   const hourlyRate = effectiveRate(employee.hourly_rate ?? null, earnedRaiseSum, baseRate);
 
   const bonusWeek = await getEmployeeWeek(employee.id, weekStart);
+  const recentEvents = await getEmployeeEvents(employee.id, 6);
 
   // Newly-granted skills the employee hasn't acknowledged → celebration.
   const unacknowledged = earnedSkills.filter((s) => !s.acknowledged);
@@ -105,21 +107,31 @@ export default async function DashboardPage() {
   });
 
   return (
-    <DashboardContent
-      employee={employee}
-      hourlyRate={hourlyRate}
-      celebration={celebration}
-      weekJobs={weekJobs}
-      mileage={mileage}
-      performanceEvents={performanceEvents}
-      attendance={attendance}
-      messages={messages as Message[]}
-      today={today}
-      bonusWeek={bonusWeek}
-      weekLabel={`${format(startOfWeek(now, { weekStartsOn: 1 }), 'MMM d')} – ${format(
-        endOfWeek(now, { weekStartsOn: 1 }),
-        'MMM d'
-      )}`}
-    />
+    <div className="space-y-6">
+      <DashboardContent
+        employee={employee}
+        hourlyRate={hourlyRate}
+        celebration={celebration}
+        weekJobs={weekJobs}
+        mileage={mileage}
+        performanceEvents={performanceEvents}
+        attendance={attendance}
+        messages={messages as Message[]}
+        today={today}
+        bonusWeek={bonusWeek}
+        weekLabel={`${format(startOfWeek(now, { weekStartsOn: 1 }), 'MMM d')} – ${format(
+          endOfWeek(now, { weekStartsOn: 1 }),
+          'MMM d'
+        )}`}
+      />
+      <div className="px-4 pb-4 md:px-6 md:pb-6">
+        <EventsTable
+          events={recentEvents}
+          title="Recent events"
+          description="Your latest positives, GG Points, strikes, and write-ups."
+          empty="No recent events — keep it clean."
+        />
+      </div>
+    </div>
   );
 }

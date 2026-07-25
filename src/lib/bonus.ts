@@ -486,6 +486,80 @@ export async function getEmployeeBonusHistory(employeeId: string, limit = 12): P
   });
 }
 
+// ── Unified event feed (one employee) ─────────────────────────
+
+export interface EmployeeEvent {
+  id: string;
+  kind: 'positive' | 'gg_point' | 'strike' | 'writeup';
+  label: string;
+  date: string;
+  weekStart: string;
+  note: string | null;
+  voided: boolean;
+  effect: string;
+}
+
+/** Every bonus/performance event for one employee, newest first — the record. */
+export async function getEmployeeEvents(employeeId: string, limit = 100): Promise<EmployeeEvent[]> {
+  const [positives, strikes, writeUps] = await Promise.all([
+    query<{ id: string; type: string; event_date: string; week_start: string; note: string | null; discretionary: boolean }>(
+      `SELECT id, type, event_date::text, week_start::text, note, discretionary
+         FROM bonus_positives WHERE employee_id = $1`,
+      [employeeId]
+    ),
+    query<{ id: string; type: string; event_date: string; week_start: string; note: string | null; voided: boolean; void_reason: string | null }>(
+      `SELECT id, type, event_date::text, week_start::text, note, voided, void_reason
+         FROM bonus_strikes WHERE employee_id = $1`,
+      [employeeId]
+    ),
+    query<{ id: string; event_date: string; week_start: string; summary: string }>(
+      `SELECT id, event_date::text, week_start::text, summary FROM write_ups WHERE employee_id = $1`,
+      [employeeId]
+    ),
+  ]);
+
+  const events: EmployeeEvent[] = [];
+  for (const p of positives) {
+    const gg = p.discretionary;
+    events.push({
+      id: p.id,
+      kind: gg ? 'gg_point' : 'positive',
+      label: positiveLabel(p.type),
+      date: p.event_date,
+      weekStart: p.week_start,
+      note: p.note,
+      voided: false,
+      effect: gg ? 'GG Point +0.5× (strike-proof)' : '+0.5×',
+    });
+  }
+  for (const s of strikes) {
+    events.push({
+      id: s.id,
+      kind: 'strike',
+      label: strikeLabel(s.type),
+      date: s.event_date,
+      weekStart: s.week_start,
+      note: s.voided && s.void_reason ? `Voided: ${s.void_reason}` : s.note,
+      voided: s.voided,
+      effect: s.voided ? 'Voided' : 'Strike — forfeits bonus',
+    });
+  }
+  for (const w of writeUps) {
+    events.push({
+      id: w.id,
+      kind: 'writeup',
+      label: 'Write-Up',
+      date: w.event_date,
+      weekStart: w.week_start,
+      note: w.summary,
+      voided: false,
+      effect: 'Write-up',
+    });
+  }
+  events.sort((a, b) => b.date.localeCompare(a.date));
+  return events.slice(0, limit);
+}
+
 export interface CompFigures {
   bonus: number;
   totalComp: number;

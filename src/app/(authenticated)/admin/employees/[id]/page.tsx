@@ -6,9 +6,11 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getSkills, getEmployeeSkills, sumRaises } from '@/lib/skills';
 import { getBaseRate } from '@/lib/settings';
+import { getEmployeeEvents } from '@/lib/bonus';
 import { EditEmployeeForm } from './edit-form';
 import { SkillsManager } from './skills-manager';
 import { TerminationCard } from './termination-card';
+import { EventsTable } from '@/components/crew/events-table';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,10 +23,11 @@ export default async function EditEmployeePage({
   const employee = await queryOne<Employee>('SELECT * FROM employees WHERE id = $1', [id]);
   if (!employee) notFound();
 
-  const [skills, earned, baseRate] = await Promise.all([
+  const [skills, earned, baseRate, events] = await Promise.all([
     getSkills(),
     getEmployeeSkills(id),
     getBaseRate(),
+    getEmployeeEvents(id, 200),
   ]);
   const derivedRate = baseRate + sumRaises(earned);
 
@@ -48,6 +51,12 @@ export default async function EditEmployeePage({
         earnedSkillIds={earned.map((e) => e.skill_id)}
         derivedRate={derivedRate}
         hasOverride={employee.hourly_rate != null}
+      />
+      <EventsTable
+        events={events}
+        title="Performance & bonus events"
+        description="Positives, GG Points, strikes, and write-ups on this employee's record."
+        empty="No events logged for this employee yet."
       />
       <TerminationCard employee={employee} />
     </div>

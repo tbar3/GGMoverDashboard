@@ -27,7 +27,6 @@ import { SkillCelebration, type CelebrationSkill } from '@/components/crew/skill
 import { WeeklyBonusCard } from '@/components/crew/weekly-bonus';
 import type { EmployeeWeek } from '@/lib/bonus';
 import { JobRow, type WeekJob } from './job-row';
-import { JobsBrowser } from './jobs-browser';
 
 export type { WeekJob };
 
@@ -150,8 +149,6 @@ export function DashboardContent({
         </CardContent>
       </Card>
 
-      {/* Browse jobs — weekly scroll + custom date range */}
-      <JobsBrowser today={today} />
 
       {/* Message board */}
       <Card>

@@ -24,10 +24,10 @@ export default async function MyJobsPage() {
 
   const today = format(new Date(), 'yyyy-MM-dd');
 
-  const [upcomingJobs, pastJobs] = await Promise.all([
-    query<Job>('SELECT * FROM jobs WHERE $1 = ANY(crew_ids) AND date >= $2 ORDER BY date ASC, start_time ASC', [employee.id, today]),
-    query<Job>('SELECT * FROM jobs WHERE $1 = ANY(crew_ids) AND date < $2 ORDER BY date DESC LIMIT 10', [employee.id, today]),
-  ]);
+  const pastJobs = await query<Job>(
+    'SELECT * FROM jobs WHERE $1 = ANY(crew_ids) AND date < $2 ORDER BY date DESC LIMIT 10',
+    [employee.id, today]
+  );
 
-  return <JobsContent upcomingJobs={upcomingJobs} pastJobs={pastJobs} today={today} />;
+  return <JobsContent pastJobs={pastJobs} today={today} />;
 }

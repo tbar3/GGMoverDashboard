@@ -19,15 +19,20 @@ export function JobsBrowser({ today }: { today: string }) {
   const { t } = useI18n();
   const todayDate = new Date(`${today}T12:00:00`);
 
-  const [mode, setMode] = useState<'week' | 'range'>('week');
+  const [mode, setMode] = useState<'upcoming' | 'week' | 'range'>('upcoming');
   const [weekStart, setWeekStart] = useState<Date>(() => mondayOf(todayDate));
   const [rangeStart, setRangeStart] = useState(today);
   const [rangeEnd, setRangeEnd] = useState(iso(addDays(todayDate, 14)));
   const [jobs, setJobs] = useState<WeekJob[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const start = mode === 'week' ? iso(weekStart) : rangeStart;
-  const end = mode === 'week' ? iso(endOfWeek(weekStart, { weekStartsOn: 1 })) : rangeEnd;
+  const start = mode === 'week' ? iso(weekStart) : mode === 'range' ? rangeStart : today;
+  const end =
+    mode === 'week'
+      ? iso(endOfWeek(weekStart, { weekStartsOn: 1 }))
+      : mode === 'range'
+        ? rangeEnd
+        : iso(addDays(todayDate, 365));
 
   const load = useCallback(async (s: string, e: string) => {
     if (s > e) {
@@ -61,6 +66,9 @@ export function JobsBrowser({ today }: { today: string }) {
             <CardDescription>{t('dash.browse_desc')}</CardDescription>
           </div>
           <div className="flex gap-1.5">
+            <Button size="sm" variant={mode === 'upcoming' ? 'default' : 'outline'} onClick={() => setMode('upcoming')}>
+              {t('dash.upcoming')}
+            </Button>
             <Button size="sm" variant={mode === 'week' ? 'default' : 'outline'} onClick={() => setMode('week')}>
               {t('dash.by_week')}
             </Button>
@@ -71,7 +79,7 @@ export function JobsBrowser({ today }: { today: string }) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {mode === 'week' ? (
+        {mode === 'week' && (
           <div className="flex items-center justify-center gap-2">
             <Button variant="outline" size="icon" onClick={() => setWeekStart((w) => subWeeks(w, 1))} aria-label="Previous week">
               <ChevronLeft className="h-4 w-4" />
@@ -91,7 +99,8 @@ export function JobsBrowser({ today }: { today: string }) {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-        ) : (
+        )}
+        {mode === 'range' && (
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1.5">
               <Label>{t('dash.from')}</Label>

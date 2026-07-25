@@ -7,14 +7,14 @@ import { format } from 'date-fns';
 import { Job } from '@/types';
 import { Clock, MapPin, Phone, Truck, Users, FileText } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { JobsBrowser } from '../dashboard/jobs-browser';
 
 interface JobsContentProps {
-  upcomingJobs: Job[];
   pastJobs: Job[];
   today: string;
 }
 
-export function JobsContent({ upcomingJobs, pastJobs, today }: JobsContentProps) {
+export function JobsContent({ pastJobs, today }: JobsContentProps) {
   const { t } = useI18n();
 
   return (
@@ -24,24 +24,8 @@ export function JobsContent({ upcomingJobs, pastJobs, today }: JobsContentProps)
         <p className="text-muted-foreground mt-1">{t('jobs.subtitle')}</p>
       </div>
 
-      <div>
-        <h2 className="text-lg font-semibold text-foreground mb-3">
-          {t('jobs.today_upcoming', { count: upcomingJobs.length })}
-        </h2>
-        {upcomingJobs.length > 0 ? (
-          <div className="space-y-4">
-            {upcomingJobs.map((job) => (
-              <JobCard key={job.id} job={job} isToday={job.date === today} t={t} />
-            ))}
-          </div>
-        ) : (
-          <Card>
-            <CardContent className="p-6">
-              <p className="text-muted-foreground text-center">{t('jobs.no_upcoming')}</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      {/* Upcoming / weekly scroll / custom range */}
+      <JobsBrowser today={today} />
 
       {pastJobs.length > 0 && (
         <div>

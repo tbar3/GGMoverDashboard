@@ -14,6 +14,7 @@ import {
 import { getMessages, type Message } from '@/lib/messages';
 import { getEmployeeSkills, effectiveRate, sumRaises } from '@/lib/skills';
 import { getBaseRate } from '@/lib/settings';
+import { getEmployeeWeek } from '@/lib/bonus';
 import { DashboardContent, type WeekJob } from './dashboard-content';
 
 export const dynamic = 'force-dynamic';
@@ -80,6 +81,8 @@ export default async function DashboardPage() {
   const earnedRaiseSum = sumRaises(earnedSkills);
   const hourlyRate = effectiveRate(employee.hourly_rate ?? null, earnedRaiseSum, baseRate);
 
+  const bonusWeek = await getEmployeeWeek(employee.id, weekStart);
+
   // Newly-granted skills the employee hasn't acknowledged → celebration.
   const unacknowledged = earnedSkills.filter((s) => !s.acknowledged);
   const celebration =
@@ -112,6 +115,7 @@ export default async function DashboardPage() {
       attendance={attendance}
       messages={messages as Message[]}
       today={today}
+      bonusWeek={bonusWeek}
       weekLabel={`${format(startOfWeek(now, { weekStartsOn: 1 }), 'MMM d')} – ${format(
         endOfWeek(now, { weekStartsOn: 1 }),
         'MMM d'

@@ -1,4 +1,4 @@
-import { query } from '@/lib/db';
+import { query, queryOne } from '@/lib/db';
 import { startOfWeek, format } from 'date-fns';
 import { getNumberSetting } from '@/lib/settings';
 
@@ -190,4 +190,175 @@ export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
     });
     return { employeeId: e.id, name: e.name, events, result };
   });
+}
+
+// ── Crew-facing (one employee) ────────────────────────────────
+
+/** Billable + warehouse hours for a week (the bonus basis), or 0 if no payroll yet. */
+async function bonusHoursFor(employeeId: string, weekStart: string): Promise<{ hours: number; hasPayroll: boolean }> {
+  const row = await queryOne<{ h: number | null }>(
+    `SELECT COALESCE(billable_hours, 0) + COALESCE(warehouse_hours, 0) AS h
+       FROM payroll_entries WHERE employee_id = $1 AND week_start = $2`,
+    [employeeId, weekStart]
+  );
+  return { hours: row ? Number(row.h) || 0 : 0, hasPayroll: row != null };
+}
+
+export interface EmployeeWeek {
+  weekStart: string;
+  result: WeekResult;
+  hasPayroll: boolean;
+  positives: (PositiveRow & { label: string })[];
+  strikes: (StrikeRow & { label: string })[];
+  writeUps: WriteUpRow[];
+  config: BonusConfig;
+}
+
+/** One employee's computed week + their events (with labels), for the crew card. */
+export async function getEmployeeWeek(employeeId: string, weekStart: string): Promise<EmployeeWeek> {
+  const config = await getBonusConfig();
+  const [positives, strikes, writeUps, hoursInfo] = await Promise.all([
+    query<PositiveRow>(
+      `SELECT id, type, event_date::text, note, job_id FROM bonus_positives
+        WHERE employee_id = $1 AND week_start = $2 ORDER BY event_date`,
+      [employeeId, weekStart]
+    ),
+    query<StrikeRow>(
+      `SELECT id, type, event_date::text, voided, void_reason, note, truck_id FROM bonus_strikes
+        WHERE employee_id = $1 AND week_start = $2 ORDER BY event_date`,
+      [employeeId, weekStart]
+    ),
+    query<WriteUpRow>(
+      `SELECT id, event_date::text, summary FROM write_ups
+        WHERE employee_id = $1 AND week_start = $2 ORDER BY event_date`,
+      [employeeId, weekStart]
+    ),
+    bonusHoursFor(employeeId, weekStart),
+  ]);
+
+  const events: WeekEvents = { positives, strikes, writeUps };
+  const result = computeWeek(events, hoursInfo.hours, config, {
+    attendanceComplete: hoursInfo.hasPayroll && hoursInfo.hours > 0,
+  });
+
+  return {
+    weekStart,
+    result,
+    hasPayroll: hoursInfo.hasPayroll,
+    positives: positives.map((p) => ({ ...p, label: positiveLabel(p.type) })),
+    strikes: strikes.map((s) => ({ ...s, label: strikeLabel(s.type) })),
+    writeUps,
+    config,
+  };
+}
+
+export interface BonusHistoryRow {
+  weekStart: string;
+  weekEnd: string;
+  hours: number;
+  positivesCount: number;
+  perfectWeek: boolean;
+  multiplier: number;
+  hasStrike: boolean;
+  bonus: number;
+}
+
+/**
+ * Recent weeks with a computed bonus, most recent first. Anchored on payroll weeks
+ * (the closed/paid weeks that have hours) so each row shows a real dollar figure.
+ */
+export async function getEmployeeBonusHistory(employeeId: string, limit = 12): Promise<BonusHistoryRow[]> {
+  const config = await getBonusConfig();
+  const weeks = await query<{ week_start: string; week_end: string; hours: number | null }>(
+    `SELECT week_start::text, week_end::text,
+            COALESCE(billable_hours, 0) + COALESCE(warehouse_hours, 0) AS hours
+       FROM payroll_entries WHERE employee_id = $1
+      ORDER BY week_start DESC LIMIT $2`,
+    [employeeId, limit]
+  );
+  if (weeks.length === 0) return [];
+
+  const weekStarts = weeks.map((w) => w.week_start);
+  const [positives, strikes, writeUps] = await Promise.all([
+    query<PositiveRow & { week_start: string }>(
+      `SELECT id, type, event_date::text, note, job_id, week_start::text FROM bonus_positives
+        WHERE employee_id = $1 AND week_start = ANY($2)`,
+      [employeeId, weekStarts]
+    ),
+    query<StrikeRow & { week_start: string }>(
+      `SELECT id, type, event_date::text, voided, void_reason, note, truck_id, week_start::text FROM bonus_strikes
+        WHERE employee_id = $1 AND week_start = ANY($2)`,
+      [employeeId, weekStarts]
+    ),
+    query<WriteUpRow & { week_start: string }>(
+      `SELECT id, event_date::text, summary, week_start::text FROM write_ups
+        WHERE employee_id = $1 AND week_start = ANY($2)`,
+      [employeeId, weekStarts]
+    ),
+  ]);
+
+  return weeks.map((w) => {
+    const events: WeekEvents = {
+      positives: positives.filter((p) => p.week_start === w.week_start),
+      strikes: strikes.filter((s) => s.week_start === w.week_start),
+      writeUps: writeUps.filter((u) => u.week_start === w.week_start),
+    };
+    const hours = Number(w.hours) || 0;
+    const r = computeWeek(events, hours, config, { attendanceComplete: hours > 0 });
+    return {
+      weekStart: w.week_start,
+      weekEnd: w.week_end,
+      hours,
+      positivesCount: r.positivesCount,
+      perfectWeek: r.perfectWeek,
+      multiplier: r.multiplier,
+      hasStrike: r.hasStrike,
+      bonus: r.bonus,
+    };
+  });
+}
+
+export interface CompFigures {
+  bonus: number;
+  totalComp: number;
+}
+export interface PayrollComp {
+  week: CompFigures & { label: string | null };
+  month: CompFigures;
+  ytd: CompFigures;
+}
+
+/** Actual paid bonus + total compensation for the crew Payroll cards (week / month / YTD). */
+export async function getPayrollComp(employeeId: string, today: Date): Promise<PayrollComp> {
+  const y = today.getFullYear();
+  const monthStart = `${y}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+  const yearStart = `${y}-01-01`;
+
+  const [latest, month, ytd] = await Promise.all([
+    queryOne<{ bonus: number | null; comp: number | null; week_start: string; week_end: string }>(
+      `SELECT bonus_amount AS bonus, total_compensation AS comp, week_start::text, week_end::text
+         FROM payroll_entries WHERE employee_id = $1 ORDER BY week_start DESC LIMIT 1`,
+      [employeeId]
+    ),
+    queryOne<{ bonus: number | null; comp: number | null }>(
+      `SELECT COALESCE(SUM(bonus_amount),0) AS bonus, COALESCE(SUM(total_compensation),0) AS comp
+         FROM payroll_entries WHERE employee_id = $1 AND week_start >= $2`,
+      [employeeId, monthStart]
+    ),
+    queryOne<{ bonus: number | null; comp: number | null }>(
+      `SELECT COALESCE(SUM(bonus_amount),0) AS bonus, COALESCE(SUM(total_compensation),0) AS comp
+         FROM payroll_entries WHERE employee_id = $1 AND week_start >= $2`,
+      [employeeId, yearStart]
+    ),
+  ]);
+
+  return {
+    week: {
+      bonus: Number(latest?.bonus) || 0,
+      totalComp: Number(latest?.comp) || 0,
+      label: latest ? latest.week_start : null,
+    },
+    month: { bonus: Number(month?.bonus) || 0, totalComp: Number(month?.comp) || 0 },
+    ytd: { bonus: Number(ytd?.bonus) || 0, totalComp: Number(ytd?.comp) || 0 },
+  };
 }

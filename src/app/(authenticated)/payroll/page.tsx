@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { format } from 'date-fns';
 import { Employee, PayrollEntry } from '@/types';
 import { PayrollContent } from './payroll-content';
+import { getEmployeeWeek, getPayrollComp, getEmployeeBonusHistory, weekStartOf } from '@/lib/bonus';
 
 export default async function MyPayrollPage() {
   const user = await currentUser();
@@ -42,6 +43,13 @@ export default async function MyPayrollPage() {
   const expectedHours = thisWeekJobs.reduce((sum, j) => sum + (Number(j.estimated_hours) || 0), 0);
   const expectedPay = expectedHours * (Number(employee.hourly_rate) || 0);
 
+  const weekStart = weekStartOf(currentMonday);
+  const [bonusWeek, payrollComp, bonusHistory] = await Promise.all([
+    getEmployeeWeek(employee.id, weekStart),
+    getPayrollComp(employee.id, today),
+    getEmployeeBonusHistory(employee.id, 12),
+  ]);
+
   return (
     <PayrollContent
       employee={employee}
@@ -51,6 +59,9 @@ export default async function MyPayrollPage() {
       expectedPay={expectedPay}
       currentMondayStr={format(currentMonday, 'MMM d')}
       currentSundayStr={format(currentSunday, 'MMM d')}
+      bonusWeek={bonusWeek}
+      payrollComp={payrollComp}
+      bonusHistory={bonusHistory}
     />
   );
 }

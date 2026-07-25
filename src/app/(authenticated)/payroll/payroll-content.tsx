@@ -8,6 +8,8 @@ import { format } from 'date-fns';
 import { Employee, PayrollEntry } from '@/types';
 import { DollarSign, TrendingUp } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { WeeklyBonusCard, PayrollCompCards, BonusHistoryTable } from '@/components/crew/weekly-bonus';
+import type { EmployeeWeek, PayrollComp, BonusHistoryRow } from '@/lib/bonus';
 
 interface PayrollContentProps {
   employee: Employee;
@@ -17,9 +19,12 @@ interface PayrollContentProps {
   expectedPay: number;
   currentMondayStr: string;
   currentSundayStr: string;
+  bonusWeek: EmployeeWeek;
+  payrollComp: PayrollComp;
+  bonusHistory: BonusHistoryRow[];
 }
 
-export function PayrollContent({ employee, entries, thisWeekJobs, expectedHours, expectedPay, currentMondayStr, currentSundayStr }: PayrollContentProps) {
+export function PayrollContent({ employee, entries, thisWeekJobs, expectedHours, expectedPay, currentMondayStr, currentSundayStr, bonusWeek, payrollComp, bonusHistory }: PayrollContentProps) {
   const { t } = useI18n();
 
   const latestEntry = entries[0] || null;
@@ -31,6 +36,12 @@ export function PayrollContent({ employee, entries, thisWeekJobs, expectedHours,
         <h1 className="text-2xl font-bold text-foreground">{t('pay.title')}</h1>
         <p className="text-muted-foreground mt-1">{t('pay.subtitle')}</p>
       </div>
+
+      {/* Weekly bonus — where you stand this week */}
+      <WeeklyBonusCard week={bonusWeek} />
+
+      {/* Actual bonus + total comp, week / month / YTD */}
+      <PayrollCompCards comp={payrollComp} />
 
       {/* This Week Expected */}
       {thisWeekJobs.length > 0 && (
@@ -168,6 +179,9 @@ export function PayrollContent({ employee, entries, thisWeekJobs, expectedHours,
           </CardContent>
         </Card>
       )}
+
+      {/* Bonus history */}
+      <BonusHistoryTable history={bonusHistory} />
 
       {/* Pay History Table */}
       <Card>

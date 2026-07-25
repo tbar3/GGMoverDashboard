@@ -33,6 +33,8 @@ import {
 import type { Message } from '@/lib/messages';
 import { respondToJob } from '@/lib/crew-actions';
 import { SkillCelebration, type CelebrationSkill } from '@/components/crew/skill-celebration';
+import { WeeklyBonusCard } from '@/components/crew/weekly-bonus';
+import type { EmployeeWeek } from '@/lib/bonus';
 
 export type WeekJob = Job & {
   response: 'accepted' | 'declined' | null;
@@ -49,6 +51,7 @@ interface DashboardContentProps {
   attendance: Attendance[];
   messages: Message[];
   today: string;
+  bonusWeek: EmployeeWeek;
   weekLabel: string;
 }
 
@@ -62,6 +65,7 @@ export function DashboardContent({
   attendance,
   messages,
   today,
+  bonusWeek,
   weekLabel,
 }: DashboardContentProps) {
   const { t } = useI18n();
@@ -94,6 +98,9 @@ export function DashboardContent({
         </h1>
         <p className="text-muted-foreground mt-1">{t('dash.your_week', { week: weekLabel })}</p>
       </div>
+
+      {/* Weekly bonus — where you stand this week */}
+      <WeeklyBonusCard week={bonusWeek} />
 
       {/* This Week */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

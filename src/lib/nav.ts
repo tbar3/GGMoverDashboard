@@ -5,7 +5,6 @@ import {
   Car,
   AlertTriangle,
   Star,
-  Calculator,
   Briefcase,
   DollarSign,
   FileSpreadsheet,
@@ -91,12 +90,6 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         href: '/admin/payroll',
         description: 'Hours and pay by week',
         icon: DollarSign,
-      },
-      {
-        title: 'Bonus Calculator',
-        href: '/admin/bonus',
-        description: 'Monthly pool distribution',
-        icon: Calculator,
       },
       {
         title: 'Performance',

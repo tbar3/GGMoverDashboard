@@ -147,19 +147,18 @@ export function parseCalendarEvent(event: {
     result.quoted_crew = parseInt(quotedMatch[2]);
   }
 
-  // Parse crew list: "Crew: Name Phone\nName Phone\n..."
+  // Parse crew list: "Crew: Name Phone" then one crew member per following line.
+  // Members may or may not have a phone (e.g. a new hire with no number on file),
+  // so a phone is optional — we still capture the name. The block ends at a blank
+  // line or a separator row.
   const crewMatch = desc.match(/Crew:\s*(.+(?:\n(?!\s*$|\s*\w+:).+)*)/i);
   if (crewMatch) {
-    const crewBlock = crewMatch[1];
-    const crewLines = crewBlock.split('\n');
-    for (const line of crewLines) {
-      const memberMatch = line.trim().match(/^(.+?)\s+(\d{3}-\d{3}-\d{4})/);
-      if (memberMatch) {
-        result.crew_members.push({
-          name: memberMatch[1].replace(/^Crew:\s*/i, '').trim(),
-          phone: memberMatch[2],
-        });
-      }
+    for (const raw of crewMatch[1].split('\n')) {
+      const line = raw.trim().replace(/^Crew:\s*/i, '').trim();
+      if (!line || /^[-–—=]{3,}/.test(line)) break;
+      const phone = line.match(/(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})/);
+      const name = (phone ? line.slice(0, phone.index).trim() : line).trim();
+      if (name) result.crew_members.push({ name, phone: phone ? phone[1] : '' });
     }
   }
 

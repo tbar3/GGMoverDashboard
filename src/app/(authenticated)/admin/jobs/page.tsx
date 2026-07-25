@@ -51,14 +51,16 @@ export default function JobsPage() {
   const empById = useMemo(() => new Map(employees.map((e) => [e.id, e.name])), [employees]);
 
   function crewNames(job: Job): string {
+    // Prefer the full manifest (everyone listed on the calendar, matched or not);
+    // fall back to matched employee ids when there's no manifest.
+    if (job.crew_manifest && job.crew_manifest.length > 0) {
+      return job.crew_manifest.map((m) => m.name).join(', ');
+    }
     if (job.crew_ids && job.crew_ids.length > 0) {
       return job.crew_ids
         .map((id) => empById.get(id))
         .filter(Boolean)
         .join(', ');
-    }
-    if (job.crew_manifest && job.crew_manifest.length > 0) {
-      return job.crew_manifest.map((m) => m.name).join(', ');
     }
     return '';
   }

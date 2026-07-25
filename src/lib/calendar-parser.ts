@@ -147,18 +147,25 @@ export function parseCalendarEvent(event: {
     result.quoted_crew = parseInt(quotedMatch[2]);
   }
 
-  // Parse crew list: "Crew: Name Phone" then one crew member per following line.
-  // Members may or may not have a phone (e.g. a new hire with no number on file),
-  // so a phone is optional — we still capture the name. The block ends at a blank
-  // line or a separator row.
-  const crewMatch = desc.match(/Crew:\s*(.+(?:\n(?!\s*$|\s*\w+:).+)*)/i);
+  // Parse the crew list. It may come through one-per-line OR all on one line, and
+  // members may or may not have a phone (a new hire with no number on file). So we
+  // grab the whole block after "Crew:" (up to a blank line / separator / end), then
+  // split it into members at each phone number — that works no matter how the
+  // calendar formats the line breaks. A trailing phoneless name is still captured.
+  const crewMatch = desc.match(/Crew:\s*([\s\S]*?)(?:\n\s*\n|\n\s*[-–—=]{3,}|$)/i);
   if (crewMatch) {
-    for (const raw of crewMatch[1].split('\n')) {
-      const line = raw.trim().replace(/^Crew:\s*/i, '').trim();
-      if (!line || /^[-–—=]{3,}/.test(line)) break;
+    const PHONE = /(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})/g;
+    const block = crewMatch[1]
+      .replace(/^Crew:\s*/i, '')
+      .replace(PHONE, '$1\n'); // break after each phone so runs on one line split apart
+    for (const raw of block.split('\n')) {
+      const line = raw.trim();
+      if (!line || /^[-–—=]{3,}/.test(line) || line.includes(':')) continue;
       const phone = line.match(/(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})/);
       const name = (phone ? line.slice(0, phone.index).trim() : line).trim();
-      if (name) result.crew_members.push({ name, phone: phone ? phone[1] : '' });
+      if (name && /[A-Za-z]/.test(name)) {
+        result.crew_members.push({ name, phone: phone ? phone[1] : '' });
+      }
     }
   }
 

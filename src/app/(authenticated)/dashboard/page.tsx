@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { query, queryOne } from '@/lib/db';
 import { isBackOffice } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
 import {
   Employee,
   Attendance,
@@ -47,20 +47,14 @@ export default async function DashboardPage() {
   const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
   const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
   const weekEnd = format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-  const upcomingEnd = format(addDays(endOfWeek(now, { weekStartsOn: 1 }), 28), 'yyyy-MM-dd');
   const today = format(now, 'yyyy-MM-dd');
 
-  const [weekJobsRaw, upcomingRaw, responses, mileage, performanceEvents, attendance, messages, earnedSkills] =
+  const [weekJobsRaw, responses, mileage, performanceEvents, attendance, messages, earnedSkills] =
     await Promise.all([
       query<Job>(
         `SELECT * FROM jobs WHERE $1 = ANY(crew_ids) AND date >= $2 AND date <= $3
          ORDER BY date ASC, start_time ASC`,
         [employee.id, weekStart, weekEnd]
-      ),
-      query<Job>(
-        `SELECT * FROM jobs WHERE $1 = ANY(crew_ids) AND date > $2 AND date <= $3
-         ORDER BY date ASC, start_time ASC`,
-        [employee.id, weekEnd, upcomingEnd]
       ),
       query<{ job_id: string; response: string; decline_reason: string | null }>(
         'SELECT job_id, response, decline_reason FROM job_responses WHERE employee_id = $1',
@@ -101,16 +95,14 @@ export default async function DashboardPage() {
 
   // Attach each job's response (for this employee) to the job.
   const responseByJob = new Map(responses.map((r) => [r.job_id, r]));
-  const withResponse = (j: Job): WeekJob => {
+  const weekJobs: WeekJob[] = weekJobsRaw.map((j) => {
     const r = responseByJob.get(j.id);
     return {
       ...j,
       response: (r?.response as 'accepted' | 'declined' | undefined) ?? null,
       decline_reason: r?.decline_reason ?? null,
     };
-  };
-  const weekJobs: WeekJob[] = weekJobsRaw.map(withResponse);
-  const upcomingJobs: WeekJob[] = upcomingRaw.map(withResponse);
+  });
 
   return (
     <DashboardContent
@@ -118,7 +110,6 @@ export default async function DashboardPage() {
       hourlyRate={hourlyRate}
       celebration={celebration}
       weekJobs={weekJobs}
-      upcomingJobs={upcomingJobs}
       mileage={mileage}
       performanceEvents={performanceEvents}
       attendance={attendance}

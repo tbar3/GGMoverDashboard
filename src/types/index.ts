@@ -11,6 +11,14 @@ export interface Employee {
   is_active: boolean;
   is_admin: boolean;
   hourly_rate: number | null;
+  phone: string | null;
+  terminated_at: string | null;
+  last_day_worked: string | null;
+  termination_type: string | null;
+  termination_reason: string | null;
+  termination_details: string | null;
+  rehire_eligible: boolean | null;
+  terminated_by: string | null;
   created_at: string;
 }
 

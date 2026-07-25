@@ -11,17 +11,28 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { differenceInMonths, format } from 'date-fns';
+import { differenceInMonths, subWeeks } from 'date-fns';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { Employee } from '@/types';
+import { getWeekBoard, weekStartOf } from '@/lib/bonus';
+
+function money(n: number): string {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+}
 
 export default async function EmployeesPage() {
   const user = await currentUser();
   if (!user) return null;
 
-  const employees = await query<Employee>('SELECT * FROM employees ORDER BY name');
   const now = new Date();
+  const [employees, lastWeekBoard] = await Promise.all([
+    query<Employee>('SELECT * FROM employees ORDER BY name'),
+    getWeekBoard(weekStartOf(subWeeks(now, 1))),
+  ]);
+
+  // Last completed week's bonus per employee — the dispatch signal.
+  const lastWeekBonus = new Map(lastWeekBoard.map((b) => [b.employeeId, b.result]));
 
   return (
     <div className="p-6 space-y-6">
@@ -50,11 +61,12 @@ export default async function EmployeesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
+                <TableHead>Phone</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead className="text-right">Pay/hr</TableHead>
+                <TableHead className="text-right">Last wk bonus</TableHead>
                 <TableHead>Tenure</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Admin</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -62,29 +74,49 @@ export default async function EmployeesPage() {
               {employees.length > 0 ? (
                 employees.map((employee) => {
                   const tenureMonths = differenceInMonths(now, new Date(employee.start_date));
+                  const bonus = lastWeekBonus.get(employee.id);
                   return (
                     <TableRow key={employee.id}>
                       <TableCell className="font-medium">{employee.name}</TableCell>
-                      <TableCell>{employee.email}</TableCell>
+                      <TableCell>
+                        {employee.phone ? (
+                          <a href={`tel:${employee.phone}`} className="hover:underline">
+                            {employee.phone}
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="capitalize">
                           {employee.role}
                         </Badge>
                       </TableCell>
+                      <TableCell className="text-right">
+                        {employee.hourly_rate != null ? `$${Number(employee.hourly_rate).toFixed(2)}` : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {bonus ? (
+                          bonus.hasStrike ? (
+                            <span className="text-destructive font-medium">Forfeit</span>
+                          ) : bonus.hours > 0 ? (
+                            <span title={`${bonus.multiplier}× · ${bonus.hours.toFixed(1)} hrs`}>{money(bonus.bonus)}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {tenureMonths} {tenureMonths === 1 ? 'month' : 'months'}
-                        <span className="text-muted-foreground/70 text-xs ml-1">
-                          ({tenureMonths} shares)
-                        </span>
                       </TableCell>
                       <TableCell>
                         <Badge variant={employee.is_active ? 'default' : 'secondary'}>
                           {employee.is_active ? 'Active' : 'Inactive'}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
                         {employee.is_admin && (
-                          <Badge variant="outline" className="bg-secondary/40">
+                          <Badge variant="outline" className="bg-secondary/40 ml-1">
                             Admin
                           </Badge>
                         )}
@@ -101,7 +133,7 @@ export default async function EmployeesPage() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     No employees found. Add your first employee to get started.
                   </TableCell>
                 </TableRow>

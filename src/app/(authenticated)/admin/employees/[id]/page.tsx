@@ -8,6 +8,7 @@ import { getSkills, getEmployeeSkills, sumRaises } from '@/lib/skills';
 import { getBaseRate } from '@/lib/settings';
 import { EditEmployeeForm } from './edit-form';
 import { SkillsManager } from './skills-manager';
+import { TerminationCard } from './termination-card';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +49,7 @@ export default async function EditEmployeePage({
         derivedRate={derivedRate}
         hasOverride={employee.hourly_rate != null}
       />
+      <TerminationCard employee={employee} />
     </div>
   );
 }

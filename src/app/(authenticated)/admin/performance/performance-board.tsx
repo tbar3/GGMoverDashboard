@@ -108,6 +108,7 @@ export default function PerformanceBoard({
   const [adjEmp, setAdjEmp] = useState('');
   const [adjAmount, setAdjAmount] = useState('');
   const [adjReason, setAdjReason] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'bonus'>('name');
 
   const locked = weekStatus.status === 'approved';
 
@@ -260,6 +261,12 @@ export default function PerformanceBoard({
         bonus: row.result.bonus,
       }));
 
+  // Dispatch view: sort by last week's earned bonus, highest first.
+  const sortedRows =
+    sortBy === 'bonus'
+      ? [...displayRows].sort((a, b) => (b.hasStrike ? 0 : b.bonus) - (a.hasStrike ? 0 : a.bonus))
+      : displayRows;
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -395,12 +402,33 @@ export default function PerformanceBoard({
       {/* Weekly board */}
       <Card>
         <CardHeader>
-          <CardTitle>{locked ? 'Locked board' : "This week's board"}</CardTitle>
-          <CardDescription>
-            {locked
-              ? 'Frozen figures from lock time. Corrections go through adjustments below.'
-              : `Multiplier = ${config.baseMultiplier} + ${config.increment} × positives. Perfect Week and bonus dollars activate once the weekly payroll & attendance import lands.`}
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>{locked ? 'Locked board' : "This week's board"}</CardTitle>
+              <CardDescription>
+                {locked
+                  ? 'Frozen figures from lock time. Corrections go through adjustments below.'
+                  : `Multiplier = ${config.baseMultiplier} + ${config.increment} × positives. Perfect Week and bonus dollars activate once the weekly payroll & attendance import lands.`}
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-xs text-muted-foreground">Sort</span>
+              <Button
+                size="sm"
+                variant={sortBy === 'name' ? 'default' : 'outline'}
+                onClick={() => setSortBy('name')}
+              >
+                Name
+              </Button>
+              <Button
+                size="sm"
+                variant={sortBy === 'bonus' ? 'default' : 'outline'}
+                onClick={() => setSortBy('bonus')}
+              >
+                Bonus (high→low)
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -416,7 +444,7 @@ export default function PerformanceBoard({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayRows.map((row) => {
+              {sortedRows.map((row) => {
                 const adj = adjByEmp.get(row.employeeId) ?? 0;
                 return (
                   <TableRow key={row.employeeId}>

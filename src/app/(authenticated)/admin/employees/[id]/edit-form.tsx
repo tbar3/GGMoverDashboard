@@ -31,6 +31,7 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
   );
   const [isAdmin, setIsAdmin] = useState(employee.is_admin);
   const [isActive, setIsActive] = useState(employee.is_active);
+  const [phone, setPhone] = useState(employee.phone ?? '');
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -50,6 +51,7 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
         isAdmin,
         isActive,
         hourlyRate: rate,
+        phone: phone.trim() || null,
       });
       if (result.error) {
         toast.error(result.error);
@@ -83,6 +85,16 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
             <div className="space-y-2">
               <Label>Email</Label>
               <Input value={employee.email} disabled />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="(404) 555-0100"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>

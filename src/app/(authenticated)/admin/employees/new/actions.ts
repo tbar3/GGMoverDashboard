@@ -62,6 +62,7 @@ interface UpdateEmployeeInput {
   isAdmin: boolean;
   isActive: boolean;
   hourlyRate: number | null;
+  phone?: string | null;
 }
 
 /**
@@ -76,7 +77,7 @@ export async function updateEmployee(input: UpdateEmployeeInput) {
     await query(
       `UPDATE employees
           SET name = $2, role = $3, start_date = $4, is_admin = $5,
-              is_active = $6, hourly_rate = $7
+              is_active = $6, hourly_rate = $7, phone = $8
         WHERE id = $1`,
       [
         input.id,
@@ -86,6 +87,7 @@ export async function updateEmployee(input: UpdateEmployeeInput) {
         input.isAdmin || input.role === 'owner' || input.role === 'manager',
         input.isActive,
         input.hourlyRate,
+        input.phone ?? null,
       ]
     );
   } catch (err: unknown) {
@@ -94,5 +96,68 @@ export async function updateEmployee(input: UpdateEmployeeInput) {
   }
 
   revalidatePath('/admin/employees');
+  return { success: true };
+}
+
+interface TerminateInput {
+  id: string;
+  lastDayWorked: string;
+  terminationType: string; // voluntary | involuntary | layoff | other
+  reason: string;
+  details?: string | null;
+  rehireEligible: boolean;
+}
+
+/** Record a separation: deactivate the employee and store the details for the letter. */
+export async function terminateEmployee(input: TerminateInput) {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { error: 'Back office access required' };
+  if (!input.lastDayWorked) return { error: 'Enter the last day worked' };
+  if (!input.reason?.trim()) return { error: 'A reason is required' };
+
+  try {
+    await query(
+      `UPDATE employees
+          SET is_active = false, terminated_at = NOW(), last_day_worked = $2,
+              termination_type = $3, termination_reason = $4, termination_details = $5,
+              rehire_eligible = $6, terminated_by = $7
+        WHERE id = $1`,
+      [
+        input.id,
+        input.lastDayWorked,
+        input.terminationType,
+        input.reason.trim(),
+        input.details?.trim() || null,
+        input.rehireEligible,
+        guard.employee.id,
+      ]
+    );
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : 'Failed to terminate' };
+  }
+
+  revalidatePath('/admin/employees');
+  revalidatePath(`/admin/employees/${input.id}`);
+  return { success: true };
+}
+
+/** Undo a separation — reactivate and clear the termination record. */
+export async function reactivateEmployee(id: string) {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { error: 'Back office access required' };
+  try {
+    await query(
+      `UPDATE employees
+          SET is_active = true, terminated_at = NULL, last_day_worked = NULL,
+              termination_type = NULL, termination_reason = NULL, termination_details = NULL,
+              rehire_eligible = NULL, terminated_by = NULL
+        WHERE id = $1`,
+      [id]
+    );
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : 'Failed to reactivate' };
+  }
+  revalidatePath('/admin/employees');
+  revalidatePath(`/admin/employees/${id}`);
   return { success: true };
 }

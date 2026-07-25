@@ -54,14 +54,25 @@ export function parseCalendarEvent(event: {
   const service_type = titleParts[1].trim();
   const customer_name = titleParts.slice(2).join(' - ').trim();
 
-  // Parse dates
-  const startStr = event.start?.dateTime || event.start?.date || '';
-  const endStr = event.end?.dateTime || event.end?.date || '';
+  // Parse dates/times in Eastern. The event instant is correct; we must format it
+  // in America/New_York or it renders in the server's zone (UTC on Vercel), which
+  // pushes an 8:00 AM job to "12:00 PM". All-day events carry only a date.
+  const TZ = 'America/New_York';
+  const startTimed = event.start?.dateTime || null;
+  const endTimed = event.end?.dateTime || null;
+  const startStr = startTimed || event.start?.date || '';
   const startDate = new Date(startStr);
-  const date = startDate.toISOString().split('T')[0];
-  const start_time = startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-  const endDate = new Date(endStr);
-  const end_time = endDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+  // Calendar day in Eastern (en-CA gives yyyy-MM-dd); all-day events use the raw date.
+  const date = startTimed
+    ? startDate.toLocaleDateString('en-CA', { timeZone: TZ })
+    : startStr.slice(0, 10);
+
+  const timeOpts = { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: true } as const;
+  const start_time = startTimed
+    ? new Date(startTimed).toLocaleTimeString('en-US', timeOpts)
+    : '';
+  const end_time = endTimed ? new Date(endTimed).toLocaleTimeString('en-US', timeOpts) : '';
 
   const desc = event.description || '';
 

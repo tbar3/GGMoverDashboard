@@ -4,6 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Check, Lock, AlertTriangle } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import type { Skill } from '@/lib/skills';
+import type { CandidateProgress } from '@/lib/certifications';
+
+interface CertProgressItem {
+  skillId: string;
+  skillName: string;
+  progress: CandidateProgress;
+}
 
 interface SkillsContentProps {
   skills: Skill[];
@@ -11,6 +18,7 @@ interface SkillsContentProps {
   currentRate: number;
   baseRate: number;
   isOverride: boolean;
+  certProgress: CertProgressItem[];
 }
 
 const DELAY_KEYS = [
@@ -28,6 +36,7 @@ export function SkillsContent({
   currentRate,
   baseRate,
   isOverride,
+  certProgress,
 }: SkillsContentProps) {
   const { t } = useI18n();
   const earned = new Set(earnedSkillIds);
@@ -90,6 +99,43 @@ export function SkillsContent({
           );
         })}
       </div>
+
+      {/* Working toward certification */}
+      {certProgress.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t('skills.working_toward')}</CardTitle>
+            <p className="text-sm text-muted-foreground">{t('skills.cert_sub')}</p>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {certProgress.map((c) => (
+              <div key={c.skillId} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{c.skillName}</span>
+                  <span className="text-sm text-muted-foreground">{c.progress.overallPct}%</span>
+                </div>
+                <ul className="space-y-1.5">
+                  {c.progress.requirements.map((r) => (
+                    <li key={r.id} className="flex items-center gap-2 text-sm">
+                      <span className="w-44 shrink-0 truncate">{r.label}</span>
+                      <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={`h-full ${r.met ? 'bg-green-500' : 'bg-primary'}`}
+                          style={{ width: `${r.pct}%` }}
+                        />
+                      </div>
+                      <span className="text-muted-foreground w-12 text-right">
+                        {r.logged}/{r.target_count}
+                      </span>
+                      {r.met && <Check className="h-4 w-4 text-green-600" />}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Reasons for delay */}
       <Card>

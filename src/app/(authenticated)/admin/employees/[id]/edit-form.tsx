@@ -16,6 +16,7 @@ import {
 import { toast } from 'sonner';
 import { Employee, UserRole } from '@/types';
 import { updateEmployee } from '../new/actions';
+import { inviteEmployee } from '@/lib/invite-actions';
 import { CREW_ROLES, isBackOfficeRole, roleLabel } from '@/lib/roles';
 
 export function EditEmployeeForm({ employee }: { employee: Employee }) {
@@ -32,7 +33,21 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
   );
   const [isActive, setIsActive] = useState(employee.is_active);
   const [phone, setPhone] = useState(employee.phone ?? '');
+  const [email, setEmail] = useState(employee.email);
+  const [inviting, setInviting] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  async function handleInvite() {
+    setInviting(true);
+    const res = await inviteEmployee(employee.id, email);
+    setInviting(false);
+    if (res.ok) {
+      toast.success(`Invitation sent to ${email.trim().toLowerCase()}`);
+      router.refresh();
+    } else {
+      toast.error(res.error ?? 'Could not send the invite');
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -51,6 +66,7 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
         isActive,
         hourlyRate: rate,
         phone: phone.trim() || null,
+        email: email.trim().toLowerCase(),
       });
       if (result.error) {
         toast.error(result.error);
@@ -82,8 +98,21 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
             <div className="space-y-2">
-              <Label>Email</Label>
-              <Input value={employee.email} disabled />
+              <Label htmlFor="email">Email (login identity)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+                <Button type="button" variant="outline" onClick={handleInvite} disabled={inviting}>
+                  {inviting ? 'Sending…' : 'Invite'}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Their sign-in email. &ldquo;Invite&rdquo; saves it and emails them a sign-up link.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">Phone</Label>

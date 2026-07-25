@@ -56,6 +56,7 @@ interface UpdateEmployeeInput {
   isActive: boolean;
   hourlyRate: number | null;
   phone?: string | null;
+  email?: string;
 }
 
 /**
@@ -68,11 +69,13 @@ export async function updateEmployee(input: UpdateEmployeeInput) {
 
   try {
     // Note: is_admin and back-office roles are managed only in Admin Settings, so
-    // this update deliberately leaves is_admin untouched.
+    // this update deliberately leaves is_admin untouched. Email (the login identity)
+    // updates only when a non-empty value is provided.
     await query(
       `UPDATE employees
           SET name = $2, role = $3, start_date = $4,
-              is_active = $5, hourly_rate = $6, phone = $7
+              is_active = $5, hourly_rate = $6, phone = $7,
+              email = COALESCE($8, email)
         WHERE id = $1`,
       [
         input.id,
@@ -82,6 +85,7 @@ export async function updateEmployee(input: UpdateEmployeeInput) {
         input.isActive,
         input.hourlyRate,
         input.phone ?? null,
+        input.email?.trim().toLowerCase() || null,
       ]
     );
   } catch (err: unknown) {

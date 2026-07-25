@@ -24,15 +24,7 @@ export default async function MaterialsAdminPage() {
   }));
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Materials Settings</h1>
-        <p className="text-muted-foreground mt-1">
-          Set up trucks, warehouses, materials, equipment, and routines. Turn something Active off
-          to hide it without losing history. Crew names now come from your Employees list.
-        </p>
-      </div>
-
+    <div className="space-y-6">
       <EntitySection
         table="warehouses"
         title="Warehouses"

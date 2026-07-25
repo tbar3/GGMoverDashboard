@@ -177,13 +177,15 @@ export async function createJob(
       );
       const id = jr[0].id as number;
 
-      // 2nd+ job of the same day: pre-fill each Pre-Dispatch from the previous
-      // job's Post-Job (the truck is continuous). First job is left blank so the
-      // mover counts fresh and catches overnight discrepancies.
+      // 2nd+ job of the same day: the truck is continuous, so the previous job's
+      // Post-Job count carries straight into this job as its starting count. We
+      // seed both Pre-Dispatch and Post-Dispatch from it so the carry-over shows
+      // in the Post-Dispatch field the crew works from. The first job of the day
+      // is left blank so the mover counts fresh and catches overnight drift.
       if (prev) {
         await client.query(
-          `INSERT INTO job_counts (job_id, material_id, pre_dispatch)
-           SELECT $1, m.id, pc.post_job
+          `INSERT INTO job_counts (job_id, material_id, pre_dispatch, post_dispatch)
+           SELECT $1, m.id, pc.post_job, pc.post_job
              FROM materials m
              LEFT JOIN job_counts pc
                ON pc.job_id = $2 AND pc.material_id = m.id

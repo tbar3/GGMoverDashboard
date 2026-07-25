@@ -44,6 +44,8 @@ export async function respondToJob(
   );
 
   revalidatePath('/dashboard');
+  revalidatePath('/jobs');
+  revalidatePath('/admin');
   return { ok: true };
 }
 

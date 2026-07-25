@@ -26,6 +26,30 @@ export interface TruckDay {
   jobs: number;
 }
 
+export interface DeclineAlert {
+  jobId: string;
+  customer: string;
+  jobDate: string;
+  employeeName: string;
+  reason: string | null;
+  respondedAt: string;
+}
+
+/** Crew declines on upcoming jobs — surfaced to admin so they can re-staff. */
+export async function getRecentDeclines(): Promise<DeclineAlert[]> {
+  return query<DeclineAlert>(
+    `SELECT j.id AS "jobId", j.customer_name AS customer, j.date::text AS "jobDate",
+            e.name AS "employeeName", r.decline_reason AS reason,
+            r.responded_at::text AS "respondedAt"
+       FROM job_responses r
+       JOIN jobs j ON j.id = r.job_id
+       JOIN employees e ON e.id = r.employee_id
+      WHERE r.response = 'declined' AND j.date >= CURRENT_DATE
+      ORDER BY r.responded_at DESC
+      LIMIT 25`
+  );
+}
+
 export interface AdminDashboard {
   dataAsOf: string | null; // most recent smartmoving_jobs import
   kpis: {

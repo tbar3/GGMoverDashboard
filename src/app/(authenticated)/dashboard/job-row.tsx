@@ -16,13 +16,23 @@ export type WeekJob = Job & {
   decline_reason: string | null;
 };
 
-export function JobRow({ job, isToday }: { job: WeekJob; isToday: boolean }) {
+export function JobRow({
+  job,
+  isToday,
+  onChanged,
+}: {
+  job: WeekJob;
+  isToday: boolean;
+  onChanged?: () => void;
+}) {
   const { t } = useI18n();
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [declining, setDeclining] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  const declined = job.response === 'declined';
 
   async function respond(response: 'accepted' | 'declined', declineReason?: string) {
     setPending(true);
@@ -36,14 +46,25 @@ export function JobRow({ job, isToday }: { job: WeekJob; isToday: boolean }) {
     setDeclining(false);
     setReason('');
     router.refresh();
+    onChanged?.();
   }
 
   return (
-    <div className={`rounded-lg border p-3 ${isToday ? 'bg-secondary/40 border-blue-200' : 'bg-muted'}`}>
+    <div
+      className={`rounded-lg border p-3 ${
+        declined
+          ? 'bg-muted/50 border-dashed opacity-70'
+          : isToday
+            ? 'bg-secondary/40 border-blue-200'
+            : 'bg-muted'
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium">{job.customer_name}</span>
+            <span className={`font-medium ${declined ? 'line-through text-muted-foreground' : ''}`}>
+              {job.customer_name}
+            </span>
             {job.job_number && (
               <Badge variant="outline" className="text-xs">
                 {job.job_number}

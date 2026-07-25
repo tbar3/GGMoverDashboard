@@ -14,8 +14,9 @@ import {
   TrendingUp,
   Clock,
   UserPlus,
+  UserX,
 } from 'lucide-react';
-import { getAdminDashboard } from '@/lib/admin-metrics';
+import { getAdminDashboard, getRecentDeclines } from '@/lib/admin-metrics';
 
 function money(n: number): string {
   return `$${Math.round(n).toLocaleString('en-US')}`;
@@ -33,7 +34,10 @@ export default async function AdminDashboardPage() {
   const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
   const trialCutoff = format(subDays(now, 31), 'yyyy-MM-dd');
 
-  const d = await getAdminDashboard(monthStart, monthEnd, today, weekEnd, weekStart, trialCutoff);
+  const [d, declines] = await Promise.all([
+    getAdminDashboard(monthStart, monthEnd, today, weekEnd, weekStart, trialCutoff),
+    getRecentDeclines(),
+  ]);
 
   const alertItems = [
     { count: d.alerts.tardiesToday, label: 'tardy this morning', href: '/admin/attendance' },
@@ -44,7 +48,7 @@ export default async function AdminDashboardPage() {
   ].filter((a) => a.count > 0);
 
   const trucksToday = d.todaysJobs.reduce((s, j) => s + Number(j.quoted_trucks ?? 0), 0);
-  const hasAlerts = alertItems.length > 0 || d.alerts.rentalDays.length > 0;
+  const hasAlerts = alertItems.length > 0 || d.alerts.rentalDays.length > 0 || declines.length > 0;
 
   return (
     <div className="p-6 space-y-6">
@@ -73,6 +77,30 @@ export default async function AdminDashboardPage() {
             <p className="text-sm text-muted-foreground">All clear — nothing needs attention.</p>
           ) : (
             <div className="space-y-2">
+              {declines.length > 0 && (
+                <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-destructive">
+                    <UserX className="h-4 w-4" />
+                    {declines.length} job {declines.length === 1 ? 'decline' : 'declines'} to re-staff
+                  </p>
+                  <ul className="mt-2 space-y-1.5">
+                    {declines.map((dec) => (
+                      <li key={`${dec.jobId}-${dec.employeeName}`} className="text-sm">
+                        <Link href="/admin/jobs" className="hover:underline">
+                          <span className="font-medium">{dec.employeeName}</span> declined{' '}
+                          <span className="font-medium">{dec.customer}</span>{' '}
+                          <span className="text-muted-foreground">
+                            ({format(new Date(`${dec.jobDate}T12:00:00`), 'EEE M/d')})
+                          </span>
+                        </Link>
+                        {dec.reason && (
+                          <span className="text-muted-foreground"> — &ldquo;{dec.reason}&rdquo;</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {d.alerts.rentalDays.length > 0 && (
                 <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
                   <p className="flex items-center gap-2 text-sm font-semibold text-destructive">

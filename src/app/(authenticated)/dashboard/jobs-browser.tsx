@@ -122,7 +122,12 @@ export function JobsBrowser({ today }: { today: string }) {
         ) : (
           <div className="space-y-3">
             {jobs.map((job) => (
-              <JobRow key={job.id} job={job} isToday={String(job.date).slice(0, 10) === today} />
+              <JobRow
+                key={job.id}
+                job={job}
+                isToday={String(job.date).slice(0, 10) === today}
+                onChanged={() => load(start, end)}
+              />
             ))}
           </div>
         )}

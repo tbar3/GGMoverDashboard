@@ -5,6 +5,7 @@ import {
   Car,
   AlertTriangle,
   Star,
+  TrendingUp,
   Briefcase,
   DollarSign,
   FileSpreadsheet,
@@ -57,6 +58,12 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         href: '/admin/jobs',
         description: 'Every move, its crew, and its outcome',
         icon: Briefcase,
+      },
+      {
+        title: 'Profitability',
+        href: '/admin/profitability',
+        description: 'P&L, job-by-job margins, weekly & monthly',
+        icon: TrendingUp,
       },
       {
         title: 'Calendar Sync',

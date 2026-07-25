@@ -170,9 +170,9 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
     status: 'live',
     items: [
       {
-        title: 'Materials Settings',
+        title: 'Materials',
         href: '/admin/materials',
-        description: 'Trucks, warehouses, materials, equipment, routines, crew',
+        description: 'On-hand inventory, receiving, count sheets, and reports',
         icon: Package,
       },
     ],

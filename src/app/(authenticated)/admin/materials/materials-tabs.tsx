@@ -4,11 +4,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const TABS = [
-  { href: '/admin/materials', label: 'Settings' },
+  { href: '/admin/materials', label: 'Inventory' },
+  { href: '/admin/materials/new-job', label: 'New Job' },
+  { href: '/admin/materials/history', label: 'History' },
   { href: '/admin/materials/receive', label: 'Receive' },
   { href: '/admin/materials/adjustments', label: 'Adjustments' },
-  { href: '/admin/materials/history', label: 'History' },
   { href: '/admin/materials/reporting', label: 'Reporting' },
+  { href: '/admin/materials/settings', label: 'Settings' },
 ];
 
 export function MaterialsTabs() {

@@ -19,6 +19,12 @@ import { toast } from 'sonner';
 import { Job } from '@/types';
 import { format } from 'date-fns';
 
+function offsetDay(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split('T')[0];
+}
+
 export default function CalendarSyncPage() {
   const [connected, setConnected] = useState<boolean | null>(null);
   const [calendarFound, setCalendarFound] = useState<boolean | null>(null);
@@ -26,8 +32,10 @@ export default function CalendarSyncPage() {
   const [syncing, setSyncing] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  // Default to a useful window (a month back through three months ahead) so a
+  // single Sync re-reads all current jobs, not just today's.
+  const [startDate, setStartDate] = useState(() => offsetDay(-30));
+  const [endDate, setEndDate] = useState(() => offsetDay(90));
   const [lastSyncResult, setLastSyncResult] = useState<{
     total_events: number;
     synced: number;

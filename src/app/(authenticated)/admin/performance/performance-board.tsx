@@ -23,12 +23,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Star, AlertTriangle, FileWarning, Lock, LockOpen, Download } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Star, Sparkles, AlertTriangle, FileWarning, Lock, LockOpen, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import type { BoardRow, BonusConfig, WeekStatus, SnapshotRow, AdjustmentRow } from '@/lib/bonus';
 import {
   logPositive,
+  logGGPoint,
   logStrike,
   logWriteUp,
   voidStrike,
@@ -39,13 +40,14 @@ import {
   deleteAdjustment,
 } from '@/lib/bonus-actions';
 
-// Combined event menu — positives, strikes, and the write-up all in one dropdown,
-// so back office logs the whole spectrum of the week from one place.
-type Kind = 'positive' | 'strike' | 'writeup';
+// Combined event menu — positives, the discretionary GG Point, strikes, and the
+// write-up all in one dropdown, so back office logs the whole spectrum from here.
+type Kind = 'positive' | 'discretionary' | 'strike' | 'writeup';
 const EVENT_OPTIONS: { value: string; label: string; kind: Kind }[] = [
   { value: 'FIVE_STAR_REVIEW', label: '5-Star Review', kind: 'positive' },
   { value: 'CUSTOMER_CALLOUT', label: 'Customer Call-out', kind: 'positive' },
   { value: 'COMPLIANCE_PLUS', label: 'Compliance +', kind: 'positive' },
+  { value: 'GG_POINT', label: 'GG Point (discretionary)', kind: 'discretionary' },
   { value: 'LATE', label: 'Late', kind: 'strike' },
   { value: 'NO_SHOW', label: 'No-Show', kind: 'strike' },
   { value: 'TRUCK_NOT_READY', label: 'Truck Not Ready', kind: 'strike' },
@@ -178,6 +180,8 @@ export default function PerformanceBoard({
       let res: { ok: boolean; error?: string };
       if (kind === 'positive') {
         res = await logPositive({ employeeId, type: eventType, eventDate, note });
+      } else if (kind === 'discretionary') {
+        res = await logGGPoint({ employeeId, eventDate, note });
       } else if (kind === 'strike') {
         res = await logStrike({ employeeId, type: eventType, eventDate, note });
       } else {
@@ -223,7 +227,14 @@ export default function PerformanceBoard({
   const feed: FlatEvent[] = [];
   for (const row of board) {
     for (const p of row.events.positives) {
-      feed.push({ id: p.id, kind: 'positive', employeeName: row.name, type: p.type, date: p.event_date, note: p.note });
+      feed.push({
+        id: p.id,
+        kind: p.discretionary ? 'discretionary' : 'positive',
+        employeeName: row.name,
+        type: p.type,
+        date: p.event_date,
+        note: p.note,
+      });
     }
     for (const s of row.events.strikes) {
       feed.push({ id: s.id, kind: 'strike', employeeName: row.name, type: s.type, date: s.event_date, note: s.note, voided: s.voided, voidReason: s.void_reason });
@@ -341,8 +352,10 @@ export default function PerformanceBoard({
         <CardHeader>
           <CardTitle>Log an event</CardTitle>
           <CardDescription>
-            Positives stack (+{config.increment}× each). Strikes zero the whole week. A review that
-            names someone is two positives — the 5-star and the call-out.
+            Each +{config.increment}× is a <span className="font-medium">GG Point</span>. Positives
+            stack and a strike forfeits them. A <span className="font-medium">discretionary GG Point</span>{' '}
+            is strike-proof — a strike drops the normal bonus but the GG Point&apos;s {config.increment}×
+            is kept, unless the week has {config.forfeitThreshold}+ strikes (then everything is lost).
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -373,6 +386,7 @@ export default function PerformanceBoard({
                     <SelectItem key={o.value} value={o.value}>
                       {o.label}
                       {o.kind === 'positive' && ' ▲'}
+                      {o.kind === 'discretionary' && ' ✦'}
                       {o.kind === 'strike' && ' ✕'}
                     </SelectItem>
                   ))}
@@ -467,14 +481,18 @@ export default function PerformanceBoard({
                       )}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {row.hasStrike ? (
+                      {row.multiplier === 0 ? (
                         <span className="text-destructive font-semibold">FORFEIT</span>
+                      ) : row.hasStrike ? (
+                        <span className="text-amber-600 font-semibold" title="Normal bonus forfeited; GG Points retained">
+                          {row.multiplier}×
+                        </span>
                       ) : (
                         `${row.multiplier}×`
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      {row.hasStrike ? (
+                      {row.multiplier === 0 ? (
                         <span className="text-destructive font-semibold">{money(0)}</span>
                       ) : row.hasHours ? (
                         money(row.bonus)
@@ -486,10 +504,10 @@ export default function PerformanceBoard({
                       <TableCell className="text-right font-semibold">
                         {adj !== 0 ? (
                           <span title={`bonus ${money(row.bonus)} ${adj > 0 ? '+' : '−'} ${money(Math.abs(adj))}`}>
-                            {money((row.hasStrike ? 0 : row.bonus) + adj)}
+                            {money(row.bonus + adj)}
                           </span>
                         ) : (
-                          money(row.hasStrike ? 0 : row.bonus)
+                          money(row.bonus)
                         )}
                       </TableCell>
                     )}
@@ -615,7 +633,7 @@ export default function PerformanceBoard({
                       Void
                     </Button>
                   )}
-                  {!locked && ev.kind === 'positive' && (
+                  {!locked && (ev.kind === 'positive' || ev.kind === 'discretionary') && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -638,6 +656,8 @@ export default function PerformanceBoard({
 function EventIcon({ kind }: { kind: Kind }) {
   if (kind === 'positive')
     return <Star className="h-4 w-4 shrink-0 text-sky-600" aria-label="positive" />;
+  if (kind === 'discretionary')
+    return <Sparkles className="h-4 w-4 shrink-0 text-violet-600" aria-label="GG Point" />;
   if (kind === 'strike')
     return <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" aria-label="strike" />;
   return <FileWarning className="h-4 w-4 shrink-0 text-amber-600" aria-label="write-up" />;

@@ -30,7 +30,10 @@ export const STRIKE_TYPES = [
 export type PositiveType = (typeof POSITIVE_TYPES)[number]['value'];
 export type StrikeType = (typeof STRIKE_TYPES)[number]['value'];
 
+export const GG_POINT_TYPE = 'GG_POINT';
+
 export function positiveLabel(t: string): string {
+  if (t === GG_POINT_TYPE) return 'GG Point';
   return POSITIVE_TYPES.find((p) => p.value === t)?.label ?? t;
 }
 export function strikeLabel(t: string): string {
@@ -48,15 +51,17 @@ export interface BonusConfig {
   baseRate: number;
   increment: number;
   baseMultiplier: number;
+  forfeitThreshold: number; // strikes in a week that wipe even discretionary GG points
 }
 
 export async function getBonusConfig(): Promise<BonusConfig> {
-  const [baseRate, increment, baseMultiplier] = await Promise.all([
+  const [baseRate, increment, baseMultiplier, forfeitThreshold] = await Promise.all([
     getNumberSetting('bonus_base_rate', 1.0),
     getNumberSetting('bonus_positive_increment', 0.5),
     getNumberSetting('bonus_base_multiplier', 0.5),
+    getNumberSetting('bonus_strike_forfeit_threshold', 3),
   ]);
-  return { baseRate, increment, baseMultiplier };
+  return { baseRate, increment, baseMultiplier, forfeitThreshold };
 }
 
 export interface PositiveRow {
@@ -65,6 +70,7 @@ export interface PositiveRow {
   event_date: string;
   note: string | null;
   job_id: string | null;
+  discretionary: boolean;
 }
 export interface StrikeRow {
   id: string;
@@ -88,10 +94,13 @@ export interface WeekEvents {
 
 export interface WeekResult {
   hours: number;
-  positivesCount: number; // logged positives, excludes the derived perfect week
+  positivesCount: number; // normal (non-discretionary) positives, excludes perfect week
+  discretionaryCount: number; // discretionary GG points
   perfectWeek: boolean;
   totalPositives: number; // positivesCount + (perfectWeek ? 1 : 0)
-  multiplier: number;
+  strikeCount: number;
+  grossMultiplier: number; // what they'd earn with no strikes (normal + discretionary)
+  multiplier: number; // EFFECTIVE multiplier after strike rules — drives the bonus
   hasStrike: boolean;
   bonus: number;
 }
@@ -100,7 +109,14 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/** Pure calculation for one employee's week. */
+/**
+ * Pure calculation for one employee's week.
+ *
+ * GG Points: each 0.5× is a "GG Point". Discretionary GG Points are hand-awarded and
+ * strike-proof — a strike forfeits the NORMAL bonus (base + positives + perfect week)
+ * but the discretionary 0.5× per point is retained, UNTIL the week hits the forfeit
+ * threshold of strikes (3), which wipes everything including GG Points.
+ */
 export function computeWeek(
   events: WeekEvents,
   hours: number,
@@ -108,24 +124,47 @@ export function computeWeek(
   opts?: { attendanceComplete?: boolean }
 ): WeekResult {
   const activeStrikes = events.strikes.filter((s) => !s.voided);
-  const hasStrike = activeStrikes.length > 0;
+  const strikeCount = activeStrikes.length;
+  const hasStrike = strikeCount > 0;
 
   // Perfect Week (spec 1.3): perfect ATTENDANCE — every scheduled shift attended,
-  // none late — AND no no-shows AND no write-ups. It is an affirmative signal, not
-  // merely the absence of logged strikes: acceptance criterion 1 (a clean 40h week
-  // with nothing logged) is 0.5×, NOT 1.0×. So it stays false until we have the
-  // week's attendance (arrives with the payroll/attendance import). A truck strike
-  // does not by itself break Perfect Week, though it still zeroes the bonus.
+  // none late — AND no no-shows AND no write-ups. Affirmative signal (needs the
+  // week's attendance/payroll), and any late/no-show breaks it.
   const hasLateOrNoShow = activeStrikes.some((s) => s.type === 'LATE' || s.type === 'NO_SHOW');
   const perfectWeek =
     opts?.attendanceComplete === true && !hasLateOrNoShow && events.writeUps.length === 0;
 
-  const positivesCount = events.positives.length;
+  const positivesCount = events.positives.filter((p) => !p.discretionary).length;
+  const discretionaryCount = events.positives.filter((p) => p.discretionary).length;
   const totalPositives = positivesCount + (perfectWeek ? 1 : 0);
-  const multiplier = config.baseMultiplier + config.increment * totalPositives;
-  const bonus = hasStrike ? 0 : round2(hours * config.baseRate * multiplier);
 
-  return { hours, positivesCount, perfectWeek, totalPositives, multiplier, hasStrike, bonus };
+  const normalMultiplier = config.baseMultiplier + config.increment * totalPositives;
+  const discretionaryValue = config.increment * discretionaryCount;
+  const grossMultiplier = normalMultiplier + discretionaryValue;
+
+  let multiplier: number;
+  if (strikeCount >= config.forfeitThreshold) {
+    multiplier = 0; // too many strikes — even GG Points are lost
+  } else if (strikeCount >= 1) {
+    multiplier = discretionaryValue; // normal bonus forfeited, GG Points retained
+  } else {
+    multiplier = grossMultiplier;
+  }
+
+  const bonus = round2(hours * config.baseRate * multiplier);
+
+  return {
+    hours,
+    positivesCount,
+    discretionaryCount,
+    perfectWeek,
+    totalPositives,
+    strikeCount,
+    grossMultiplier,
+    multiplier,
+    hasStrike,
+    bonus,
+  };
 }
 
 export interface BoardRow {
@@ -148,7 +187,7 @@ export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
       'SELECT id, name FROM employees WHERE is_active = TRUE ORDER BY name'
     ),
     query<PositiveRow & { employee_id: string }>(
-      `SELECT id, employee_id, type, event_date::text, note, job_id
+      `SELECT id, employee_id, type, event_date::text, note, job_id, discretionary
          FROM bonus_positives WHERE week_start = $1`,
       [weekStart]
     ),
@@ -316,7 +355,7 @@ export async function getEmployeeWeek(employeeId: string, weekStart: string): Pr
   const config = await getBonusConfig();
   const [positives, strikes, writeUps, hoursInfo] = await Promise.all([
     query<PositiveRow>(
-      `SELECT id, type, event_date::text, note, job_id FROM bonus_positives
+      `SELECT id, type, event_date::text, note, job_id, discretionary FROM bonus_positives
         WHERE employee_id = $1 AND week_start = $2 ORDER BY event_date`,
       [employeeId, weekStart]
     ),
@@ -378,7 +417,7 @@ export async function getEmployeeBonusHistory(employeeId: string, limit = 12): P
   const weekStarts = weeks.map((w) => w.week_start);
   const [positives, strikes, writeUps] = await Promise.all([
     query<PositiveRow & { week_start: string }>(
-      `SELECT id, type, event_date::text, note, job_id, week_start::text FROM bonus_positives
+      `SELECT id, type, event_date::text, note, job_id, discretionary, week_start::text FROM bonus_positives
         WHERE employee_id = $1 AND week_start = ANY($2)`,
       [employeeId, weekStarts]
     ),

@@ -97,10 +97,15 @@ export default async function EmployeesPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         {bonus ? (
-                          bonus.hasStrike ? (
+                          bonus.multiplier === 0 && bonus.hasStrike ? (
                             <span className="text-destructive font-medium">Forfeit</span>
                           ) : bonus.hours > 0 ? (
-                            <span title={`${bonus.multiplier}× · ${bonus.hours.toFixed(1)} hrs`}>{money(bonus.bonus)}</span>
+                            <span
+                              title={`${bonus.multiplier}× · ${bonus.hours.toFixed(1)} hrs${bonus.hasStrike ? ' · GG Points kept' : ''}`}
+                              className={bonus.hasStrike ? 'text-amber-600 font-medium' : ''}
+                            >
+                              {money(bonus.bonus)}
+                            </span>
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )

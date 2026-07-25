@@ -40,6 +40,27 @@ export async function logPositive(input: {
   return { ok: true };
 }
 
+/** A discretionary GG Point (+0.5×) that survives strikes (until the forfeit threshold). */
+export async function logGGPoint(input: {
+  employeeId: string;
+  eventDate: string;
+  note?: string;
+}): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  const date = validDate(input.eventDate);
+  if (!date) return { ok: false, error: 'Pick a valid date' };
+  if (!input.employeeId) return { ok: false, error: 'Pick a crew member' };
+
+  await query(
+    `INSERT INTO bonus_positives (employee_id, week_start, type, event_date, note, source, created_by, discretionary)
+     VALUES ($1, $2, 'GG_POINT', $3, $4, 'manual', $5, TRUE)`,
+    [input.employeeId, weekStartOf(date), date, input.note?.trim() || null, guard.employee.id]
+  );
+  revalidatePath('/admin/performance');
+  return { ok: true };
+}
+
 export async function logStrike(input: {
   employeeId: string;
   type: string;

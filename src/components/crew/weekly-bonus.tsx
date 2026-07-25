@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Star, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Star, Sparkles, AlertTriangle, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { useI18n } from '@/lib/i18n';
 import type { EmployeeWeek, BonusHistoryRow, PayrollComp } from '@/lib/bonus';
@@ -32,7 +32,13 @@ export function WeeklyBonusCard({ week }: { week: EmployeeWeek }) {
   const { t } = useI18n();
   const { result } = week;
 
-  if (result.hasStrike) {
+  const ggPoints = week.positives.filter((p) => p.discretionary);
+  const normalPositives = week.positives.filter((p) => !p.discretionary);
+  const fullForfeit = result.hasStrike && result.multiplier === 0;
+  const partialForfeit = result.hasStrike && result.multiplier > 0;
+
+  // A strike with no surviving GG Points → the whole week is forfeited.
+  if (fullForfeit) {
     return (
       <Card className="border-red-300 bg-red-50 dark:bg-red-950/30">
         <CardHeader className="pb-2">
@@ -60,14 +66,18 @@ export function WeeklyBonusCard({ week }: { week: EmployeeWeek }) {
   }
 
   return (
-    <Card>
+    <Card className={partialForfeit ? 'border-amber-300' : ''}>
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2">
-          <Star className="h-5 w-5 text-sky-600" />
-          {t('bonus.weekly_title')}
+          {partialForfeit ? (
+            <Sparkles className="h-5 w-5 text-violet-600" />
+          ) : (
+            <Star className="h-5 w-5 text-sky-600" />
+          )}
+          {partialForfeit ? t('bonus.gg_kept_title') : t('bonus.weekly_title')}
         </CardTitle>
         <CardDescription>
-          {weekLabel(week.weekStart)} · {t('bonus.weekly_sub')}
+          {weekLabel(week.weekStart)} · {partialForfeit ? t('bonus.gg_kept_sub') : t('bonus.weekly_sub')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -92,26 +102,46 @@ export function WeeklyBonusCard({ week }: { week: EmployeeWeek }) {
           <p className="text-xs text-muted-foreground text-center">{t('bonus.hours_pending')}</p>
         )}
 
-        <div>
-          <p className="text-sm font-medium mb-1.5">{t('bonus.positives')}</p>
-          {result.perfectWeek || week.positives.length > 0 ? (
+        {partialForfeit ? (
+          <div>
+            <p className="text-sm font-medium mb-1.5">{t('bonus.gg_points')}</p>
             <div className="flex flex-wrap gap-1.5">
-              {result.perfectWeek && (
-                <Badge className="bg-sky-100 text-sky-800 hover:bg-sky-100">
-                  {t('bonus.perfect_week')} +0.5×
-                </Badge>
-              )}
-              {week.positives.map((p) => (
-                <Badge key={p.id} variant="secondary" title={p.note ?? undefined}>
+              {ggPoints.map((p) => (
+                <Badge key={p.id} className="bg-violet-100 text-violet-800 hover:bg-violet-100" title={p.note ?? undefined}>
                   {p.label}
                   {p.note ? ` · ${p.note}` : ''} +0.5×
                 </Badge>
               ))}
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">{t('bonus.no_positives')}</p>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm font-medium mb-1.5">{t('bonus.positives')}</p>
+            {result.perfectWeek || week.positives.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {result.perfectWeek && (
+                  <Badge className="bg-sky-100 text-sky-800 hover:bg-sky-100">
+                    {t('bonus.perfect_week')} +0.5×
+                  </Badge>
+                )}
+                {normalPositives.map((p) => (
+                  <Badge key={p.id} variant="secondary" title={p.note ?? undefined}>
+                    {p.label}
+                    {p.note ? ` · ${p.note}` : ''} +0.5×
+                  </Badge>
+                ))}
+                {ggPoints.map((p) => (
+                  <Badge key={p.id} className="bg-violet-100 text-violet-800 hover:bg-violet-100" title={p.note ?? undefined}>
+                    {p.label}
+                    {p.note ? ` · ${p.note}` : ''} +0.5×
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t('bonus.no_positives')}</p>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

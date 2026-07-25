@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { query, queryOne } from '@/lib/db';
 import { requireBackOffice } from '@/lib/auth';
-import { weekStartOf, getWeekBoard, POSITIVE_TYPES, STRIKE_TYPES } from '@/lib/bonus';
+import { weekStartOf, getWeekBoard, getBonusConfig, POSITIVE_TYPES, STRIKE_TYPES } from '@/lib/bonus';
 
 // Performance / weekly-bonus event logging (back office only). Positives, strikes,
 // and write-ups are the inputs to the weekly bonus multiplier.
@@ -74,13 +74,56 @@ export async function logStrike(input: {
   if (!date) return { ok: false, error: 'Pick a valid date' };
   if (!input.employeeId) return { ok: false, error: 'Pick a crew member' };
 
+  const weekStart = weekStartOf(date);
   await query(
     `INSERT INTO bonus_strikes (employee_id, week_start, type, event_date, note, created_by)
      VALUES ($1, $2, $3, $4, $5, $6)`,
-    [input.employeeId, weekStartOf(date), input.type, date, input.note?.trim() || null, guard.employee.id]
+    [input.employeeId, weekStart, input.type, date, input.note?.trim() || null, guard.employee.id]
   );
+
+  // Policy: 3 active strikes in a week auto-generates a write-up (one per week).
+  await maybeAutoWriteUp(input.employeeId, weekStart, date, guard.employee.id);
+
   revalidatePath('/admin/performance');
   return { ok: true };
+}
+
+/**
+ * When a crew member reaches the weekly strike threshold, the system files a
+ * write-up automatically. Deduped to one auto write-up per employee per week so
+ * a 4th strike doesn't stack a second one.
+ */
+async function maybeAutoWriteUp(
+  employeeId: string,
+  weekStart: string,
+  date: string,
+  createdBy: string
+): Promise<void> {
+  const config = await getBonusConfig();
+  const threshold = Math.max(1, Math.round(config.forfeitThreshold));
+
+  const counts = await queryOne<{ strikes: number; autos: number }>(
+    `SELECT
+        (SELECT COUNT(*)::int FROM bonus_strikes
+           WHERE employee_id = $1 AND week_start = $2 AND voided = FALSE) AS strikes,
+        (SELECT COUNT(*)::int FROM write_ups
+           WHERE employee_id = $1 AND week_start = $2 AND source = 'auto') AS autos`,
+    [employeeId, weekStart]
+  );
+  if (!counts) return;
+  if (counts.strikes < threshold || counts.autos > 0) return;
+
+  await query(
+    `INSERT INTO write_ups (employee_id, week_start, event_date, summary, source, created_by)
+     VALUES ($1, $2, $3, $4, 'auto', $5)`,
+    [
+      employeeId,
+      weekStart,
+      date,
+      `Automatic write-up: reached ${threshold} strikes in the week of ${weekStart}.`,
+      createdBy,
+    ]
+  );
 }
 
 export async function logWriteUp(input: {
@@ -110,10 +153,30 @@ export async function voidStrike(strikeId: string, reason: string): Promise<Resu
   if (!guard.ok) return { ok: false, error: 'Back office access required' };
   const r = reason.trim();
   if (!r) return { ok: false, error: 'A void needs a reason' };
-  await query(
-    `UPDATE bonus_strikes SET voided = TRUE, void_reason = $2 WHERE id = $1 AND voided = FALSE`,
+  const row = await queryOne<{ employee_id: string; week_start: string }>(
+    `UPDATE bonus_strikes SET voided = TRUE, void_reason = $2
+      WHERE id = $1 AND voided = FALSE
+      RETURNING employee_id, week_start::text`,
     [strikeId, r]
   );
+
+  // If voiding drops the week back under the threshold, retract the auto write-up.
+  if (row) {
+    const config = await getBonusConfig();
+    const threshold = Math.max(1, Math.round(config.forfeitThreshold));
+    const active = await queryOne<{ n: number }>(
+      `SELECT COUNT(*)::int AS n FROM bonus_strikes
+        WHERE employee_id = $1 AND week_start = $2 AND voided = FALSE`,
+      [row.employee_id, row.week_start]
+    );
+    if ((active?.n ?? 0) < threshold) {
+      await query(
+        `DELETE FROM write_ups WHERE employee_id = $1 AND week_start = $2 AND source = 'auto'`,
+        [row.employee_id, row.week_start]
+      );
+    }
+  }
+
   revalidatePath('/admin/performance');
   return { ok: true };
 }

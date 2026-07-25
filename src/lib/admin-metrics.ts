@@ -50,6 +50,47 @@ export async function getRecentDeclines(): Promise<DeclineAlert[]> {
   );
 }
 
+export interface TerminationFlag {
+  employeeId: string;
+  employeeName: string;
+  writeUpsThisMonth: number;
+  monthLabel: string;
+}
+
+/**
+ * Policy: 3 write-ups in a calendar month flags a crew member for termination
+ * review. Computed live from write_ups so it clears itself when the month rolls
+ * over (or a write-up is removed). Active employees only.
+ */
+export async function getTerminationFlags(threshold = 3): Promise<TerminationFlag[]> {
+  return query<TerminationFlag>(
+    `SELECT e.id AS "employeeId", e.name AS "employeeName",
+            COUNT(w.id)::int AS "writeUpsThisMonth",
+            to_char(date_trunc('month', CURRENT_DATE), 'Mon YYYY') AS "monthLabel"
+       FROM write_ups w
+       JOIN employees e ON e.id = w.employee_id
+      WHERE e.is_active = TRUE
+        AND w.event_date >= date_trunc('month', CURRENT_DATE)
+        AND w.event_date < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
+      GROUP BY e.id, e.name
+     HAVING COUNT(w.id) >= $1
+      ORDER BY COUNT(w.id) DESC, e.name`,
+    [threshold]
+  );
+}
+
+/** Write-up count for one employee in the current calendar month (for their record). */
+export async function getWriteUpMonthCount(employeeId: string): Promise<number> {
+  const row = await queryOne<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM write_ups
+      WHERE employee_id = $1
+        AND event_date >= date_trunc('month', CURRENT_DATE)
+        AND event_date < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'`,
+    [employeeId]
+  );
+  return row?.n ?? 0;
+}
+
 export interface AdminDashboard {
   dataAsOf: string | null; // most recent smartmoving_jobs import
   kpis: {

@@ -512,8 +512,8 @@ export async function getEmployeeEvents(employeeId: string, limit = 100): Promis
          FROM bonus_strikes WHERE employee_id = $1`,
       [employeeId]
     ),
-    query<{ id: string; event_date: string; week_start: string; summary: string }>(
-      `SELECT id, event_date::text, week_start::text, summary FROM write_ups WHERE employee_id = $1`,
+    query<{ id: string; event_date: string; week_start: string; summary: string; source: string }>(
+      `SELECT id, event_date::text, week_start::text, summary, source FROM write_ups WHERE employee_id = $1`,
       [employeeId]
     ),
   ]);
@@ -545,15 +545,16 @@ export async function getEmployeeEvents(employeeId: string, limit = 100): Promis
     });
   }
   for (const w of writeUps) {
+    const auto = w.source === 'auto';
     events.push({
       id: w.id,
       kind: 'writeup',
-      label: 'Write-Up',
+      label: auto ? 'Write-Up (auto)' : 'Write-Up',
       date: w.event_date,
       weekStart: w.week_start,
       note: w.summary,
       voided: false,
-      effect: 'Write-up',
+      effect: auto ? 'Write-up — 3 strikes in the week' : 'Write-up',
     });
   }
   events.sort((a, b) => b.date.localeCompare(a.date));

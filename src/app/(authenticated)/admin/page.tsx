@@ -16,7 +16,8 @@ import {
   UserPlus,
   UserX,
 } from 'lucide-react';
-import { getAdminDashboard, getRecentDeclines } from '@/lib/admin-metrics';
+import { getAdminDashboard, getRecentDeclines, getTerminationFlags } from '@/lib/admin-metrics';
+import { getPendingNewCrewEvals } from '@/lib/new-crew-eval';
 
 function money(n: number): string {
   return `$${Math.round(n).toLocaleString('en-US')}`;
@@ -34,10 +35,13 @@ export default async function AdminDashboardPage() {
   const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
   const trialCutoff = format(subDays(now, 31), 'yyyy-MM-dd');
 
-  const [d, declines] = await Promise.all([
+  const [d, declines, terminationFlags, pendingEvals] = await Promise.all([
     getAdminDashboard(monthStart, monthEnd, today, weekEnd, weekStart, trialCutoff),
     getRecentDeclines(),
+    getTerminationFlags(),
+    getPendingNewCrewEvals(),
   ]);
+  const dueEvals = pendingEvals.filter((e) => e.status !== 'upcoming');
 
   const alertItems = [
     { count: d.alerts.tardiesToday, label: 'tardy this morning', href: '/admin/attendance' },
@@ -48,7 +52,12 @@ export default async function AdminDashboardPage() {
   ].filter((a) => a.count > 0);
 
   const trucksToday = d.todaysJobs.reduce((s, j) => s + Number(j.quoted_trucks ?? 0), 0);
-  const hasAlerts = alertItems.length > 0 || d.alerts.rentalDays.length > 0 || declines.length > 0;
+  const hasAlerts =
+    alertItems.length > 0 ||
+    d.alerts.rentalDays.length > 0 ||
+    declines.length > 0 ||
+    terminationFlags.length > 0 ||
+    dueEvals.length > 0;
 
   return (
     <div className="p-6 space-y-6">
@@ -77,6 +86,50 @@ export default async function AdminDashboardPage() {
             <p className="text-sm text-muted-foreground">All clear — nothing needs attention.</p>
           ) : (
             <div className="space-y-2">
+              {terminationFlags.length > 0 && (
+                <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-destructive">
+                    <UserX className="h-4 w-4" />
+                    {terminationFlags.length} crew flagged for termination review (3+ write-ups this month)
+                  </p>
+                  <ul className="mt-2 space-y-1.5">
+                    {terminationFlags.map((f) => (
+                      <li key={f.employeeId} className="text-sm">
+                        <Link href={`/admin/employees/${f.employeeId}`} className="hover:underline">
+                          <span className="font-medium">{f.employeeName}</span>
+                        </Link>
+                        <span className="text-muted-foreground">
+                          {' '}
+                          — {f.writeUpsThisMonth} write-ups in {f.monthLabel}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {dueEvals.length > 0 && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-500">
+                    <UserPlus className="h-4 w-4" />
+                    {dueEvals.length} 30-day new-crew {dueEvals.length === 1 ? 'evaluation' : 'evaluations'} due
+                  </p>
+                  <ul className="mt-2 space-y-1.5">
+                    {dueEvals.map((ev) => (
+                      <li key={ev.employeeId} className="text-sm">
+                        <Link href={`/admin/employees/${ev.employeeId}`} className="hover:underline">
+                          <span className="font-medium">{ev.employeeName}</span>
+                        </Link>
+                        <span className="text-muted-foreground">
+                          {' '}
+                          — {ev.status === 'overdue'
+                            ? `overdue since ${format(new Date(`${ev.dueDate}T12:00:00`), 'M/d')}`
+                            : `due ${format(new Date(`${ev.dueDate}T12:00:00`), 'M/d')}`}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {declines.length > 0 && (
                 <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
                   <p className="flex items-center gap-2 text-sm font-semibold text-destructive">

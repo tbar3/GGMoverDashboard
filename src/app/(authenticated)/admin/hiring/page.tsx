@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { POSITIONS, FIT_BAND_LABELS, MAX_SCORE, type FitBand } from '@/lib/interview-scorecard';
+import { getPendingNewCrewEvals } from '@/lib/new-crew-eval';
 
 interface CandidateRow {
   id: string;
@@ -42,7 +43,14 @@ function positionLabel(value: string) {
   return POSITIONS.find((p) => p.value === value)?.label ?? value;
 }
 
+const EVAL_STATUS = {
+  overdue: { label: 'Overdue', tone: 'bg-red-100 text-red-800' },
+  due: { label: 'Due now', tone: 'bg-amber-100 text-amber-800' },
+  upcoming: { label: 'Upcoming', tone: 'bg-sky-100 text-sky-800' },
+} as const;
+
 export default async function HiringPage() {
+  const pendingEvals = await getPendingNewCrewEvals();
   const candidates = await query<CandidateRow>(`
     SELECT
       c.*,
@@ -76,6 +84,51 @@ export default async function HiringPage() {
           </Button>
         </Link>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>30-Day New Crew Evaluations</CardTitle>
+          <CardDescription>
+            Probation reviews due 30 days after a new crew member&apos;s start date.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {pendingEvals.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No evaluations pending — all new crew are reviewed.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Crew member</TableHead>
+                  <TableHead>Started</TableHead>
+                  <TableHead>Due</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingEvals.map((ev) => (
+                  <TableRow key={ev.employeeId}>
+                    <TableCell className="font-medium">{ev.employeeName}</TableCell>
+                    <TableCell>{format(new Date(`${ev.startDate}T12:00:00`), 'MMM d, yyyy')}</TableCell>
+                    <TableCell>{format(new Date(`${ev.dueDate}T12:00:00`), 'MMM d, yyyy')}</TableCell>
+                    <TableCell>
+                      <Badge className={EVAL_STATUS[ev.status].tone}>{EVAL_STATUS[ev.status].label}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Link href={`/admin/employees/${ev.employeeId}`} className="text-sm text-primary">
+                        Evaluate
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

@@ -7,7 +7,7 @@ import {
   getJobsForTruckDate,
   getRoutineItems,
   getJobEquipment,
-  getCrewMembers,
+  getCrewEmployeeNames,
   getTrucks,
 } from '@/lib/materials/queries';
 import CountSheet from '@/components/materials/CountSheet';
@@ -49,7 +49,7 @@ export default async function MaterialsCrewJobSheet({
     getJobsForTruckDate(job.truck_id, job.job_date),
     getRoutineItems(),
     getJobEquipment(jobId),
-    getCrewMembers(),
+    getCrewEmployeeNames(),
     getTrucks(true),
   ]);
 
@@ -119,7 +119,7 @@ export default async function MaterialsCrewJobSheet({
         isFirstOfDay={isFirstOfDay}
         morningItems={morningItems}
         closeItems={closeItems}
-        crew={crew.map((c) => c.name)}
+        crew={crew}
         initialHeader={{
           customer: job.customer,
           job_number: job.job_number,

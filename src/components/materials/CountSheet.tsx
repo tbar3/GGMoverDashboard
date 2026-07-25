@@ -408,14 +408,24 @@ export default function CountSheet({
           />
         </Field>
         <Field label="Crew Lead *">
-          <input
+          <select
             className={`gg-input w-full${reqErr(header.crew_lead)}`}
             value={header.crew_lead ?? ""}
             disabled={locked}
             onChange={(e) =>
               setHeader((h) => ({ ...h, crew_lead: e.target.value }))
             }
-          />
+          >
+            <option value="">Select…</option>
+            {header.crew_lead && !crew.includes(header.crew_lead) && (
+              <option value={header.crew_lead}>{header.crew_lead}</option>
+            )}
+            {crew.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
         </Field>
         {/* Not wrapped in <Field> (a <label>): a label forwards inner clicks to
             its first control, which would re-toggle the dropdown on "Done". */}

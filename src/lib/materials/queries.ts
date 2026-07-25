@@ -29,6 +29,16 @@ export async function getCrewMembers(includeInactive = false): Promise<CrewMembe
   );
 }
 
+/** Real crew members (employees with crew roles) — for the count-sheet crew pickers. */
+export async function getCrewEmployeeNames(): Promise<string[]> {
+  const rows = await query<{ name: string }>(
+    `SELECT name FROM employees
+      WHERE is_active = TRUE AND role IN ('driver', 'lead', 'helper')
+      ORDER BY name`
+  );
+  return rows.map((r) => r.name);
+}
+
 export async function getRoutineItems(): Promise<RoutineItem[]> {
   return query<RoutineItem>(
     `SELECT id, phase, label, sort_order, active

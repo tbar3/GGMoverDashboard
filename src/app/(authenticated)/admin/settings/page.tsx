@@ -14,16 +14,10 @@ export default async function AdminSettingsPage() {
   }
 
   const roles = BACK_OFFICE_ROLES as string[];
-  const [team, candidates, locations] = await Promise.all([
+  const [team, locations] = await Promise.all([
     query<{ id: string; name: string; email: string; role: string }>(
       `SELECT id, name, email, role FROM employees
         WHERE role = ANY($1) OR is_admin = TRUE
-        ORDER BY name`,
-      [roles]
-    ),
-    query<{ id: string; name: string }>(
-      `SELECT id, name FROM employees
-        WHERE is_active = TRUE AND NOT (role = ANY($1) OR is_admin = TRUE)
         ORDER BY name`,
       [roles]
     ),
@@ -40,7 +34,7 @@ export default async function AdminSettingsPage() {
           Manage who has back-office access and the company&apos;s locations.
         </p>
       </div>
-      <AdminTeamManager team={team} candidates={candidates} />
+      <AdminTeamManager team={team} />
       <LocationsManager locations={locations} />
     </div>
   );

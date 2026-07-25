@@ -1,6 +1,8 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
+import { clerkClient } from '@clerk/nextjs/server';
 import { query } from '@/lib/db';
 import { requireBackOffice } from '@/lib/auth';
 import { Employee } from '@/types';
@@ -9,6 +11,7 @@ import { BACK_OFFICE_ROLES } from '@/lib/roles';
 type Result = { ok: boolean; error?: string };
 
 const BACK_OFFICE_SET = new Set<string>(BACK_OFFICE_ROLES);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Only an owner or an admin may manage the admin team / settings. */
 function canManageAdmins(emp: Pick<Employee, 'role' | 'is_admin'>): boolean {
@@ -24,6 +27,53 @@ async function requireAdminManager(): Promise<
     return { ok: false, error: 'Only an owner or admin can manage admin access' };
   }
   return { ok: true, employee: guard.employee };
+}
+
+/** Add a new admin team member from scratch (name + email + role) and invite them. */
+export async function addAdminMember(
+  name: string,
+  email: string,
+  role: string
+): Promise<Result & { invited?: boolean }> {
+  const guard = await requireAdminManager();
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const n = name.trim();
+  const e = email.trim().toLowerCase();
+  if (!n) return { ok: false, error: 'Enter a name' };
+  if (!EMAIL_RE.test(e)) return { ok: false, error: 'Enter a valid email' };
+  if (!BACK_OFFICE_SET.has(role)) return { ok: false, error: 'Pick a role' };
+
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    await query(
+      `INSERT INTO employees (email, name, role, start_date, is_active, is_admin)
+       VALUES ($1, $2, $3, $4, TRUE, TRUE)`,
+      [e, n, role, today]
+    );
+  } catch {
+    return { ok: false, error: 'That email is already in use' };
+  }
+
+  // Best-effort invite so they can sign in.
+  let invited = false;
+  try {
+    const h = await headers();
+    const host = h.get('host') ?? 'goodguys-dashboard.vercel.app';
+    const proto = h.get('x-forwarded-proto') ?? 'https';
+    const client = await clerkClient();
+    await client.invitations.createInvitation({
+      emailAddress: e,
+      redirectUrl: `${proto}://${host}/sign-up`,
+      ignoreExisting: true,
+    });
+    invited = true;
+  } catch {
+    invited = false;
+  }
+
+  revalidatePath('/admin/settings');
+  revalidatePath('/admin/employees');
+  return { ok: true, invited };
 }
 
 /** Grant / change a back-office role. Sets is_admin so access is unambiguous. */

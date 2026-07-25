@@ -27,6 +27,7 @@ import { MapPin, ShieldCheck } from 'lucide-react';
 import { BACK_OFFICE_ROLES, roleLabel } from '@/lib/roles';
 import {
   setAdminRole,
+  addAdminMember,
   removeFromAdminTeam,
   addLocation,
   toggleLocation,
@@ -39,10 +40,6 @@ interface TeamMember {
   email: string;
   role: string;
 }
-interface Candidate {
-  id: string;
-  name: string;
-}
 interface Location {
   id: string;
   name: string;
@@ -50,16 +47,11 @@ interface Location {
   is_active: boolean;
 }
 
-export function AdminTeamManager({
-  team,
-  candidates,
-}: {
-  team: TeamMember[];
-  candidates: Candidate[];
-}) {
+export function AdminTeamManager({ team }: { team: TeamMember[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [addId, setAddId] = useState('');
+  const [addName, setAddName] = useState('');
+  const [addEmail, setAddEmail] = useState('');
   const [addRole, setAddRole] = useState('manager');
 
   function changeRole(id: string, role: string) {
@@ -73,12 +65,18 @@ export function AdminTeamManager({
   }
 
   function add() {
-    if (!addId) return toast.error('Pick a person');
+    if (!addName.trim()) return toast.error('Enter a name');
+    if (!addEmail.trim()) return toast.error('Enter an email');
     startTransition(async () => {
-      const res = await setAdminRole(addId, addRole);
+      const res = await addAdminMember(addName, addEmail, addRole);
       if (res.ok) {
-        toast.success('Added to admin team');
-        setAddId('');
+        toast.success(
+          res.invited
+            ? 'Admin member added and invited'
+            : 'Admin member added — send the invite from their profile'
+        );
+        setAddName('');
+        setAddEmail('');
         router.refresh();
       } else toast.error(res.error ?? 'Could not add');
     });
@@ -153,40 +151,45 @@ export function AdminTeamManager({
           </TableBody>
         </Table>
 
-        <div className="flex flex-wrap items-end gap-3 border-t pt-4">
-          <div className="space-y-1.5">
-            <Label>Add person</Label>
-            <Select value={addId} onValueChange={setAddId}>
-              <SelectTrigger className="w-56">
-                <SelectValue placeholder="Select an employee…" />
-              </SelectTrigger>
-              <SelectContent>
-                {candidates.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="border-t pt-4 space-y-3">
+          <p className="text-sm font-medium">Add an admin member</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Full name" className="w-48" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={addEmail}
+                onChange={(e) => setAddEmail(e.target.value)}
+                placeholder="name@example.com"
+                className="w-56"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={addRole} onValueChange={setAddRole}>
+                <SelectTrigger className="w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BACK_OFFICE_ROLES.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {roleLabel(r)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={add} disabled={pending}>
+              Add &amp; invite
+            </Button>
           </div>
-          <div className="space-y-1.5">
-            <Label>Role</Label>
-            <Select value={addRole} onValueChange={setAddRole}>
-              <SelectTrigger className="w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {BACK_OFFICE_ROLES.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {roleLabel(r)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button onClick={add} disabled={pending || candidates.length === 0}>
-            Add to admin team
-          </Button>
+          <p className="text-xs text-muted-foreground">
+            Creates a new back-office account and emails them a sign-up link.
+          </p>
         </div>
       </CardContent>
     </Card>

@@ -4,20 +4,18 @@ import {
   getAllMaterials,
   getAllEquipment,
   getAllRoutines,
-  getAllCrew,
 } from '@/lib/materials/admin';
 import { EntitySection } from './entity-section';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MaterialsAdminPage() {
-  const [warehouses, trucks, materials, equipment, routines, crew] = await Promise.all([
+  const [warehouses, trucks, materials, equipment, routines] = await Promise.all([
     getAllWarehouses(),
     getAllTrucks(),
     getAllMaterials(),
     getAllEquipment(),
     getAllRoutines(),
-    getAllCrew(),
   ]);
 
   const warehouseOptions = warehouses.map((w) => ({
@@ -30,8 +28,8 @@ export default async function MaterialsAdminPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Materials Settings</h1>
         <p className="text-muted-foreground mt-1">
-          Set up trucks, warehouses, materials, equipment, routines, and the crew roster. Turn
-          something Active off to hide it without losing history.
+          Set up trucks, warehouses, materials, equipment, and routines. Turn something Active off
+          to hide it without losing history. Crew names now come from your Employees list.
         </p>
       </div>
 
@@ -102,13 +100,6 @@ export default async function MaterialsAdminPage() {
         ]}
       />
 
-      <EntitySection
-        table="crew_members"
-        title="Crew Roster"
-        description="Names that appear in the crew picker on the count sheet."
-        items={crew}
-        fields={[{ key: 'name', label: 'Crew member', type: 'text' }]}
-      />
     </div>
   );
 }

@@ -52,6 +52,7 @@ interface DashboardContentProps {
   messages: Message[];
   today: string;
   bonusWeek: EmployeeWeek;
+  upcomingJobs: WeekJob[];
   weekLabel: string;
 }
 
@@ -66,6 +67,7 @@ export function DashboardContent({
   messages,
   today,
   bonusWeek,
+  upcomingJobs,
   weekLabel,
 }: DashboardContentProps) {
   const { t } = useI18n();
@@ -159,6 +161,23 @@ export function DashboardContent({
           )}
         </CardContent>
       </Card>
+
+      {/* Upcoming jobs (beyond this week) */}
+      {upcomingJobs.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('dash.upcoming')}</CardTitle>
+            <CardDescription>{t('dash.upcoming_desc')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {upcomingJobs.map((job) => (
+                <JobRow key={job.id} job={job} isToday={false} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Message board */}
       <Card>

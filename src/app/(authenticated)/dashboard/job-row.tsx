@@ -102,18 +102,16 @@ export function JobRow({
 
         <div className="shrink-0 flex flex-col items-end gap-2">
           {job.truck_name && <Badge variant="secondary">{job.truck_name}</Badge>}
-          {!declining && (
+          {!declining && !declined && (
             <div className="flex gap-2">
               {job.response !== 'accepted' && (
                 <Button size="sm" variant="outline" disabled={pending} onClick={() => respond('accepted')}>
                   <Check className="h-4 w-4 mr-1" /> {t('dash.accept')}
                 </Button>
               )}
-              {job.response !== 'declined' && (
-                <Button size="sm" variant="outline" disabled={pending} onClick={() => setDeclining(true)}>
-                  <X className="h-4 w-4 mr-1" /> {t('dash.decline')}
-                </Button>
-              )}
+              <Button size="sm" variant="outline" disabled={pending} onClick={() => setDeclining(true)}>
+                <X className="h-4 w-4 mr-1" /> {t('dash.decline')}
+              </Button>
             </div>
           )}
         </div>

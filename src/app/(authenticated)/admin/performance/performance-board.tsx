@@ -23,11 +23,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Star, AlertTriangle, FileWarning } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Star, AlertTriangle, FileWarning, Lock, LockOpen, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import type { BoardRow, BonusConfig } from '@/lib/bonus';
-import { logPositive, logStrike, logWriteUp, voidStrike, deletePositive } from '@/lib/bonus-actions';
+import type { BoardRow, BonusConfig, WeekStatus, SnapshotRow, AdjustmentRow } from '@/lib/bonus';
+import {
+  logPositive,
+  logStrike,
+  logWriteUp,
+  voidStrike,
+  deletePositive,
+  approveWeek,
+  reopenWeek,
+  addAdjustment,
+  deleteAdjustment,
+} from '@/lib/bonus-actions';
 
 // Combined event menu — positives, strikes, and the write-up all in one dropdown,
 // so back office logs the whole spectrum of the week from one place.
@@ -73,6 +83,9 @@ export default function PerformanceBoard({
   prevWeek,
   nextWeek,
   config,
+  weekStatus,
+  lockedResults,
+  adjustments,
 }: {
   board: BoardRow[];
   employees: { id: string; name: string }[];
@@ -82,6 +95,9 @@ export default function PerformanceBoard({
   prevWeek: string;
   nextWeek: string;
   config: BonusConfig;
+  weekStatus: WeekStatus;
+  lockedResults: SnapshotRow[];
+  adjustments: AdjustmentRow[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -89,6 +105,61 @@ export default function PerformanceBoard({
   const [eventType, setEventType] = useState('');
   const [eventDate, setEventDate] = useState(localToday());
   const [note, setNote] = useState('');
+  const [adjEmp, setAdjEmp] = useState('');
+  const [adjAmount, setAdjAmount] = useState('');
+  const [adjReason, setAdjReason] = useState('');
+
+  const locked = weekStatus.status === 'approved';
+
+  // Sum of adjustments per employee, for the net-bonus display + export preview.
+  const adjByEmp = new Map<string, number>();
+  for (const a of adjustments) adjByEmp.set(a.employeeId, (adjByEmp.get(a.employeeId) ?? 0) + a.delta);
+
+  function onApprove() {
+    if (!window.confirm('Lock this week? Hours, positives, strikes, and the bonus will be frozen.')) return;
+    startTransition(async () => {
+      const res = await approveWeek(weekStart);
+      if (res.ok) {
+        toast.success('Week locked');
+        router.refresh();
+      } else toast.error(res.error ?? 'Could not lock the week');
+    });
+  }
+
+  function onReopen() {
+    if (!window.confirm('Reopen this week for editing? The frozen snapshot will be cleared.')) return;
+    startTransition(async () => {
+      const res = await reopenWeek(weekStart);
+      if (res.ok) {
+        toast.success('Week reopened');
+        router.refresh();
+      } else toast.error(res.error ?? 'Could not reopen');
+    });
+  }
+
+  function onAddAdjustment() {
+    if (!adjEmp) return toast.error('Pick a crew member');
+    startTransition(async () => {
+      const res = await addAdjustment({ weekStart, employeeId: adjEmp, delta: adjAmount, reason: adjReason });
+      if (res.ok) {
+        toast.success('Adjustment added');
+        setAdjEmp('');
+        setAdjAmount('');
+        setAdjReason('');
+        router.refresh();
+      } else toast.error(res.error ?? 'Could not add adjustment');
+    });
+  }
+
+  function onDeleteAdjustment(id: string) {
+    startTransition(async () => {
+      const res = await deleteAdjustment(id);
+      if (res.ok) {
+        toast.success('Adjustment removed');
+        router.refresh();
+      } else toast.error(res.error ?? 'Could not remove');
+    });
+  }
 
   const kind = kindFor(eventType);
 
@@ -162,6 +233,33 @@ export default function PerformanceBoard({
   }
   feed.sort((a, b) => b.date.localeCompare(a.date));
 
+  // Unify the board rows: frozen snapshot when locked, live compute when open.
+  const displayRows = locked
+    ? lockedResults.map((r) => ({
+        employeeId: r.employeeId,
+        name: r.name,
+        positivesCount: r.positivesCount,
+        activeStrikes: r.hasStrike ? 1 : 0,
+        perfectWeek: r.perfectWeek,
+        multiplier: r.multiplier,
+        hasStrike: r.hasStrike,
+        hours: r.hours,
+        hasHours: r.hours > 0,
+        bonus: r.bonus,
+      }))
+    : board.map((row) => ({
+        employeeId: row.employeeId,
+        name: row.name,
+        positivesCount: row.result.positivesCount,
+        activeStrikes: row.events.strikes.filter((s) => !s.voided).length,
+        perfectWeek: row.result.perfectWeek,
+        multiplier: row.result.multiplier,
+        hasStrike: row.result.hasStrike,
+        hours: row.result.hours,
+        hasHours: row.result.hours > 0,
+        bonus: row.result.bonus,
+      }));
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -189,7 +287,49 @@ export default function PerformanceBoard({
         </div>
       </div>
 
-      {/* Log an event */}
+      {/* Week close status */}
+      <Card className={locked ? 'border-primary' : ''}>
+        <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {locked ? (
+              <Lock className="h-5 w-5 text-primary" />
+            ) : (
+              <LockOpen className="h-5 w-5 text-muted-foreground" />
+            )}
+            <div>
+              <p className="font-semibold">{locked ? 'Week locked' : 'Week open'}</p>
+              <p className="text-sm text-muted-foreground">
+                {locked
+                  ? `Frozen${weekStatus.approvedByName ? ` by ${weekStatus.approvedByName}` : ''}${
+                      weekStatus.approvedAt ? ` · ${format(new Date(weekStatus.approvedAt), 'MMM d, h:mm a')}` : ''
+                    }`
+                  : 'Review the board, then lock the week to freeze it for payroll.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {locked ? (
+              <>
+                <a href={`/api/bonus/export?week=${weekStart}`}>
+                  <Button variant="outline">
+                    <Download className="h-4 w-4 mr-1.5" /> Export CSV
+                  </Button>
+                </a>
+                <Button variant="outline" onClick={onReopen} disabled={pending}>
+                  <LockOpen className="h-4 w-4 mr-1.5" /> Reopen
+                </Button>
+              </>
+            ) : (
+              <Button onClick={onApprove} disabled={pending}>
+                <Lock className="h-4 w-4 mr-1.5" /> Approve &amp; lock week
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Log an event — only while the week is open */}
+      {!locked && (
       <Card>
         <CardHeader>
           <CardTitle>Log an event</CardTitle>
@@ -250,14 +390,16 @@ export default function PerformanceBoard({
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Weekly board */}
       <Card>
         <CardHeader>
-          <CardTitle>This week&apos;s board</CardTitle>
+          <CardTitle>{locked ? 'Locked board' : "This week's board"}</CardTitle>
           <CardDescription>
-            Multiplier = {config.baseMultiplier} + {config.increment} × positives. Perfect Week and
-            bonus dollars activate once the weekly payroll &amp; attendance import lands.
+            {locked
+              ? 'Frozen figures from lock time. Corrections go through adjustments below.'
+              : `Multiplier = ${config.baseMultiplier} + ${config.increment} × positives. Perfect Week and bonus dollars activate once the weekly payroll & attendance import lands.`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -270,47 +412,59 @@ export default function PerformanceBoard({
                 <TableHead className="text-center">Perfect week</TableHead>
                 <TableHead className="text-right">Multiplier</TableHead>
                 <TableHead className="text-right">Bonus</TableHead>
+                {locked && <TableHead className="text-right">Net</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {board.map((row) => {
-                const activeStrikes = row.events.strikes.filter((s) => !s.voided).length;
+              {displayRows.map((row) => {
+                const adj = adjByEmp.get(row.employeeId) ?? 0;
                 return (
                   <TableRow key={row.employeeId}>
                     <TableCell className="font-medium">{row.name}</TableCell>
                     <TableCell className="text-center">
-                      {row.result.positivesCount || <span className="text-muted-foreground">0</span>}
+                      {row.positivesCount || <span className="text-muted-foreground">0</span>}
                     </TableCell>
                     <TableCell className="text-center">
-                      {activeStrikes > 0 ? (
-                        <Badge variant="destructive">{activeStrikes}</Badge>
+                      {row.hasStrike ? (
+                        <Badge variant="destructive">{row.activeStrikes || 1}</Badge>
                       ) : (
                         <span className="text-muted-foreground">0</span>
                       )}
                     </TableCell>
                     <TableCell className="text-center">
-                      {row.result.perfectWeek ? (
+                      {row.perfectWeek ? (
                         <Badge className="bg-sky-100 text-sky-800 hover:bg-sky-100">Perfect</Badge>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {row.result.hasStrike ? (
+                      {row.hasStrike ? (
                         <span className="text-destructive font-semibold">FORFEIT</span>
                       ) : (
-                        `${row.result.multiplier}×`
+                        `${row.multiplier}×`
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      {row.result.hasStrike ? (
+                      {row.hasStrike ? (
                         <span className="text-destructive font-semibold">{money(0)}</span>
-                      ) : row.result.hours > 0 ? (
-                        money(row.result.bonus)
+                      ) : row.hasHours ? (
+                        money(row.bonus)
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
+                    {locked && (
+                      <TableCell className="text-right font-semibold">
+                        {adj !== 0 ? (
+                          <span title={`bonus ${money(row.bonus)} ${adj > 0 ? '+' : '−'} ${money(Math.abs(adj))}`}>
+                            {money((row.hasStrike ? 0 : row.bonus) + adj)}
+                          </span>
+                        ) : (
+                          money(row.hasStrike ? 0 : row.bonus)
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}
@@ -318,6 +472,79 @@ export default function PerformanceBoard({
           </Table>
         </CardContent>
       </Card>
+
+      {/* Adjustments — only on a locked week */}
+      {locked && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Adjustments</CardTitle>
+            <CardDescription>
+              Corrections after lock. Each is a signed amount with a reason and shows up as its own
+              line on the payroll export.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+              <div className="space-y-1.5">
+                <Label>Crew member</Label>
+                <Select value={adjEmp} onValueChange={setAdjEmp}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Amount (+ / −)</Label>
+                <Input
+                  value={adjAmount}
+                  onChange={(e) => setAdjAmount(e.target.value)}
+                  placeholder="e.g. 15 or -10"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Reason</Label>
+                <Input
+                  value={adjReason}
+                  onChange={(e) => setAdjReason(e.target.value)}
+                  placeholder="Why"
+                />
+              </div>
+              <Button onClick={onAddAdjustment} disabled={pending}>
+                Add adjustment
+              </Button>
+            </div>
+            {adjustments.length > 0 && (
+              <ul className="divide-y">
+                {adjustments.map((a) => (
+                  <li key={a.id} className="flex items-center gap-3 py-2">
+                    <span className="font-medium">{a.name}</span>
+                    <span className={a.delta < 0 ? 'text-destructive' : 'text-green-600'}>
+                      {a.delta < 0 ? '−' : '+'}
+                      {money(Math.abs(a.delta))}
+                    </span>
+                    <span className="text-sm text-muted-foreground flex-1 truncate">{a.reason}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDeleteAdjustment(a.id)}
+                      disabled={pending}
+                    >
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Event feed */}
       <Card>
@@ -355,12 +582,12 @@ export default function PerformanceBoard({
                   <span className="text-xs text-muted-foreground whitespace-nowrap">
                     {format(new Date(`${ev.date}T12:00:00`), 'EEE MMM d')}
                   </span>
-                  {ev.kind === 'strike' && !ev.voided && (
+                  {!locked && ev.kind === 'strike' && !ev.voided && (
                     <Button variant="outline" size="sm" onClick={() => onVoid(ev.id)} disabled={pending}>
                       Void
                     </Button>
                   )}
-                  {ev.kind === 'positive' && (
+                  {!locked && ev.kind === 'positive' && (
                     <Button
                       variant="ghost"
                       size="sm"

@@ -192,6 +192,103 @@ export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
   });
 }
 
+// ── Week lifecycle (open → approved/locked) ───────────────────
+
+export interface WeekStatus {
+  status: 'open' | 'approved';
+  approvedByName: string | null;
+  approvedAt: string | null;
+}
+
+export async function getWeekStatus(weekStart: string): Promise<WeekStatus> {
+  const row = await queryOne<{ status: string; name: string | null; approved_at: string | null }>(
+    `SELECT w.status, e.name, w.approved_at::text AS approved_at
+       FROM bonus_weeks w LEFT JOIN employees e ON e.id = w.approved_by
+      WHERE w.week_start = $1`,
+    [weekStart]
+  );
+  if (!row) return { status: 'open', approvedByName: null, approvedAt: null };
+  return {
+    status: row.status === 'approved' ? 'approved' : 'open',
+    approvedByName: row.name,
+    approvedAt: row.approved_at,
+  };
+}
+
+export interface SnapshotRow {
+  employeeId: string;
+  name: string;
+  hours: number;
+  positivesCount: number;
+  perfectWeek: boolean;
+  multiplier: number;
+  hasStrike: boolean;
+  bonus: number;
+}
+
+/** The frozen figures for an approved week (empty if not yet locked). */
+export async function getWeekResults(weekStart: string): Promise<SnapshotRow[]> {
+  const rows = await query<{
+    employee_id: string;
+    name: string;
+    hours: number;
+    positives_count: number;
+    perfect_week: boolean;
+    multiplier: number;
+    has_strike: boolean;
+    bonus: number;
+  }>(
+    `SELECT r.employee_id, e.name, r.hours, r.positives_count, r.perfect_week,
+            r.multiplier, r.has_strike, r.bonus
+       FROM bonus_week_results r JOIN employees e ON e.id = r.employee_id
+      WHERE r.week_start = $1 ORDER BY e.name`,
+    [weekStart]
+  );
+  return rows.map((r) => ({
+    employeeId: r.employee_id,
+    name: r.name,
+    hours: Number(r.hours),
+    positivesCount: r.positives_count,
+    perfectWeek: r.perfect_week,
+    multiplier: Number(r.multiplier),
+    hasStrike: r.has_strike,
+    bonus: Number(r.bonus),
+  }));
+}
+
+export interface AdjustmentRow {
+  id: string;
+  employeeId: string;
+  name: string;
+  delta: number;
+  reason: string;
+  createdAt: string;
+}
+
+export async function getWeekAdjustments(weekStart: string): Promise<AdjustmentRow[]> {
+  const rows = await query<{
+    id: string;
+    employee_id: string;
+    name: string;
+    delta: number;
+    reason: string;
+    created_at: string;
+  }>(
+    `SELECT a.id, a.employee_id, e.name, a.delta, a.reason, a.created_at::text AS created_at
+       FROM bonus_adjustments a JOIN employees e ON e.id = a.employee_id
+      WHERE a.week_start = $1 ORDER BY a.created_at`,
+    [weekStart]
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    employeeId: r.employee_id,
+    name: r.name,
+    delta: Number(r.delta),
+    reason: r.reason,
+    createdAt: r.created_at,
+  }));
+}
+
 // ── Crew-facing (one employee) ────────────────────────────────
 
 /** Billable + warehouse hours for a week (the bonus basis), or 0 if no payroll yet. */

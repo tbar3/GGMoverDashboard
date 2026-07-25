@@ -1,9 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { query } from '@/lib/db';
+import { query, queryOne } from '@/lib/db';
 import { requireBackOffice } from '@/lib/auth';
-import { weekStartOf, POSITIVE_TYPES, STRIKE_TYPES } from '@/lib/bonus';
+import { weekStartOf, getWeekBoard, POSITIVE_TYPES, STRIKE_TYPES } from '@/lib/bonus';
 
 // Performance / weekly-bonus event logging (back office only). Positives, strikes,
 // and write-ups are the inputs to the weekly bonus multiplier.
@@ -101,6 +101,114 @@ export async function deletePositive(id: string): Promise<Result> {
   const guard = await requireBackOffice();
   if (!guard.ok) return { ok: false, error: 'Back office access required' };
   await query('DELETE FROM bonus_positives WHERE id = $1', [id]);
+  revalidatePath('/admin/performance');
+  return { ok: true };
+}
+
+// ── Week close / lifecycle ────────────────────────────────────
+
+function validWeek(raw: string): string | null {
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? weekStartOf(raw) : null;
+}
+
+/**
+ * Lock a week: snapshot every employee's computed result into bonus_week_results
+ * and mark the week approved. Re-approving refreshes the snapshot.
+ */
+export async function approveWeek(weekStartRaw: string): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  const weekStart = validWeek(weekStartRaw);
+  if (!weekStart) return { ok: false, error: 'Invalid week' };
+
+  const board = await getWeekBoard(weekStart);
+  // Only snapshot people who have something for the week (hours or events) —
+  // an empty $0 row for everyone else is just noise on the export.
+  const rows = board.filter(
+    (b) =>
+      b.result.hours > 0 ||
+      b.events.positives.length > 0 ||
+      b.events.strikes.length > 0 ||
+      b.events.writeUps.length > 0
+  );
+
+  await query('DELETE FROM bonus_week_results WHERE week_start = $1', [weekStart]);
+  for (const b of rows) {
+    await query(
+      `INSERT INTO bonus_week_results
+         (week_start, employee_id, hours, positives_count, perfect_week, multiplier, has_strike, bonus, locked_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [
+        weekStart,
+        b.employeeId,
+        b.result.hours,
+        b.result.positivesCount,
+        b.result.perfectWeek,
+        b.result.multiplier,
+        b.result.hasStrike,
+        b.result.bonus,
+        guard.employee.id,
+      ]
+    );
+  }
+
+  await query(
+    `INSERT INTO bonus_weeks (week_start, status, approved_by, approved_at)
+     VALUES ($1, 'approved', $2, NOW())
+     ON CONFLICT (week_start) DO UPDATE SET status = 'approved', approved_by = $2, approved_at = NOW()`,
+    [weekStart, guard.employee.id]
+  );
+
+  revalidatePath('/admin/performance');
+  return { ok: true };
+}
+
+/** Reopen an approved week for editing (clears the frozen snapshot; keeps adjustments). */
+export async function reopenWeek(weekStartRaw: string): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  const weekStart = validWeek(weekStartRaw);
+  if (!weekStart) return { ok: false, error: 'Invalid week' };
+
+  await query('DELETE FROM bonus_week_results WHERE week_start = $1', [weekStart]);
+  await query(`UPDATE bonus_weeks SET status = 'open', approved_by = NULL, approved_at = NULL WHERE week_start = $1`, [weekStart]);
+  revalidatePath('/admin/performance');
+  return { ok: true };
+}
+
+/** Post-lock correction: a signed delta + reason, shown on the next export. */
+export async function addAdjustment(input: {
+  weekStart: string;
+  employeeId: string;
+  delta: string;
+  reason: string;
+}): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  const weekStart = validWeek(input.weekStart);
+  if (!weekStart) return { ok: false, error: 'Invalid week' };
+  if (!input.employeeId) return { ok: false, error: 'Pick a crew member' };
+  const delta = parseFloat(String(input.delta).replace(/[$,]/g, ''));
+  if (isNaN(delta) || delta === 0) return { ok: false, error: 'Enter a non-zero amount' };
+  const reason = input.reason.trim();
+  if (!reason) return { ok: false, error: 'An adjustment needs a reason' };
+
+  const wk = await queryOne<{ status: string }>('SELECT status FROM bonus_weeks WHERE week_start = $1', [weekStart]);
+  if (wk?.status !== 'approved') return { ok: false, error: 'Approve the week before adjusting it' };
+
+  await query(
+    `INSERT INTO bonus_adjustments (week_start, employee_id, delta, reason, created_by)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [weekStart, input.employeeId, delta, reason, guard.employee.id]
+  );
+  revalidatePath('/admin/performance');
+  return { ok: true };
+}
+
+export async function deleteAdjustment(id: string): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  await query('DELETE FROM bonus_adjustments WHERE id = $1', [id]);
   revalidatePath('/admin/performance');
   return { ok: true };
 }

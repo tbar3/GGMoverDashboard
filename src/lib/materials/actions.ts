@@ -118,7 +118,8 @@ export async function createJob(
   truckId: number,
   date: string,
   isStorageIn = false,
-  area: Area = 'crew'
+  area: Area = 'crew',
+  header?: { customer?: string; jobNumber?: string; crewLead?: string; crew?: string }
 ) {
   await assertEmployee();
 
@@ -159,9 +160,20 @@ export async function createJob(
       const sequence_no = prev ? prev.sequence_no + 1 : 1;
 
       const { rows: jr } = await client.query(
-        `INSERT INTO materials_jobs (job_date, truck_id, sequence_no, is_storage_in, created_by)
-         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-        [date, truckId, sequence_no, isStorageIn, createdBy]
+        `INSERT INTO materials_jobs
+           (job_date, truck_id, sequence_no, is_storage_in, created_by, customer, job_number, crew_lead, crew)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+        [
+          date,
+          truckId,
+          sequence_no,
+          isStorageIn,
+          createdBy,
+          header?.customer?.trim() || null,
+          header?.jobNumber?.trim() || null,
+          header?.crewLead?.trim() || null,
+          header?.crew?.trim() || null,
+        ]
       );
       const id = jr[0].id as number;
 

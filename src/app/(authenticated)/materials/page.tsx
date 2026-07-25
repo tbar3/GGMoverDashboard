@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getCurrentEmployee } from '@/lib/auth';
-import { getTrucks, getCrewRecentJobs } from '@/lib/materials/queries';
+import { getTrucks, getCrewRecentJobs, getCrewEmployeeNames } from '@/lib/materials/queries';
 import { createJob } from '@/lib/materials/actions';
 
 export const dynamic = 'force-dynamic';
@@ -23,14 +23,23 @@ export default async function MaterialsCrewHome() {
     );
   }
 
-  const [trucks, recent] = await Promise.all([getTrucks(), getCrewRecentJobs()]);
+  const [trucks, recent, crewNames] = await Promise.all([
+    getTrucks(),
+    getCrewRecentJobs(),
+    getCrewEmployeeNames(),
+  ]);
 
   async function start(formData: FormData) {
     'use server';
     const truckId = Number(formData.get('truckId'));
     const date = String(formData.get('date'));
     const storageIn = formData.get('storageIn') === 'on';
-    await createJob(truckId, date, storageIn, 'crew');
+    await createJob(truckId, date, storageIn, 'crew', {
+      customer: String(formData.get('customer') ?? ''),
+      jobNumber: String(formData.get('jobNumber') ?? ''),
+      crewLead: String(formData.get('crewLead') ?? ''),
+      crew: formData.getAll('crew').map(String).join(', '),
+    });
   }
 
   return (
@@ -74,6 +83,45 @@ export default async function MaterialsCrewHome() {
               className="gg-input box-border block h-11 w-full min-w-0 appearance-none"
             />
           </label>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="gg-eyebrow mb-1 block">Customer name</span>
+              <input name="customer" placeholder="e.g. Amber Mirani" className="gg-input w-full" />
+            </label>
+            <label className="block">
+              <span className="gg-eyebrow mb-1 block">Job #</span>
+              <input name="jobNumber" placeholder="e.g. 1804-2" className="gg-input w-full" />
+            </label>
+          </div>
+
+          <label className="block">
+            <span className="gg-eyebrow mb-1 block">Crew Lead</span>
+            <select name="crewLead" defaultValue="" className="gg-input w-full">
+              <option value="">Select…</option>
+              {crewNames.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="block">
+            <span className="gg-eyebrow mb-1 block">Crew</span>
+            {crewNames.length === 0 ? (
+              <p className="font-ui text-sm text-navy-400">No crew members yet — add them under Employees.</p>
+            ) : (
+              <div className="max-h-44 space-y-1 overflow-y-auto rounded-md border-2 border-navy-100 bg-cream-50 p-2">
+                {crewNames.map((name) => (
+                  <label key={name} className="flex items-center gap-2 font-ui text-sm text-navy-700">
+                    <input type="checkbox" name="crew" value={name} className="h-4 w-4" />
+                    {name}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
 
           <label className="flex items-start gap-2 rounded-md border-2 border-navy-100 bg-cream-50 p-3 font-ui text-sm text-navy-700">
             <input type="checkbox" name="storageIn" className="mt-0.5 h-5 w-5" />

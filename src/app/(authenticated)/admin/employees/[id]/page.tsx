@@ -91,8 +91,6 @@ export default async function EditEmployeePage({
         baseOverride={employee.base_multiplier != null ? Number(employee.base_multiplier) : null}
         driverAmount={bonusConfig.driverWeekly}
         leadAmount={bonusConfig.truckLeadWeekly}
-        driverSkillId={driverSkill?.id ?? null}
-        leadSkillId={leadSkill?.id ?? null}
         isDriver={driverSkill ? earnedIds.has(driverSkill.id) : false}
         isLead={leadSkill ? earnedIds.has(leadSkill.id) : false}
       />

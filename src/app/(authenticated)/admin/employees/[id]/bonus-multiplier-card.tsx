@@ -6,9 +6,9 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { grantSkill, revokeSkill, setEmployeeBaseMultiplier } from '@/lib/skills-actions';
+import { Check, Minus } from 'lucide-react';
+import { setEmployeeBaseMultiplier } from '@/lib/skills-actions';
 
 export function BonusMultiplierCard({
   employeeId,
@@ -16,29 +16,25 @@ export function BonusMultiplierCard({
   baseOverride,
   driverAmount,
   leadAmount,
-  driverSkillId,
-  leadSkillId,
-  isDriver: initialDriver,
-  isLead: initialLead,
+  isDriver,
+  isLead,
 }: {
   employeeId: string;
   companyBase: number;
   baseOverride: number | null;
   driverAmount: number;
   leadAmount: number;
-  driverSkillId: string | null;
-  leadSkillId: string | null;
   isDriver: boolean;
   isLead: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [baseInput, setBaseInput] = useState(baseOverride != null ? String(baseOverride) : '');
-  const [isDriver, setIsDriver] = useState(initialDriver);
-  const [isLead, setIsLead] = useState(initialLead);
 
-  const effectiveBase = baseInput.trim() !== '' && !isNaN(Number(baseInput)) ? Number(baseInput) : companyBase;
+  const effectiveBase =
+    baseInput.trim() !== '' && !isNaN(Number(baseInput)) ? Number(baseInput) : companyBase;
   const starting = effectiveBase + (isDriver ? driverAmount : 0) + (isLead ? leadAmount : 0);
+  const round = (n: number) => Math.round(n * 100) / 100;
 
   function saveBase() {
     startTransition(async () => {
@@ -50,43 +46,45 @@ export function BonusMultiplierCard({
     });
   }
 
-  function toggleRole(kind: 'driver' | 'lead', on: boolean) {
-    const skillId = kind === 'driver' ? driverSkillId : leadSkillId;
-    if (!skillId) {
-      toast.error(`The ${kind === 'driver' ? 'Driver' : '2-Truck Lead'} skill isn't set up`);
-      return;
-    }
-    // Optimistic; revert on failure.
-    if (kind === 'driver') setIsDriver(on);
-    else setIsLead(on);
+  function resetBase() {
+    setBaseInput('');
     startTransition(async () => {
-      const res = on ? await grantSkill(employeeId, skillId) : await revokeSkill(employeeId, skillId);
+      const res = await setEmployeeBaseMultiplier(employeeId, null);
       if (res.ok) {
-        toast.success(`${kind === 'driver' ? 'Driver' : '2-Truck Lead'} ${on ? 'added' : 'removed'}`);
+        toast.success('Reset to company default');
         router.refresh();
-      } else {
-        toast.error(res.error ?? 'Could not update');
-        if (kind === 'driver') setIsDriver(!on);
-        else setIsLead(!on);
-      }
+      } else toast.error(res.error ?? 'Could not reset');
     });
   }
+
+  const RoleRow = ({ on, label, amount }: { on: boolean; label: string; amount: number }) => (
+    <div className="flex items-center gap-2 text-sm">
+      {on ? (
+        <Check className="h-4 w-4 text-green-600" />
+      ) : (
+        <Minus className="h-4 w-4 text-muted-foreground" />
+      )}
+      <span className={on ? '' : 'text-muted-foreground'}>{label}</span>
+      <span className={on ? 'font-medium' : 'text-muted-foreground'}>+{amount}×</span>
+      {!on && <span className="text-xs text-muted-foreground/70">(skill not earned)</span>}
+    </div>
+  );
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Bonus multiplier</CardTitle>
         <CardDescription>
-          Their weekly starting multiplier: base + role add-ons. Positives earned during the week
-          stack on top of this.
+          Their weekly starting multiplier: base + role add-ons. Driver and 2-Truck Lead come straight
+          from the skills below — check them in Skills &amp; Pay Scale and they apply here automatically.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Live starting-multiplier readout */}
         <div className="rounded-lg bg-muted p-3 flex items-baseline gap-2">
-          <span className="text-3xl font-bold">{Math.round(starting * 100) / 100}×</span>
+          <span className="text-3xl font-bold">{round(starting)}×</span>
           <span className="text-sm text-muted-foreground">
-            = base {Math.round(effectiveBase * 100) / 100}
+            = base {round(effectiveBase)}
             {isDriver ? ` + Driver ${driverAmount}` : ''}
             {isLead ? ` + 2-Truck Lead ${leadAmount}` : ''}
           </span>
@@ -110,18 +108,7 @@ export function BonusMultiplierCard({
             Save base
           </Button>
           {baseOverride != null && (
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setBaseInput('');
-                startTransition(async () => {
-                  await setEmployeeBaseMultiplier(employeeId, null);
-                  toast.success('Reset to company default');
-                  router.refresh();
-                });
-              }}
-              disabled={pending}
-            >
+            <Button variant="ghost" onClick={resetBase} disabled={pending}>
               Reset to default
             </Button>
           )}
@@ -130,17 +117,14 @@ export function BonusMultiplierCard({
           Leave blank to use the company default ({companyBase}).
         </p>
 
-        {/* Role add-ons */}
+        {/* Role add-ons — reflected from skills, not editable here */}
         <div className="space-y-2 border-t pt-3">
-          <p className="text-sm font-medium">Role add-ons (+{driverAmount} each)</p>
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={isDriver} onCheckedChange={(c) => toggleRole('driver', c as boolean)} disabled={pending} />
-            Driver <span className="text-muted-foreground">(+{driverAmount}× and grants the Driver skill)</span>
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={isLead} onCheckedChange={(c) => toggleRole('lead', c as boolean)} disabled={pending} />
-            2-Truck Lead <span className="text-muted-foreground">(+{leadAmount}× and grants the 2-Truck Job Lead skill)</span>
-          </label>
+          <p className="text-sm font-medium">Role add-ons (from skills)</p>
+          <RoleRow on={isDriver} label="Driver" amount={driverAmount} />
+          <RoleRow on={isLead} label="2-Truck Lead" amount={leadAmount} />
+          <p className="text-xs text-muted-foreground/70">
+            Toggle these in Skills &amp; Pay Scale below — they drive both pay and this multiplier.
+          </p>
         </div>
       </CardContent>
     </Card>

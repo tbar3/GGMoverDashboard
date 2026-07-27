@@ -117,6 +117,44 @@ export async function getOnHandMatrix(): Promise<OnHandView> {
   return { truckNames: trucks.map((t) => t.name), rows };
 }
 
+// ── Adjustment grid (editable on-hand by location) ────────────
+export interface AdjustColumn {
+  kind: 'warehouse' | 'truck';
+  id: number;
+  name: string;
+}
+export interface AdjustGrid {
+  columns: AdjustColumn[];
+  materials: { id: number; name: string }[];
+  // current on-hand keyed by `${kind}:${locationId}:${materialId}`
+  current: Record<string, number>;
+}
+
+/** Current per-location on-hand for every material — powers the editable Adjustments grid. */
+export async function getAdjustGrid(): Promise<AdjustGrid> {
+  const [warehouses, trucks, materials, wh, ts] = await Promise.all([
+    query<{ id: number; name: string }>('SELECT id, name FROM warehouses WHERE active = TRUE ORDER BY name'),
+    query<{ id: number; name: string }>('SELECT id, name FROM trucks WHERE active = TRUE ORDER BY sort_order, name'),
+    query<{ id: number; name: string }>('SELECT id, name FROM materials WHERE active = TRUE ORDER BY sort_order, name'),
+    query<{ warehouse_id: number; material_id: number; on_hand: number }>(
+      'SELECT warehouse_id, material_id, on_hand::float8 AS on_hand FROM warehouse_stock'
+    ),
+    query<{ truck_id: number; material_id: number; on_hand: number }>(
+      'SELECT truck_id, material_id, on_hand::float8 AS on_hand FROM truck_stock'
+    ),
+  ]);
+
+  const columns: AdjustColumn[] = [
+    ...warehouses.map((w) => ({ kind: 'warehouse' as const, id: w.id, name: w.name })),
+    ...trucks.map((t) => ({ kind: 'truck' as const, id: t.id, name: t.name })),
+  ];
+  const current: Record<string, number> = {};
+  for (const r of wh) current[`warehouse:${r.warehouse_id}:${r.material_id}`] = Number(r.on_hand);
+  for (const r of ts) current[`truck:${r.truck_id}:${r.material_id}`] = Number(r.on_hand);
+
+  return { columns, materials, current };
+}
+
 export interface UnclosedSheet {
   id: number;
   label: string;

@@ -83,3 +83,50 @@ export async function adjustStock(input: {
   revalidateInventory();
   return { ok: true };
 }
+
+export interface AdjustCell {
+  materialId: number;
+  location: 'warehouse' | 'truck';
+  locationId: number;
+  delta: number; // new value − current value
+}
+
+/**
+ * Apply many on-hand corrections at once (the editable Adjustments grid). Each
+ * changed cell becomes a ledger 'adjustment' row + a stock update, all in one
+ * transaction with a shared reason.
+ */
+export async function adjustStockBatch(
+  cells: AdjustCell[],
+  reason: string
+): Promise<Result & { count?: number }> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  if (!reason.trim()) return { ok: false, error: 'A reason is required' };
+
+  const changes = (cells ?? []).filter(
+    (c) => c.materialId && c.locationId && Number.isFinite(c.delta) && c.delta !== 0
+  );
+  if (changes.length === 0) return { ok: false, error: 'No changes to save' };
+
+  await withTransaction(async (client) => {
+    for (const c of changes) {
+      const isWarehouse = c.location === 'warehouse';
+      const locCol = isWarehouse ? 'warehouse_id' : 'truck_id';
+      const stockTable = isWarehouse ? 'warehouse_stock' : 'truck_stock';
+      await client.query(
+        `INSERT INTO inventory_transactions (material_id, ${locCol}, type, qty_delta, note, created_by)
+         VALUES ($1, $2, 'adjustment', $3, $4, $5)`,
+        [c.materialId, c.locationId, c.delta, reason.trim(), guard.employee.name]
+      );
+      await client.query(
+        `INSERT INTO ${stockTable} (${locCol}, material_id, on_hand) VALUES ($1, $2, $3)
+         ON CONFLICT (${locCol}, material_id)
+           DO UPDATE SET on_hand = ${stockTable}.on_hand + $3, updated_at = NOW()`,
+        [c.locationId, c.materialId, c.delta]
+      );
+    }
+  });
+  revalidateInventory();
+  return { ok: true, count: changes.length };
+}

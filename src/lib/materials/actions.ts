@@ -630,3 +630,26 @@ export async function reassignJobTruck(
   }
   return result;
 }
+
+/**
+ * Delete a job. If it was completed, its inventory effect is reversed (stock
+ * restored, load/use ledger rows dropped) before the row is removed; job_counts
+ * cascade. Back office only.
+ */
+export async function deleteJob(jobId: number) {
+  await assertBackOffice();
+  await withTransaction(async (client) => {
+    const { rows } = await client.query(
+      'SELECT id, status FROM materials_jobs WHERE id=$1 FOR UPDATE',
+      [jobId]
+    );
+    const job = rows[0];
+    if (!job) return;
+    if (job.status === 'complete') {
+      await reverseJobEffect(client, jobId); // restore stock + drop load/use rows
+    }
+    await client.query('DELETE FROM materials_jobs WHERE id=$1', [jobId]); // cascades job_counts
+  });
+  revalidatePath('/admin/materials');
+  revalidatePath('/admin/materials/history');
+}

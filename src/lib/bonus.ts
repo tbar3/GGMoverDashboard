@@ -1,6 +1,11 @@
 import { query, queryOne } from '@/lib/db';
-import { startOfWeek, format } from 'date-fns';
+import { startOfWeek, format, addDays } from 'date-fns';
 import { getNumberSetting } from '@/lib/settings';
+
+/** Add days to a yyyy-MM-dd string, returning yyyy-MM-dd (noon-anchored, TZ-safe). */
+function addDaysStr(dateStr: string, days: number): string {
+  return format(addDays(new Date(`${dateStr}T12:00:00`), days), 'yyyy-MM-dd');
+}
 
 /**
  * Weekly bonus engine (BONUS_FEATURE_SPEC).
@@ -278,6 +283,50 @@ export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
     const result = computeWeek(events, hours, config, { autoBonus: autoBonus.get(e.id) ?? 0 });
     return { employeeId: e.id, name: e.name, events, result };
   });
+}
+
+export interface WeekJobOption {
+  id: string;
+  date: string;
+  jobNumber: string | null;
+  customer: string | null;
+  startTime: string | null;
+  crewCount: number;
+  crewNames: string[];
+}
+
+/** Jobs in a week that have a crew, for the group-event picker. Most recent first. */
+export async function getWeekJobs(weekStart: string): Promise<WeekJobOption[]> {
+  const weekEnd = addDaysStr(weekStart, 6);
+  const rows = await query<{
+    id: string;
+    date: string;
+    job_number: string | null;
+    customer_name: string | null;
+    start_time: string | null;
+    crew_ids: string[] | null;
+    crew_names: string[] | null;
+  }>(
+    `SELECT j.id, j.date::text, j.job_number, j.customer_name, j.start_time, j.crew_ids,
+            ARRAY(
+              SELECT e.name FROM employees e
+               WHERE e.id = ANY(j.crew_ids) ORDER BY e.name
+            ) AS crew_names
+       FROM jobs j
+      WHERE j.date >= $1 AND j.date <= $2
+        AND COALESCE(array_length(j.crew_ids, 1), 0) > 0
+      ORDER BY j.date DESC, j.start_time`,
+    [weekStart, weekEnd]
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    date: r.date,
+    jobNumber: r.job_number,
+    customer: r.customer_name,
+    startTime: r.start_time,
+    crewCount: (r.crew_ids ?? []).filter(Boolean).length,
+    crewNames: r.crew_names ?? [],
+  }));
 }
 
 // ── Week lifecycle (open → approved/locked) ───────────────────

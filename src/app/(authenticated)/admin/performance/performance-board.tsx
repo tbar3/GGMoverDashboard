@@ -23,15 +23,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Star, Sparkles, AlertTriangle, FileWarning, Lock, LockOpen, Download } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Star, Sparkles, AlertTriangle, FileWarning, Lock, LockOpen, Download, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import type { BoardRow, BonusConfig, WeekStatus, SnapshotRow, AdjustmentRow } from '@/lib/bonus';
+import type { BoardRow, BonusConfig, WeekStatus, SnapshotRow, AdjustmentRow, WeekJobOption } from '@/lib/bonus';
 import {
   logPositive,
   logGGPoint,
   logStrike,
   logWriteUp,
+  logGroupEvent,
   voidStrike,
   deletePositive,
   approveWeek,
@@ -93,6 +94,7 @@ export default function PerformanceBoard({
   weekStatus,
   lockedResults,
   adjustments,
+  weekJobs,
 }: {
   board: BoardRow[];
   employees: { id: string; name: string }[];
@@ -105,6 +107,7 @@ export default function PerformanceBoard({
   weekStatus: WeekStatus;
   lockedResults: SnapshotRow[];
   adjustments: AdjustmentRow[];
+  weekJobs: WeekJobOption[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -116,6 +119,11 @@ export default function PerformanceBoard({
   const [adjAmount, setAdjAmount] = useState('');
   const [adjReason, setAdjReason] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'bonus'>('name');
+  // Group-event (whole-crew-by-job) form.
+  const [groupJobId, setGroupJobId] = useState('');
+  const [groupType, setGroupType] = useState('');
+  const [groupDate, setGroupDate] = useState(localToday());
+  const [groupNote, setGroupNote] = useState('');
 
   const locked = weekStatus.status === 'approved';
 
@@ -198,6 +206,33 @@ export default function PerformanceBoard({
         router.refresh();
       } else {
         toast.error(res.error ?? 'Could not log the event');
+      }
+    });
+  }
+
+  const groupKind = kindFor(groupType);
+  const selectedJob = weekJobs.find((j) => j.id === groupJobId);
+
+  function submitGroup() {
+    if (!groupJobId) return toast.error('Pick a job');
+    if (!groupType) return toast.error('Pick an event type');
+    const gk = kindFor(groupType);
+    if (gk === 'writeup') return toast.error('Write-ups are logged individually');
+    startTransition(async () => {
+      const res = await logGroupEvent({
+        jobId: groupJobId,
+        kind: gk as 'positive' | 'discretionary' | 'strike',
+        type: groupType,
+        eventDate: groupDate,
+        note: groupNote,
+      });
+      if (res.ok) {
+        toast.success(`Logged ${labelFor(groupType)} for ${res.count} crew`);
+        setGroupType('');
+        setGroupNote('');
+        router.refresh();
+      } else {
+        toast.error(res.error ?? 'Could not log the group event');
       }
     });
   }
@@ -414,6 +449,94 @@ export default function PerformanceBoard({
               {pending ? 'Saving…' : 'Log event'}
             </Button>
           </div>
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Group event — apply one event to a whole job's crew at once */}
+      {!locked && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" /> Group event (whole crew)
+          </CardTitle>
+          <CardDescription>
+            Pick a job and log a whole-crew event once — Truck Not Ready, 5-Star Review, Compliance
+            Plus, etc. — instead of adding it to each person.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {weekJobs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No crewed jobs found for this week. Jobs appear here once they&apos;re synced with a crew.
+            </p>
+          ) : (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 lg:items-end">
+                <div className="space-y-1.5">
+                  <Label>Job</Label>
+                  <Select value={groupJobId} onValueChange={setGroupJobId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a job…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {weekJobs.map((j) => (
+                        <SelectItem key={j.id} value={j.id}>
+                          {format(new Date(`${j.date}T12:00:00`), 'EEE M/d')} ·{' '}
+                          {j.jobNumber ? `#${j.jobNumber} · ` : ''}
+                          {j.customer ?? 'Job'} ({j.crewCount})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Event</Label>
+                  <Select value={groupType} onValueChange={setGroupType}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EVENT_OPTIONS.filter((o) => o.kind !== 'writeup').map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                          {o.kind === 'positive' && ' ▲'}
+                          {o.kind === 'discretionary' && ' ✦'}
+                          {o.kind === 'strike' && ' ✕'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Date</Label>
+                  <Input type="date" value={groupDate} onChange={(e) => setGroupDate(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Note (optional)</Label>
+                  <Input
+                    value={groupNote}
+                    onChange={(e) => setGroupNote(e.target.value)}
+                    placeholder="e.g. tailgate left open"
+                  />
+                </div>
+                <Button onClick={submitGroup} disabled={pending || !groupJobId || !groupType}>
+                  {pending
+                    ? 'Saving…'
+                    : `Apply to crew${selectedJob ? ` (${selectedJob.crewCount})` : ''}`}
+                </Button>
+              </div>
+              {selectedJob && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {groupType ? `${labelFor(groupType)} → ` : 'Applies to: '}
+                  {selectedJob.crewNames.join(', ')}
+                  {groupKind === 'strike' && (
+                    <span className="text-destructive"> · counts as a strike for each</span>
+                  )}
+                </p>
+              )}
+            </>
+          )}
         </CardContent>
       </Card>
       )}

@@ -148,6 +148,67 @@ export async function logWriteUp(input: {
   return { ok: true };
 }
 
+/**
+ * Apply one event to every crew member on a job at once — e.g. "Truck Not Ready"
+ * or a whole-crew 5-Star Review — instead of logging it person by person.
+ */
+export async function logGroupEvent(input: {
+  jobId: string;
+  kind: 'positive' | 'discretionary' | 'strike';
+  type?: string;
+  eventDate: string;
+  note?: string;
+}): Promise<Result & { count?: number }> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  const date = validDate(input.eventDate);
+  if (!date) return { ok: false, error: 'Pick a valid date' };
+  if (!input.jobId) return { ok: false, error: 'Pick a job' };
+
+  if (input.kind === 'positive' && !POSITIVE_SET.has(input.type ?? '')) {
+    return { ok: false, error: 'Unknown positive type' };
+  }
+  if (input.kind === 'strike' && !STRIKE_SET.has(input.type ?? '')) {
+    return { ok: false, error: 'Unknown strike type' };
+  }
+
+  const job = await queryOne<{ crew_ids: string[] }>(
+    'SELECT crew_ids FROM jobs WHERE id = $1',
+    [input.jobId]
+  );
+  const crew = (job?.crew_ids ?? []).filter(Boolean);
+  if (crew.length === 0) return { ok: false, error: 'This job has no crew assigned' };
+
+  const weekStart = weekStartOf(date);
+  const note = input.note?.trim() || null;
+
+  for (const employeeId of crew) {
+    if (input.kind === 'strike') {
+      await query(
+        `INSERT INTO bonus_strikes (employee_id, week_start, type, event_date, note, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [employeeId, weekStart, input.type, date, note, guard.employee.id]
+      );
+      await maybeAutoWriteUp(employeeId, weekStart, date, guard.employee.id);
+    } else if (input.kind === 'discretionary') {
+      await query(
+        `INSERT INTO bonus_positives (employee_id, week_start, type, event_date, note, source, created_by, discretionary)
+         VALUES ($1, $2, 'GG_POINT', $3, $4, 'group', $5, TRUE)`,
+        [employeeId, weekStart, date, note, guard.employee.id]
+      );
+    } else {
+      await query(
+        `INSERT INTO bonus_positives (employee_id, week_start, type, event_date, note, source, created_by)
+         VALUES ($1, $2, $3, $4, $5, 'group', $6)`,
+        [employeeId, weekStart, input.type, date, note, guard.employee.id]
+      );
+    }
+  }
+
+  revalidatePath('/admin/performance');
+  return { ok: true, count: crew.length };
+}
+
 export async function voidStrike(strikeId: string, reason: string): Promise<Result> {
   const guard = await requireBackOffice();
   if (!guard.ok) return { ok: false, error: 'Back office access required' };

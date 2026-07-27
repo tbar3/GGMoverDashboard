@@ -101,6 +101,8 @@ export interface Attendance {
   employee_id: string;
   date: string;
   arrival_time: string | null;
+  scheduled_start: string; // TIME, default 07:15
+  late_minutes: number;
   is_tardy: boolean;
   in_uniform: boolean;
   notes: string | null;

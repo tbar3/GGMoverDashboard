@@ -17,9 +17,19 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { Employee, Attendance, CONFIG } from '@/types';
-import { Save } from 'lucide-react';
+import { Save, Download } from 'lucide-react';
+
+const DEFAULT_START = `${CONFIG.TARDY_CUTOFF_HOUR.toString().padStart(2, '0')}:${CONFIG.TARDY_CUTOFF_MINUTE.toString().padStart(2, '0')}`;
+
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().split('T')[0];
+}
 
 export default function AttendancePage() {
+  const [exportStart, setExportStart] = useState(daysAgo(13));
+  const [exportEnd, setExportEnd] = useState(daysAgo(0));
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendance, setAttendance] = useState<Record<string, Attendance>>({});
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -50,26 +60,30 @@ export default function AttendancePage() {
   }
 
   function updateAttendance(employeeId: string, field: keyof Attendance, value: string | boolean) {
-    setAttendance(prev => ({
-      ...prev,
-      [employeeId]: {
-        ...prev[employeeId],
+    setAttendance(prev => {
+      const existing = prev[employeeId];
+      const next = {
+        ...existing,
         employee_id: employeeId,
         date: selectedDate,
+        scheduled_start: existing?.scheduled_start || DEFAULT_START,
         [field]: value,
-        ...(field === 'arrival_time' && typeof value === 'string' ? {
-          is_tardy: checkTardy(value),
-        } : {}),
-      } as Attendance,
-    }));
+      } as Attendance;
+      // Recompute lateness whenever arrival or scheduled start changes.
+      const late = minutesLate(next.scheduled_start, next.arrival_time);
+      next.late_minutes = late;
+      next.is_tardy = late > 0;
+      return { ...prev, [employeeId]: next };
+    });
   }
 
-  function checkTardy(timeString: string): boolean {
-    if (!timeString) return false;
-    const [hours, minutes] = timeString.split(':').map(Number);
-    const cutoffMinutes = CONFIG.TARDY_CUTOFF_HOUR * 60 + CONFIG.TARDY_CUTOFF_MINUTE;
-    const arrivalMinutes = hours * 60 + minutes;
-    return arrivalMinutes > cutoffMinutes;
+  function minutesLate(scheduledStart: string, arrival: string | null): number {
+    if (!arrival) return 0;
+    const toMin = (t: string) => {
+      const [h, m] = t.split(':').map(Number);
+      return (h || 0) * 60 + (m || 0);
+    };
+    return Math.max(0, toMin(arrival) - toMin(scheduledStart || DEFAULT_START));
   }
 
   async function saveAttendance() {
@@ -84,6 +98,8 @@ export default function AttendancePage() {
         employee_id: r.employee_id,
         date: selectedDate,
         arrival_time: r.arrival_time,
+        scheduled_start: r.scheduled_start || DEFAULT_START,
+        late_minutes: r.late_minutes ?? 0,
         is_tardy: r.is_tardy,
         in_uniform: r.in_uniform ?? true,
         notes: r.notes,
@@ -132,6 +148,47 @@ export default function AttendancePage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Export time & events</CardTitle>
+          <CardDescription>
+            Download a CSV of late time (unpaid minutes) plus every positive, GG Point, strike, and
+            write-up across a date range — for payroll and records.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">From</label>
+              <Input
+                type="date"
+                value={exportStart}
+                onChange={(e) => setExportStart(e.target.value)}
+                className="w-auto"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">To</label>
+              <Input
+                type="date"
+                value={exportEnd}
+                onChange={(e) => setExportEnd(e.target.value)}
+                className="w-auto"
+              />
+            </div>
+            <a
+              href={`/api/events/export?start=${exportStart}&end=${exportEnd}`}
+              download
+            >
+              <Button variant="outline">
+                <Download className="h-4 w-4 mr-2" />
+                Download CSV
+              </Button>
+            </a>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>
             Attendance for {format(new Date(selectedDate), 'EEEE, MMMM d, yyyy')}
           </CardTitle>
@@ -145,7 +202,9 @@ export default function AttendancePage() {
               <TableRow>
                 <TableHead>Employee</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Arrival Time</TableHead>
+                <TableHead>Scheduled</TableHead>
+                <TableHead>Arrival</TableHead>
+                <TableHead>Late (unpaid)</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>In Uniform</TableHead>
                 <TableHead>Notes</TableHead>
@@ -165,15 +224,35 @@ export default function AttendancePage() {
                     <TableCell>
                       <Input
                         type="time"
+                        value={record?.scheduled_start || DEFAULT_START}
+                        onChange={(e) => updateAttendance(employee.id, 'scheduled_start', e.target.value)}
+                        className="w-28"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="time"
                         value={record?.arrival_time || ''}
                         onChange={(e) => updateAttendance(employee.id, 'arrival_time', e.target.value)}
-                        className="w-32"
+                        className="w-28"
                       />
+                    </TableCell>
+                    <TableCell>
+                      {record?.arrival_time && (record?.late_minutes ?? 0) > 0 ? (
+                        <span className="text-destructive font-medium">
+                          {record.late_minutes} min
+                          <span className="text-muted-foreground font-normal">
+                            {' '}(−{(record.late_minutes / 60).toFixed(2)} hr)
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/70">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {record?.arrival_time ? (
                         <Badge variant={record.is_tardy ? 'destructive' : 'default'}>
-                          {record.is_tardy ? 'Tardy' : 'On Time'}
+                          {record.is_tardy ? 'Late' : 'On Time'}
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground/70">-</span>

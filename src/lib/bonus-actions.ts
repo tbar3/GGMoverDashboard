@@ -43,10 +43,12 @@ export async function logPositive(input: {
   if (!input.employeeId) return { ok: false, error: 'Pick a crew member' };
   const effective = effectiveOf(input.effectiveDate, todayStr());
 
+  // The bonus week follows the EFFECTIVE (record) date — an event noticed later
+  // counts against the week we log it in.
   await query(
     `INSERT INTO bonus_positives (employee_id, week_start, type, event_date, effective_date, note, source, created_by)
      VALUES ($1, $2, $3, $4, $5, $6, 'manual', $7)`,
-    [input.employeeId, weekStartOf(date), input.type, date, effective, input.note?.trim() || null, guard.employee.id]
+    [input.employeeId, weekStartOf(effective), input.type, date, effective, input.note?.trim() || null, guard.employee.id]
   );
   revalidatePath('/admin/performance');
   return { ok: true };
@@ -69,7 +71,7 @@ export async function logGGPoint(input: {
   await query(
     `INSERT INTO bonus_positives (employee_id, week_start, type, event_date, effective_date, note, source, created_by, discretionary)
      VALUES ($1, $2, 'GG_POINT', $3, $4, $5, 'manual', $6, TRUE)`,
-    [input.employeeId, weekStartOf(date), date, effective, input.note?.trim() || null, guard.employee.id]
+    [input.employeeId, weekStartOf(effective), date, effective, input.note?.trim() || null, guard.employee.id]
   );
   revalidatePath('/admin/performance');
   return { ok: true };
@@ -92,14 +94,16 @@ export async function logStrike(input: {
   const effective = effectiveOf(input.effectiveDate, todayStr());
   const arrival = input.type === 'LATE' ? validArrival(input.arrivalTime) : null;
 
-  const weekStart = weekStartOf(date);
+  // The bonus week follows the EFFECTIVE (record) date.
+  const weekStart = weekStartOf(effective);
   await query(
     `INSERT INTO bonus_strikes (employee_id, week_start, type, event_date, effective_date, arrival_time, note, created_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
     [input.employeeId, weekStart, input.type, date, effective, arrival, input.note?.trim() || null, guard.employee.id]
   );
 
-  // A Late strike with an arrival time also feeds attendance lateness tracking.
+  // A Late strike with an arrival time also feeds attendance lateness tracking,
+  // recorded on the actual day worked (the job date).
   if (arrival) await recordLateArrival(input.employeeId, date, arrival);
 
   // Policy: 3 active strikes in a week auto-generates a write-up (one per week).
@@ -194,7 +198,7 @@ export async function logWriteUp(input: {
   await query(
     `INSERT INTO write_ups (employee_id, week_start, event_date, effective_date, summary, created_by)
      VALUES ($1, $2, $3, $4, $5, $6)`,
-    [input.employeeId, weekStartOf(date), date, effective, summary, guard.employee.id]
+    [input.employeeId, weekStartOf(effective), date, effective, summary, guard.employee.id]
   );
   revalidatePath('/admin/performance');
   return { ok: true };
@@ -238,8 +242,9 @@ export async function logGroupEvent(input: {
     await query('UPDATE jobs SET crew_ids = $2 WHERE id = $1', [input.jobId, crew]);
   }
 
-  const weekStart = weekStartOf(date);
   const effective = effectiveOf(input.effectiveDate, todayStr());
+  // The bonus week follows the EFFECTIVE (record) date, not the job date.
+  const weekStart = weekStartOf(effective);
   const arrival = input.type === 'LATE' ? validArrival(input.arrivalTime) : null;
   const note = input.note?.trim() || null;
 

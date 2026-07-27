@@ -122,6 +122,60 @@ export async function adjustStock(input: {
   return { ok: true };
 }
 
+export type AdjustLocation = { warehouse: number } | { truck: number };
+export interface AbsAdjust {
+  materialId: number;
+  location: AdjustLocation;
+  newValue: number; // the corrected absolute on-hand
+}
+
+/**
+ * Correct warehouse/truck totals to absolute new values after a physical recount
+ * (the live-app Adjust grid). Each change sets the new on-hand and logs the delta
+ * as an 'adjust' transaction. Ported from the live materials app.
+ */
+export async function applyAdjustments(
+  changes: AbsAdjust[],
+  note: string | null
+): Promise<Result & { count?: number }> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  const clean = (changes ?? []).filter(
+    (c) => c.materialId && Number.isFinite(c.newValue) && c.location
+  );
+  if (clean.length === 0) return { ok: false, error: 'No changes to save' };
+
+  await withTransaction(async (client) => {
+    for (const c of clean) {
+      const isWarehouse = 'warehouse' in c.location;
+      const locCol = isWarehouse ? 'warehouse_id' : 'truck_id';
+      const stockTable = isWarehouse ? 'warehouse_stock' : 'truck_stock';
+      const locId = isWarehouse
+        ? (c.location as { warehouse: number }).warehouse
+        : (c.location as { truck: number }).truck;
+
+      const { rows } = await client.query(
+        `SELECT on_hand FROM ${stockTable} WHERE ${locCol}=$1 AND material_id=$2 FOR UPDATE`,
+        [locId, c.materialId]
+      );
+      const current = Number(rows[0]?.on_hand ?? 0);
+      await client.query(
+        `INSERT INTO ${stockTable} (${locCol}, material_id, on_hand, updated_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (${locCol}, material_id) DO UPDATE SET on_hand=$3, updated_at=NOW()`,
+        [locId, c.materialId, c.newValue]
+      );
+      await client.query(
+        `INSERT INTO inventory_transactions (material_id, ${locCol}, type, qty_delta, note, created_by)
+         VALUES ($1, $2, 'adjust', $3, $4, $5)`,
+        [c.materialId, locId, c.newValue - current, note, guard.employee.name]
+      );
+    }
+  });
+  revalidateInventory();
+  return { ok: true, count: clean.length };
+}
+
 export interface AdjustCell {
   materialId: number;
   location: 'warehouse' | 'truck';

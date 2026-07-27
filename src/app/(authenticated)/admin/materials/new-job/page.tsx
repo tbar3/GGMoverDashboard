@@ -1,117 +1,82 @@
-import { getTrucks, getCrewEmployeeNames } from '@/lib/materials/queries';
+import { getTrucks } from '@/lib/materials/queries';
 import { createJob } from '@/lib/materials/actions';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export const dynamic = 'force-dynamic';
 
 function today(): string {
+  // Local date in YYYY-MM-DD (server timezone is fine for a single-warehouse app)
   return new Date().toLocaleDateString('en-CA');
 }
 
-const field = 'w-full rounded-md border bg-background px-3 py-2 text-sm';
-const label = 'mb-1 block text-xs font-medium text-muted-foreground';
-
-export default async function NewMaterialsJobPage() {
-  const [trucks, crewNames] = await Promise.all([getTrucks(), getCrewEmployeeNames()]);
+export default async function NewJobPage() {
+  const trucks = await getTrucks();
 
   async function start(formData: FormData) {
     'use server';
     const truckId = Number(formData.get('truckId'));
     const date = String(formData.get('date'));
     const storageIn = formData.get('storageIn') === 'on';
-    await createJob(truckId, date, storageIn, 'crew', {
-      customer: String(formData.get('customer') ?? ''),
-      jobNumber: String(formData.get('jobNumber') ?? ''),
-      crewLead: String(formData.get('crewLead') ?? ''),
-      crew: formData.getAll('crew').map(String).join(', '),
-    });
+    await createJob(truckId, date, storageIn);
   }
 
   return (
-    <Card className="max-w-2xl">
-      <CardHeader>
-        <CardTitle>New count sheet</CardTitle>
-        <CardDescription>
-          Start a truck count. It opens the sheet, pre-filled with the details you enter here.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {trucks.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Add a truck under Settings first.</p>
-        ) : (
-          <form action={start} className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className={label}>Truck</label>
-                <select name="truckId" required defaultValue="" className={field}>
-                  <option value="" disabled>
-                    Choose…
-                  </option>
-                  {trucks.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={label}>Date</label>
-                <input type="date" name="date" required defaultValue={today()} className={field} />
-              </div>
-              <div>
-                <label className={label}>Customer name</label>
-                <input name="customer" placeholder="e.g. Amber Mirani" className={field} />
-              </div>
-              <div>
-                <label className={label}>Job #</label>
-                <input name="jobNumber" placeholder="e.g. 1804-2" className={field} />
-              </div>
-              <div>
-                <label className={label}>Crew Lead</label>
-                <select name="crewLead" defaultValue="" className={field}>
-                  <option value="">Select…</option>
-                  {crewNames.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+    <div className="mx-auto max-w-md">
+      <p className="gg-eyebrow mb-1">New Job</p>
+      <h1 className="mb-1 font-display text-2xl font-bold tracking-tight text-navy-700">
+        Start a Job Count
+      </h1>
+      <p className="mb-5 font-ui text-sm text-navy-500">
+        Pick the truck and date. Pre-Dispatch counts pre-fill from what&apos;s currently on that
+        truck.
+      </p>
 
-            <div>
-              <label className={label}>Crew</label>
-              {crewNames.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No crew members yet — add them under Employees.</p>
-              ) : (
-                <div className="max-h-44 space-y-1 overflow-y-auto rounded-md border p-2">
-                  {crewNames.map((n) => (
-                    <label key={n} className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" name="crew" value={n} className="h-4 w-4" />
-                      {n}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
+      {trucks.length === 0 ? (
+        <p className="rounded-lg border-2 border-warning bg-warning/10 p-4 font-ui text-sm text-navy-700">
+          No trucks yet. Add one under <strong>Admin</strong> first.
+        </p>
+      ) : (
+        <form action={start} className="gg-card space-y-4 p-5">
+          <label className="block">
+            <span className="gg-eyebrow mb-1 block">Truck</span>
+            <select name="truckId" required defaultValue="" className="gg-input w-full">
+              <option value="" disabled>
+                Choose a truck…
+              </option>
+              {trucks.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
 
-            <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
-              <input type="checkbox" name="storageIn" className="mt-0.5 h-4 w-4" />
-              <span>
-                <span className="font-medium">Storage-In job</span>
-                <span className="block text-muted-foreground">Pads stay wrapped in storage.</span>
+          <label className="block">
+            <span className="gg-eyebrow mb-1 block">Date</span>
+            <input
+              type="date"
+              name="date"
+              required
+              defaultValue={today()}
+              className="gg-input box-border block h-11 w-full min-w-0 appearance-none"
+            />
+          </label>
+
+          <label className="flex items-start gap-2 rounded-md border-2 border-navy-100 bg-cream-50 p-3 font-ui text-sm text-navy-700">
+            <input type="checkbox" name="storageIn" className="mt-0.5 h-5 w-5" />
+            <span>
+              <span className="font-semibold">Storage-In job</span>
+              <span className="block text-navy-500">
+                Pads stay wrapped in storage. In Step 2 the crew records pads left in storage on the
+                Furniture Pads row — charged to the customer and deducted from total pads on hand.
               </span>
-            </label>
+            </span>
+          </label>
 
-            <button
-              type="submit"
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              Open count sheet
-            </button>
-          </form>
-        )}
-      </CardContent>
-    </Card>
+          <button type="submit" className="gg-btn-cta w-full">
+            Open Count Sheet
+          </button>
+        </form>
+      )}
+    </div>
   );
 }

@@ -366,6 +366,8 @@ export default function PerformanceBoard({
         hours: r.hours,
         hasHours: r.hours > 0,
         bonus: r.bonus,
+        estHours: 0,
+        estBonus: r.bonus, // locked → frozen actual is the figure
       }))
     : board.map((row) => ({
         employeeId: row.employeeId,
@@ -378,6 +380,8 @@ export default function PerformanceBoard({
         hours: row.result.hours,
         hasHours: row.result.hours > 0,
         bonus: row.result.bonus,
+        estHours: row.estHours,
+        estBonus: row.estBonus,
       }));
 
   // Dispatch view: sort by last week's earned bonus, highest first.
@@ -723,6 +727,7 @@ export default function PerformanceBoard({
                 <TableHead className="text-center">Strikes</TableHead>
                 <TableHead className="text-center">Perfect week</TableHead>
                 <TableHead className="text-right">Multiplier</TableHead>
+                {!locked && <TableHead className="text-right">Est. bonus</TableHead>}
                 <TableHead className="text-right">Bonus</TableHead>
                 {locked && <TableHead className="text-right">Net</TableHead>}
               </TableRow>
@@ -732,7 +737,11 @@ export default function PerformanceBoard({
                 const adj = adjByEmp.get(row.employeeId) ?? 0;
                 return (
                   <TableRow key={row.employeeId}>
-                    <TableCell className="font-medium">{row.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <Link href={`/admin/employees/${row.employeeId}`} className="hover:underline">
+                        {row.name}
+                      </Link>
+                    </TableCell>
                     <TableCell className="text-center">
                       {row.positivesCount || <span className="text-muted-foreground">0</span>}
                     </TableCell>
@@ -761,6 +770,19 @@ export default function PerformanceBoard({
                         `${row.multiplier}×`
                       )}
                     </TableCell>
+                    {!locked && (
+                      <TableCell className="text-right">
+                        {row.multiplier === 0 ? (
+                          <span className="text-destructive">{money(0)}</span>
+                        ) : row.estHours > 0 ? (
+                          <span title={`${row.estHours.toFixed(1)} est. hrs × ${row.multiplier}×`}>
+                            {money(row.estBonus)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">
                       {row.multiplier === 0 ? (
                         <span className="text-destructive font-semibold">{money(0)}</span>

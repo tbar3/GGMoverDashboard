@@ -224,6 +224,8 @@ export interface BoardRow {
   name: string;
   events: WeekEvents;
   result: WeekResult;
+  estHours: number; // estimated hours from the week's assigned jobs
+  estBonus: number; // projected bonus = estHours × baseRate × multiplier
 }
 
 /**
@@ -234,7 +236,7 @@ export interface BoardRow {
  */
 export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
   const config = await getBonusConfig();
-  const [employees, positives, strikes, writeUps, payroll] = await Promise.all([
+  const [employees, positives, strikes, writeUps, payroll, estimated] = await Promise.all([
     query<{ id: string; name: string }>(
       'SELECT id, name FROM employees WHERE is_active = TRUE ORDER BY name'
     ),
@@ -261,11 +263,21 @@ export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
          FROM payroll_entries WHERE week_start = $1`,
       [weekStart]
     ),
+    // Estimated hours from the jobs each crew member is assigned to this week —
+    // lets us project the bonus before the payroll import lands.
+    query<{ employee_id: string; est_hours: number }>(
+      `SELECT c.employee_id, COALESCE(SUM(j.estimated_hours), 0)::float8 AS est_hours
+         FROM jobs j, unnest(j.crew_ids) AS c(employee_id)
+        WHERE j.date >= $1 AND j.date <= $1::date + 6
+        GROUP BY c.employee_id`,
+      [weekStart]
+    ),
   ]);
 
   const forEmp = <T extends { employee_id: string }>(rows: T[], id: string) =>
     rows.filter((r) => r.employee_id === id);
   const hoursByEmployee = new Map(payroll.map((p) => [p.employee_id, Number(p.bonus_hours) || 0]));
+  const estByEmployee = new Map(estimated.map((r) => [r.employee_id, Number(r.est_hours) || 0]));
   const autoBonus = await roleAutoBonusMap(config);
 
   return employees.map((e) => {
@@ -276,8 +288,48 @@ export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
     };
     const hours = hoursByEmployee.get(e.id) ?? 0;
     const result = computeWeek(events, hours, config, { autoBonus: autoBonus.get(e.id) ?? 0 });
-    return { employeeId: e.id, name: e.name, events, result };
+    const estHours = estByEmployee.get(e.id) ?? 0;
+    const estBonus = round2(estHours * config.baseRate * result.multiplier);
+    return { employeeId: e.id, name: e.name, events, result, estHours, estBonus };
   });
+}
+
+export interface EstimatedWeekBonus {
+  weekStart: string;
+  estHours: number;
+  multiplier: number;
+  estBonus: number;
+  hasStrike: boolean;
+}
+
+/**
+ * One employee's projected bonus for a week from the ESTIMATED hours of the jobs
+ * they're assigned to (before the payroll import lands): estHours × baseRate ×
+ * this week's multiplier.
+ */
+export async function getEstimatedWeekBonus(
+  employeeId: string,
+  weekStart: string
+): Promise<EstimatedWeekBonus> {
+  const [config, week, row] = await Promise.all([
+    getBonusConfig(),
+    getEmployeeWeek(employeeId, weekStart),
+    queryOne<{ est: number }>(
+      `SELECT COALESCE(SUM(j.estimated_hours), 0)::float8 AS est
+         FROM jobs j
+        WHERE $1 = ANY(j.crew_ids) AND j.date >= $2 AND j.date <= $2::date + 6`,
+      [employeeId, weekStart]
+    ),
+  ]);
+  const estHours = Number(row?.est) || 0;
+  const estBonus = round2(estHours * config.baseRate * week.result.multiplier);
+  return {
+    weekStart,
+    estHours,
+    multiplier: week.result.multiplier,
+    estBonus,
+    hasStrike: week.result.hasStrike,
+  };
 }
 
 export interface JobCrewOption {

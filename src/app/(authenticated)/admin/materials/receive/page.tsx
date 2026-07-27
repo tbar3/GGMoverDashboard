@@ -1,22 +1,28 @@
-import { query } from '@/lib/db';
-import { getTransactions } from '@/lib/materials/inventory';
+import { getInventory } from '@/lib/materials/live-inventory';
 import { ReceiveForm } from './receive-form';
-import { TxnList } from '../txn-list';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ReceivePage() {
-  const [materials, warehouses, txns] = await Promise.all([
-    query<{ id: number; name: string }>('SELECT id, name FROM materials WHERE active = TRUE ORDER BY sort_order, name'),
-    query<{ id: number; name: string }>('SELECT id, name FROM warehouses WHERE active = TRUE ORDER BY name'),
-    getTransactions(15),
-  ]);
-  const receives = txns.filter((t) => t.type === 'receive');
+  const inv = await getInventory();
+  const warehouses =
+    inv[0]?.warehouses.map((w) => ({ id: w.warehouseId, name: w.name })) ?? [];
+  const rows = inv.map((r) => ({
+    id: r.material.id,
+    name: r.material.name,
+    byWarehouse: Object.fromEntries(r.warehouses.map((w) => [w.warehouseId, w.on_hand])) as Record<
+      number,
+      number
+    >,
+  }));
 
   return (
-    <div className="space-y-6">
-      <ReceiveForm materials={materials} warehouses={warehouses} />
-      <TxnList title="Recent receipts" rows={receives} />
+    <div>
+      <h1 className="mb-1 text-xl font-bold text-navy-700">Receive Stock</h1>
+      <p className="mb-5 font-ui text-sm text-navy-500">
+        Add delivered supplies to a warehouse. Each entry is logged.
+      </p>
+      <ReceiveForm warehouses={warehouses} rows={rows} />
     </div>
   );
 }

@@ -45,6 +45,44 @@ export async function receiveStock(input: {
   return { ok: true };
 }
 
+/**
+ * Receive delivered stock into a warehouse for many materials at once (the
+ * live-app Receive screen). Each entry is a +delta on warehouse_stock plus a
+ * 'receive' ledger row. Ported from the live materials app.
+ */
+export async function receiveStockBatch(
+  warehouseId: number,
+  entries: { material_id: number; qty: number }[],
+  note: string | null
+): Promise<Result & { count?: number }> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  if (!Number.isInteger(warehouseId) || warehouseId <= 0) {
+    return { ok: false, error: 'Pick a warehouse' };
+  }
+  const clean = (entries ?? []).filter((e) => e.material_id && Number.isFinite(e.qty) && e.qty !== 0);
+  if (clean.length === 0) return { ok: false, error: 'Enter a quantity for at least one item' };
+
+  await withTransaction(async (client) => {
+    for (const e of clean) {
+      await client.query(
+        `INSERT INTO warehouse_stock (warehouse_id, material_id, on_hand, updated_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (warehouse_id, material_id)
+           DO UPDATE SET on_hand = warehouse_stock.on_hand + $3, updated_at = NOW()`,
+        [warehouseId, e.material_id, e.qty]
+      );
+      await client.query(
+        `INSERT INTO inventory_transactions (material_id, warehouse_id, type, qty_delta, note, created_by)
+         VALUES ($1, $2, 'receive', $3, $4, $5)`,
+        [e.material_id, warehouseId, e.qty, note, guard.employee.name]
+      );
+    }
+  });
+  revalidateInventory();
+  return { ok: true, count: clean.length };
+}
+
 /** Manual stock adjustment (+/-) on a warehouse or truck, with a required reason. */
 export async function adjustStock(input: {
   materialId: string;

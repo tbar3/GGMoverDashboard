@@ -94,15 +94,10 @@ export async function getOnHandMatrix(): Promise<OnHandView> {
     query<{ material_id: number; on_hand: number }>(
       'SELECT material_id, SUM(on_hand)::float8 AS on_hand FROM warehouse_stock GROUP BY material_id'
     ),
+    // Truck on-hand comes from the truck_stock snapshot — the running total that
+    // count-sheet completion, receives, and adjustments all maintain via deltas.
     query<{ truck_id: number; material_id: number; qty: number }>(
-      `WITH latest AS (
-         SELECT DISTINCT ON (truck_id) id, truck_id
-           FROM materials_jobs WHERE status = 'complete'
-          ORDER BY truck_id, job_date DESC, sequence_no DESC
-       )
-       SELECT l.truck_id, jc.material_id, jc.post_job::float8 AS qty
-         FROM latest l JOIN job_counts jc ON jc.job_id = l.id
-        WHERE jc.post_job IS NOT NULL`
+      'SELECT truck_id, material_id, on_hand::float8 AS qty FROM truck_stock'
     ),
   ]);
 

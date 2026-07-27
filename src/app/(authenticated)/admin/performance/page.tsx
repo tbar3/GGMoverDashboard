@@ -5,7 +5,6 @@ import {
   getWeekStatus,
   getWeekResults,
   getWeekAdjustments,
-  getWeekJobs,
 } from '@/lib/bonus';
 import { query } from '@/lib/db';
 import { addDays, format } from 'date-fns';
@@ -28,7 +27,7 @@ export default async function PerformancePage({
   const weekStart =
     sp.week && /^\d{4}-\d{2}-\d{2}$/.test(sp.week) ? weekStartOf(sp.week) : weekStartOf(new Date());
 
-  const [board, employees, config, weekStatus, lockedResults, adjustments, weekJobs] = await Promise.all([
+  const [board, employees, config, weekStatus, lockedResults, adjustments] = await Promise.all([
     getWeekBoard(weekStart),
     query<{ id: string; name: string }>(
       'SELECT id, name FROM employees WHERE is_active = TRUE ORDER BY name'
@@ -37,7 +36,6 @@ export default async function PerformancePage({
     getWeekStatus(weekStart),
     getWeekResults(weekStart),
     getWeekAdjustments(weekStart),
-    getWeekJobs(weekStart),
   ]);
 
   const prevWeek = weekStartOf(format(addDays(new Date(`${weekStart}T12:00:00`), -7), 'yyyy-MM-dd'));
@@ -57,7 +55,6 @@ export default async function PerformancePage({
       weekStatus={weekStatus}
       lockedResults={lockedResults}
       adjustments={adjustments}
-      weekJobs={weekJobs}
     />
   );
 }

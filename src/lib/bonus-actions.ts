@@ -150,14 +150,18 @@ export async function logWriteUp(input: {
 
 /**
  * Apply one event to every crew member on a job at once — e.g. "Truck Not Ready"
- * or a whole-crew 5-Star Review — instead of logging it person by person.
+ * or a whole-crew 5-Star Review — instead of logging it person by person. The
+ * caller passes the (possibly edited) crew list, so a missed-sync roster can be
+ * corrected before logging; that corrected roster is also saved back to the job.
  */
 export async function logGroupEvent(input: {
   jobId: string;
+  employeeIds: string[];
   kind: 'positive' | 'discretionary' | 'strike';
   type?: string;
   eventDate: string;
   note?: string;
+  saveCrew?: boolean; // persist the edited crew back to the job (default true)
 }): Promise<Result & { count?: number }> {
   const guard = await requireBackOffice();
   if (!guard.ok) return { ok: false, error: 'Back office access required' };
@@ -172,12 +176,13 @@ export async function logGroupEvent(input: {
     return { ok: false, error: 'Unknown strike type' };
   }
 
-  const job = await queryOne<{ crew_ids: string[] }>(
-    'SELECT crew_ids FROM jobs WHERE id = $1',
-    [input.jobId]
-  );
-  const crew = (job?.crew_ids ?? []).filter(Boolean);
-  if (crew.length === 0) return { ok: false, error: 'This job has no crew assigned' };
+  const crew = Array.from(new Set((input.employeeIds ?? []).filter(Boolean)));
+  if (crew.length === 0) return { ok: false, error: 'Add at least one crew member' };
+
+  // Persist the corrected roster back to the job so the fix sticks everywhere.
+  if (input.saveCrew !== false) {
+    await query('UPDATE jobs SET crew_ids = $2 WHERE id = $1', [input.jobId, crew]);
+  }
 
   const weekStart = weekStartOf(date);
   const note = input.note?.trim() || null;
@@ -207,6 +212,17 @@ export async function logGroupEvent(input: {
 
   revalidatePath('/admin/performance');
   return { ok: true, count: crew.length };
+}
+
+/** Save a corrected crew roster to a job (e.g. when the calendar sync missed someone). */
+export async function saveJobCrew(jobId: string, employeeIds: string[]): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  if (!jobId) return { ok: false, error: 'Pick a job' };
+  const crew = Array.from(new Set((employeeIds ?? []).filter(Boolean)));
+  await query('UPDATE jobs SET crew_ids = $2 WHERE id = $1', [jobId, crew]);
+  revalidatePath('/admin/performance');
+  return { ok: true };
 }
 
 export async function voidStrike(strikeId: string, reason: string): Promise<Result> {

@@ -1,11 +1,6 @@
 import { query, queryOne } from '@/lib/db';
-import { startOfWeek, format, addDays } from 'date-fns';
+import { startOfWeek, format } from 'date-fns';
 import { getNumberSetting } from '@/lib/settings';
-
-/** Add days to a yyyy-MM-dd string, returning yyyy-MM-dd (noon-anchored, TZ-safe). */
-function addDaysStr(dateStr: string, days: number): string {
-  return format(addDays(new Date(`${dateStr}T12:00:00`), days), 'yyyy-MM-dd');
-}
 
 /**
  * Weekly bonus engine (BONUS_FEATURE_SPEC).
@@ -285,38 +280,38 @@ export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
   });
 }
 
-export interface WeekJobOption {
+export interface JobCrewOption {
   id: string;
   date: string;
   jobNumber: string | null;
   customer: string | null;
   startTime: string | null;
-  crewCount: number;
-  crewNames: string[];
+  crew: { id: string; name: string }[];
 }
 
-/** Jobs in a week that have a crew, for the group-event picker. Most recent first. */
-export async function getWeekJobs(weekStart: string): Promise<WeekJobOption[]> {
-  const weekEnd = addDaysStr(weekStart, 6);
+/**
+ * Every job on a given date with its crew (auto-populated), for the group-event
+ * picker. Includes jobs with no crew so a missed-sync roster can be corrected by
+ * adding members. Any date, past or future.
+ */
+export async function getJobsByDate(date: string): Promise<JobCrewOption[]> {
   const rows = await query<{
     id: string;
     date: string;
     job_number: string | null;
     customer_name: string | null;
     start_time: string | null;
-    crew_ids: string[] | null;
-    crew_names: string[] | null;
+    crew: { id: string; name: string }[] | null;
   }>(
-    `SELECT j.id, j.date::text, j.job_number, j.customer_name, j.start_time, j.crew_ids,
-            ARRAY(
-              SELECT e.name FROM employees e
-               WHERE e.id = ANY(j.crew_ids) ORDER BY e.name
-            ) AS crew_names
+    `SELECT j.id, j.date::text, j.job_number, j.customer_name, j.start_time,
+            COALESCE((
+              SELECT json_agg(json_build_object('id', e.id, 'name', e.name) ORDER BY e.name)
+                FROM employees e WHERE e.id = ANY(j.crew_ids)
+            ), '[]'::json) AS crew
        FROM jobs j
-      WHERE j.date >= $1 AND j.date <= $2
-        AND COALESCE(array_length(j.crew_ids, 1), 0) > 0
-      ORDER BY j.date DESC, j.start_time`,
-    [weekStart, weekEnd]
+      WHERE j.date = $1
+      ORDER BY j.start_time, j.customer_name`,
+    [date]
   );
   return rows.map((r) => ({
     id: r.id,
@@ -324,8 +319,7 @@ export async function getWeekJobs(weekStart: string): Promise<WeekJobOption[]> {
     jobNumber: r.job_number,
     customer: r.customer_name,
     startTime: r.start_time,
-    crewCount: (r.crew_ids ?? []).filter(Boolean).length,
-    crewNames: r.crew_names ?? [],
+    crew: r.crew ?? [],
   }));
 }
 

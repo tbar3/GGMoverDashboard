@@ -3,6 +3,7 @@ import { query } from '@/lib/db';
 import { getCurrentEmployee } from '@/lib/auth';
 import { BACK_OFFICE_ROLES } from '@/lib/roles';
 import { AdminTeamManager, LocationsManager } from './admin-settings-client';
+import { EventsExportCard } from './events-export-card';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +35,7 @@ export default async function AdminSettingsPage() {
           Manage who has back-office access and the company&apos;s locations.
         </p>
       </div>
+      <EventsExportCard />
       <AdminTeamManager team={team} />
       <LocationsManager locations={locations} />
     </div>

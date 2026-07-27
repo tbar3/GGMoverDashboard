@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
   };
 
   const header = [
-    'Date',
+    'Effective Date',
+    'Job Date',
     'Employee',
     'Category',
     'Detail',
@@ -38,7 +39,8 @@ export async function GET(request: NextRequest) {
   for (const r of rows) {
     lines.push(
       [
-        r.date,
+        r.effectiveDate,
+        r.jobDate,
         esc(r.employee),
         r.category,
         esc(r.detail),

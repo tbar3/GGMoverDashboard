@@ -18,10 +18,21 @@ function validDate(raw: string): string | null {
   return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
 }
 
+// Effective (record) date drives the pay-period export; defaults to today when
+// the caller doesn't supply one.
+function effectiveOf(raw: string | undefined, fallback: string): string {
+  return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : fallback;
+}
+
+function validArrival(raw: string | undefined): string | null {
+  return raw && /^\d{2}:\d{2}(:\d{2})?$/.test(raw) ? raw : null;
+}
+
 export async function logPositive(input: {
   employeeId: string;
   type: string;
   eventDate: string;
+  effectiveDate?: string;
   note?: string;
 }): Promise<Result> {
   const guard = await requireBackOffice();
@@ -30,11 +41,12 @@ export async function logPositive(input: {
   const date = validDate(input.eventDate);
   if (!date) return { ok: false, error: 'Pick a valid date' };
   if (!input.employeeId) return { ok: false, error: 'Pick a crew member' };
+  const effective = effectiveOf(input.effectiveDate, todayStr());
 
   await query(
-    `INSERT INTO bonus_positives (employee_id, week_start, type, event_date, note, source, created_by)
-     VALUES ($1, $2, $3, $4, $5, 'manual', $6)`,
-    [input.employeeId, weekStartOf(date), input.type, date, input.note?.trim() || null, guard.employee.id]
+    `INSERT INTO bonus_positives (employee_id, week_start, type, event_date, effective_date, note, source, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, 'manual', $7)`,
+    [input.employeeId, weekStartOf(date), input.type, date, effective, input.note?.trim() || null, guard.employee.id]
   );
   revalidatePath('/admin/performance');
   return { ok: true };
@@ -44,6 +56,7 @@ export async function logPositive(input: {
 export async function logGGPoint(input: {
   employeeId: string;
   eventDate: string;
+  effectiveDate?: string;
   note?: string;
 }): Promise<Result> {
   const guard = await requireBackOffice();
@@ -51,11 +64,12 @@ export async function logGGPoint(input: {
   const date = validDate(input.eventDate);
   if (!date) return { ok: false, error: 'Pick a valid date' };
   if (!input.employeeId) return { ok: false, error: 'Pick a crew member' };
+  const effective = effectiveOf(input.effectiveDate, todayStr());
 
   await query(
-    `INSERT INTO bonus_positives (employee_id, week_start, type, event_date, note, source, created_by, discretionary)
-     VALUES ($1, $2, 'GG_POINT', $3, $4, 'manual', $5, TRUE)`,
-    [input.employeeId, weekStartOf(date), date, input.note?.trim() || null, guard.employee.id]
+    `INSERT INTO bonus_positives (employee_id, week_start, type, event_date, effective_date, note, source, created_by, discretionary)
+     VALUES ($1, $2, 'GG_POINT', $3, $4, $5, 'manual', $6, TRUE)`,
+    [input.employeeId, weekStartOf(date), date, effective, input.note?.trim() || null, guard.employee.id]
   );
   revalidatePath('/admin/performance');
   return { ok: true };
@@ -65,6 +79,8 @@ export async function logStrike(input: {
   employeeId: string;
   type: string;
   eventDate: string;
+  effectiveDate?: string;
+  arrivalTime?: string;
   note?: string;
 }): Promise<Result> {
   const guard = await requireBackOffice();
@@ -73,19 +89,52 @@ export async function logStrike(input: {
   const date = validDate(input.eventDate);
   if (!date) return { ok: false, error: 'Pick a valid date' };
   if (!input.employeeId) return { ok: false, error: 'Pick a crew member' };
+  const effective = effectiveOf(input.effectiveDate, todayStr());
+  const arrival = input.type === 'LATE' ? validArrival(input.arrivalTime) : null;
 
   const weekStart = weekStartOf(date);
   await query(
-    `INSERT INTO bonus_strikes (employee_id, week_start, type, event_date, note, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [input.employeeId, weekStart, input.type, date, input.note?.trim() || null, guard.employee.id]
+    `INSERT INTO bonus_strikes (employee_id, week_start, type, event_date, effective_date, arrival_time, note, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [input.employeeId, weekStart, input.type, date, effective, arrival, input.note?.trim() || null, guard.employee.id]
   );
+
+  // A Late strike with an arrival time also feeds attendance lateness tracking.
+  if (arrival) await recordLateArrival(input.employeeId, date, arrival);
 
   // Policy: 3 active strikes in a week auto-generates a write-up (one per week).
   await maybeAutoWriteUp(input.employeeId, weekStart, date, guard.employee.id);
 
   revalidatePath('/admin/performance');
   return { ok: true };
+}
+
+/** yyyy-MM-dd for "today" in the server's local time. */
+function todayStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Upsert an attendance row from a logged Late arrival so the unpaid-minutes
+ * deduction stays in sync. Scheduled start defaults to the 7:15 call.
+ */
+async function recordLateArrival(employeeId: string, date: string, arrival: string): Promise<void> {
+  const toMin = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+  const scheduled = '07:15';
+  const lateMinutes = Math.max(0, toMin(arrival) - toMin(scheduled));
+  await query(
+    `INSERT INTO attendance (employee_id, date, arrival_time, scheduled_start, late_minutes, is_tardy)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (employee_id, date)
+     DO UPDATE SET arrival_time = $3,
+                   late_minutes = GREATEST(0, EXTRACT(EPOCH FROM ($3::time - attendance.scheduled_start)) / 60)::int,
+                   is_tardy = ($3::time > attendance.scheduled_start)`,
+    [employeeId, date, arrival, scheduled, lateMinutes, lateMinutes > 0]
+  );
 }
 
 /**
@@ -114,12 +163,13 @@ async function maybeAutoWriteUp(
   if (counts.strikes < threshold || counts.autos > 0) return;
 
   await query(
-    `INSERT INTO write_ups (employee_id, week_start, event_date, summary, source, created_by)
-     VALUES ($1, $2, $3, $4, 'auto', $5)`,
+    `INSERT INTO write_ups (employee_id, week_start, event_date, effective_date, summary, source, created_by)
+     VALUES ($1, $2, $3, $4, $5, 'auto', $6)`,
     [
       employeeId,
       weekStart,
       date,
+      todayStr(),
       `Automatic write-up: reached ${threshold} strikes in the week of ${weekStart}.`,
       createdBy,
     ]
@@ -129,6 +179,7 @@ async function maybeAutoWriteUp(
 export async function logWriteUp(input: {
   employeeId: string;
   eventDate: string;
+  effectiveDate?: string;
   summary: string;
 }): Promise<Result> {
   const guard = await requireBackOffice();
@@ -138,11 +189,12 @@ export async function logWriteUp(input: {
   if (!input.employeeId) return { ok: false, error: 'Pick a crew member' };
   const summary = input.summary.trim();
   if (!summary) return { ok: false, error: 'A write-up needs a summary' };
+  const effective = effectiveOf(input.effectiveDate, todayStr());
 
   await query(
-    `INSERT INTO write_ups (employee_id, week_start, event_date, summary, created_by)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [input.employeeId, weekStartOf(date), date, summary, guard.employee.id]
+    `INSERT INTO write_ups (employee_id, week_start, event_date, effective_date, summary, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [input.employeeId, weekStartOf(date), date, effective, summary, guard.employee.id]
   );
   revalidatePath('/admin/performance');
   return { ok: true };
@@ -160,6 +212,8 @@ export async function logGroupEvent(input: {
   kind: 'positive' | 'discretionary' | 'strike';
   type?: string;
   eventDate: string;
+  effectiveDate?: string;
+  arrivalTime?: string;
   note?: string;
   saveCrew?: boolean; // persist the edited crew back to the job (default true)
 }): Promise<Result & { count?: number }> {
@@ -185,27 +239,30 @@ export async function logGroupEvent(input: {
   }
 
   const weekStart = weekStartOf(date);
+  const effective = effectiveOf(input.effectiveDate, todayStr());
+  const arrival = input.type === 'LATE' ? validArrival(input.arrivalTime) : null;
   const note = input.note?.trim() || null;
 
   for (const employeeId of crew) {
     if (input.kind === 'strike') {
       await query(
-        `INSERT INTO bonus_strikes (employee_id, week_start, type, event_date, note, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [employeeId, weekStart, input.type, date, note, guard.employee.id]
+        `INSERT INTO bonus_strikes (employee_id, week_start, type, event_date, effective_date, arrival_time, note, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [employeeId, weekStart, input.type, date, effective, arrival, note, guard.employee.id]
       );
+      if (arrival) await recordLateArrival(employeeId, date, arrival);
       await maybeAutoWriteUp(employeeId, weekStart, date, guard.employee.id);
     } else if (input.kind === 'discretionary') {
       await query(
-        `INSERT INTO bonus_positives (employee_id, week_start, type, event_date, note, source, created_by, discretionary)
-         VALUES ($1, $2, 'GG_POINT', $3, $4, 'group', $5, TRUE)`,
-        [employeeId, weekStart, date, note, guard.employee.id]
+        `INSERT INTO bonus_positives (employee_id, week_start, type, event_date, effective_date, note, source, created_by, discretionary)
+         VALUES ($1, $2, 'GG_POINT', $3, $4, $5, 'group', $6, TRUE)`,
+        [employeeId, weekStart, date, effective, note, guard.employee.id]
       );
     } else {
       await query(
-        `INSERT INTO bonus_positives (employee_id, week_start, type, event_date, note, source, created_by)
-         VALUES ($1, $2, $3, $4, $5, 'group', $6)`,
-        [employeeId, weekStart, input.type, date, note, guard.employee.id]
+        `INSERT INTO bonus_positives (employee_id, week_start, type, event_date, effective_date, note, source, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, 'group', $7)`,
+        [employeeId, weekStart, input.type, date, effective, note, guard.employee.id]
       );
     }
   }

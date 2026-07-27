@@ -50,12 +50,12 @@ export function EventsTable({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
+                  <TableHead>Job date</TableHead>
+                  <TableHead>Effective</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Event</TableHead>
                   <TableHead>Effect</TableHead>
                   <TableHead>Note</TableHead>
-                  <TableHead>Week</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -64,8 +64,16 @@ export function EventsTable({
                     <TableCell className="whitespace-nowrap text-sm">
                       {format(new Date(`${e.date}T12:00:00`), 'EEE MMM d')}
                     </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      {format(new Date(`${e.effectiveDate}T12:00:00`), 'MMM d')}
+                    </TableCell>
                     <TableCell>{kindBadge(e.kind)}</TableCell>
-                    <TableCell className={`font-medium ${e.voided ? 'line-through' : ''}`}>{e.label}</TableCell>
+                    <TableCell className={`font-medium ${e.voided ? 'line-through' : ''}`}>
+                      {e.label}
+                      {e.arrivalTime && (
+                        <span className="ml-1 font-normal text-muted-foreground">· in {e.arrivalTime}</span>
+                      )}
+                    </TableCell>
                     <TableCell
                       className={`text-sm ${
                         e.kind === 'strike' && !e.voided ? 'text-destructive' : 'text-muted-foreground'
@@ -75,9 +83,6 @@ export function EventsTable({
                     </TableCell>
                     <TableCell className="max-w-[16rem] truncate text-sm text-muted-foreground">
                       {e.note ?? ''}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {format(new Date(`${e.weekStart}T12:00:00`), 'MMM d')}
                     </TableCell>
                   </TableRow>
                 ))}

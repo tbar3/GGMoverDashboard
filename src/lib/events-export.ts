@@ -2,12 +2,14 @@ import { query } from '@/lib/db';
 import { positiveLabel, strikeLabel } from '@/lib/bonus';
 
 /**
- * Unified export of everything that affects pay or standing over a date range:
- * lateness (unpaid minutes) plus every positive, GG Point, strike, and write-up.
- * One flat row shape so it drops straight into a CSV.
+ * Unified export of everything that affects pay or standing, filtered by EFFECTIVE
+ * (record) date — the day it was logged, which is the pay period it's paid in.
+ * Lateness (unpaid minutes) plus every positive, GG Point, strike, and write-up.
+ * Each row carries both the job date (when it happened) and the effective date.
  */
 export interface ExportRow {
-  date: string;
+  effectiveDate: string;
+  jobDate: string;
   employee: string;
   category: 'Lateness' | 'Positive' | 'GG Point' | 'Strike' | 'Write-Up';
   detail: string;
@@ -21,6 +23,7 @@ export interface ExportRow {
 
 export async function getEventsExport(start: string, end: string): Promise<ExportRow[]> {
   const [lateness, positives, strikes, writeUps] = await Promise.all([
+    // Lateness is recorded the day it happens, so it filters on the attendance date.
     query<{
       date: string;
       name: string;
@@ -36,22 +39,32 @@ export async function getEventsExport(start: string, end: string): Promise<Expor
         ORDER BY a.date, e.name`,
       [start, end]
     ),
-    query<{ date: string; name: string; type: string; note: string | null; discretionary: boolean }>(
-      `SELECT p.event_date::text AS date, e.name, p.type, p.note, p.discretionary
+    query<{ effective: string; event: string; name: string; type: string; note: string | null; discretionary: boolean }>(
+      `SELECT p.effective_date::text AS effective, p.event_date::text AS event, e.name, p.type, p.note, p.discretionary
          FROM bonus_positives p JOIN employees e ON e.id = p.employee_id
-        WHERE p.event_date >= $1 AND p.event_date <= $2`,
+        WHERE p.effective_date >= $1 AND p.effective_date <= $2`,
       [start, end]
     ),
-    query<{ date: string; name: string; type: string; note: string | null; voided: boolean; void_reason: string | null }>(
-      `SELECT s.event_date::text AS date, e.name, s.type, s.note, s.voided, s.void_reason
+    query<{
+      effective: string;
+      event: string;
+      name: string;
+      type: string;
+      arrival_time: string | null;
+      note: string | null;
+      voided: boolean;
+      void_reason: string | null;
+    }>(
+      `SELECT s.effective_date::text AS effective, s.event_date::text AS event, e.name, s.type,
+              s.arrival_time::text, s.note, s.voided, s.void_reason
          FROM bonus_strikes s JOIN employees e ON e.id = s.employee_id
-        WHERE s.event_date >= $1 AND s.event_date <= $2`,
+        WHERE s.effective_date >= $1 AND s.effective_date <= $2`,
       [start, end]
     ),
-    query<{ date: string; name: string; summary: string; source: string }>(
-      `SELECT w.event_date::text AS date, e.name, w.summary, w.source
+    query<{ effective: string; event: string; name: string; summary: string; source: string }>(
+      `SELECT w.effective_date::text AS effective, w.event_date::text AS event, e.name, w.summary, w.source
          FROM write_ups w JOIN employees e ON e.id = w.employee_id
-        WHERE w.event_date >= $1 AND w.event_date <= $2`,
+        WHERE w.effective_date >= $1 AND w.effective_date <= $2`,
       [start, end]
     ),
   ]);
@@ -60,7 +73,8 @@ export async function getEventsExport(start: string, end: string): Promise<Expor
 
   for (const l of lateness) {
     rows.push({
-      date: l.date,
+      effectiveDate: l.date,
+      jobDate: l.date,
       employee: l.name,
       category: 'Lateness',
       detail: 'Late arrival (unpaid)',
@@ -76,7 +90,8 @@ export async function getEventsExport(start: string, end: string): Promise<Expor
   for (const p of positives) {
     const gg = p.discretionary;
     rows.push({
-      date: p.date,
+      effectiveDate: p.effective,
+      jobDate: p.event,
       employee: p.name,
       category: gg ? 'GG Point' : 'Positive',
       detail: positiveLabel(p.type),
@@ -91,12 +106,13 @@ export async function getEventsExport(start: string, end: string): Promise<Expor
 
   for (const s of strikes) {
     rows.push({
-      date: s.date,
+      effectiveDate: s.effective,
+      jobDate: s.event,
       employee: s.name,
       category: 'Strike',
       detail: strikeLabel(s.type),
       scheduledStart: '',
-      arrival: '',
+      arrival: s.arrival_time ?? '',
       minutesLate: '',
       hoursDeduction: '',
       bonusImpact: s.voided ? 'voided' : 'forfeits weekly bonus',
@@ -106,7 +122,8 @@ export async function getEventsExport(start: string, end: string): Promise<Expor
 
   for (const w of writeUps) {
     rows.push({
-      date: w.date,
+      effectiveDate: w.effective,
+      jobDate: w.event,
       employee: w.name,
       category: 'Write-Up',
       detail: w.source === 'auto' ? 'Write-Up (auto)' : 'Write-Up',
@@ -119,6 +136,9 @@ export async function getEventsExport(start: string, end: string): Promise<Expor
     });
   }
 
-  rows.sort((a, b) => a.date.localeCompare(b.date) || a.employee.localeCompare(b.employee));
+  rows.sort(
+    (a, b) =>
+      a.effectiveDate.localeCompare(b.effectiveDate) || a.employee.localeCompare(b.employee)
+  );
   return rows;
 }

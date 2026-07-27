@@ -113,6 +113,8 @@ export default function PerformanceBoard({
   const [employeeId, setEmployeeId] = useState('');
   const [eventType, setEventType] = useState('');
   const [eventDate, setEventDate] = useState(localToday());
+  const [effectiveDate, setEffectiveDate] = useState(localToday());
+  const [arrivalTime, setArrivalTime] = useState('');
   const [note, setNote] = useState('');
   const [adjEmp, setAdjEmp] = useState('');
   const [adjAmount, setAdjAmount] = useState('');
@@ -127,6 +129,8 @@ export default function PerformanceBoard({
   const [groupCrew, setGroupCrew] = useState<{ id: string; name: string }[]>([]);
   const [addMemberId, setAddMemberId] = useState('');
   const [groupType, setGroupType] = useState('');
+  const [groupEffectiveDate, setGroupEffectiveDate] = useState(localToday());
+  const [groupArrivalTime, setGroupArrivalTime] = useState('');
   const [groupNote, setGroupNote] = useState('');
 
   const locked = weekStatus.status === 'approved';
@@ -186,6 +190,7 @@ export default function PerformanceBoard({
   function reset() {
     setEventType('');
     setNote('');
+    setArrivalTime('');
   }
 
   function submit() {
@@ -196,13 +201,13 @@ export default function PerformanceBoard({
     startTransition(async () => {
       let res: { ok: boolean; error?: string };
       if (kind === 'positive') {
-        res = await logPositive({ employeeId, type: eventType, eventDate, note });
+        res = await logPositive({ employeeId, type: eventType, eventDate, effectiveDate, note });
       } else if (kind === 'discretionary') {
-        res = await logGGPoint({ employeeId, eventDate, note });
+        res = await logGGPoint({ employeeId, eventDate, effectiveDate, note });
       } else if (kind === 'strike') {
-        res = await logStrike({ employeeId, type: eventType, eventDate, note });
+        res = await logStrike({ employeeId, type: eventType, eventDate, effectiveDate, arrivalTime, note });
       } else {
-        res = await logWriteUp({ employeeId, eventDate, summary: note });
+        res = await logWriteUp({ employeeId, eventDate, effectiveDate, summary: note });
       }
       if (res.ok) {
         toast.success(`Logged ${labelFor(eventType)}`);
@@ -282,12 +287,15 @@ export default function PerformanceBoard({
         kind: gk as 'positive' | 'discretionary' | 'strike',
         type: groupType,
         eventDate: groupDate,
+        effectiveDate: groupEffectiveDate,
+        arrivalTime: groupArrivalTime,
         note: groupNote,
       });
       if (res.ok) {
         toast.success(`Logged ${labelFor(groupType)} for ${res.count} crew`);
         setGroupType('');
         setGroupNote('');
+        setGroupArrivalTime('');
         router.refresh();
       } else {
         toast.error(res.error ?? 'Could not log the group event');
@@ -494,9 +502,19 @@ export default function PerformanceBoard({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Date</Label>
+              <Label>Job date</Label>
               <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
             </div>
+            <div className="space-y-1.5">
+              <Label>Effective date</Label>
+              <Input type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} />
+            </div>
+            {eventType === 'LATE' && (
+              <div className="space-y-1.5">
+                <Label>Arrival time</Label>
+                <Input type="time" value={arrivalTime} onChange={(e) => setArrivalTime(e.target.value)} />
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>{kind === 'writeup' ? 'Summary (required)' : 'Note (optional)'}</Label>
               <Input
@@ -528,7 +546,7 @@ export default function PerformanceBoard({
         <CardContent className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-1.5">
-              <Label>Date</Label>
+              <Label>Job date</Label>
               <Input type="date" value={groupDate} onChange={(e) => setGroupDate(e.target.value)} />
             </div>
             <div className="space-y-1.5 lg:col-span-2">
@@ -623,6 +641,24 @@ export default function PerformanceBoard({
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1.5">
+              <Label>Effective date</Label>
+              <Input
+                type="date"
+                value={groupEffectiveDate}
+                onChange={(e) => setGroupEffectiveDate(e.target.value)}
+              />
+            </div>
+            {groupType === 'LATE' && (
+              <div className="space-y-1.5">
+                <Label>Arrival time</Label>
+                <Input
+                  type="time"
+                  value={groupArrivalTime}
+                  onChange={(e) => setGroupArrivalTime(e.target.value)}
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Note (optional)</Label>
               <Input

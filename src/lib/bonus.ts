@@ -556,7 +556,9 @@ export interface EmployeeEvent {
   id: string;
   kind: 'positive' | 'gg_point' | 'strike' | 'writeup';
   label: string;
-  date: string;
+  date: string; // job / occurrence date
+  effectiveDate: string; // record date (drives the pay period)
+  arrivalTime: string | null; // set for Late strikes
   weekStart: string;
   note: string | null;
   voided: boolean;
@@ -566,18 +568,18 @@ export interface EmployeeEvent {
 /** Every bonus/performance event for one employee, newest first — the record. */
 export async function getEmployeeEvents(employeeId: string, limit = 100): Promise<EmployeeEvent[]> {
   const [positives, strikes, writeUps] = await Promise.all([
-    query<{ id: string; type: string; event_date: string; week_start: string; note: string | null; discretionary: boolean }>(
-      `SELECT id, type, event_date::text, week_start::text, note, discretionary
+    query<{ id: string; type: string; event_date: string; effective_date: string; week_start: string; note: string | null; discretionary: boolean }>(
+      `SELECT id, type, event_date::text, effective_date::text, week_start::text, note, discretionary
          FROM bonus_positives WHERE employee_id = $1`,
       [employeeId]
     ),
-    query<{ id: string; type: string; event_date: string; week_start: string; note: string | null; voided: boolean; void_reason: string | null }>(
-      `SELECT id, type, event_date::text, week_start::text, note, voided, void_reason
+    query<{ id: string; type: string; event_date: string; effective_date: string; arrival_time: string | null; week_start: string; note: string | null; voided: boolean; void_reason: string | null }>(
+      `SELECT id, type, event_date::text, effective_date::text, arrival_time::text, week_start::text, note, voided, void_reason
          FROM bonus_strikes WHERE employee_id = $1`,
       [employeeId]
     ),
-    query<{ id: string; event_date: string; week_start: string; summary: string; source: string }>(
-      `SELECT id, event_date::text, week_start::text, summary, source FROM write_ups WHERE employee_id = $1`,
+    query<{ id: string; event_date: string; effective_date: string; week_start: string; summary: string; source: string }>(
+      `SELECT id, event_date::text, effective_date::text, week_start::text, summary, source FROM write_ups WHERE employee_id = $1`,
       [employeeId]
     ),
   ]);
@@ -590,6 +592,8 @@ export async function getEmployeeEvents(employeeId: string, limit = 100): Promis
       kind: gg ? 'gg_point' : 'positive',
       label: positiveLabel(p.type),
       date: p.event_date,
+      effectiveDate: p.effective_date,
+      arrivalTime: null,
       weekStart: p.week_start,
       note: p.note,
       voided: false,
@@ -602,6 +606,8 @@ export async function getEmployeeEvents(employeeId: string, limit = 100): Promis
       kind: 'strike',
       label: strikeLabel(s.type),
       date: s.event_date,
+      effectiveDate: s.effective_date,
+      arrivalTime: s.arrival_time,
       weekStart: s.week_start,
       note: s.voided && s.void_reason ? `Voided: ${s.void_reason}` : s.note,
       voided: s.voided,
@@ -615,13 +621,15 @@ export async function getEmployeeEvents(employeeId: string, limit = 100): Promis
       kind: 'writeup',
       label: auto ? 'Write-Up (auto)' : 'Write-Up',
       date: w.event_date,
+      effectiveDate: w.effective_date,
+      arrivalTime: null,
       weekStart: w.week_start,
       note: w.summary,
       voided: false,
       effect: auto ? 'Write-up — 3 strikes in the week' : 'Write-up',
     });
   }
-  events.sort((a, b) => b.date.localeCompare(a.date));
+  events.sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate) || b.date.localeCompare(a.date));
   return events.slice(0, limit);
 }
 

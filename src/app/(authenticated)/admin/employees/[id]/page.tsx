@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getSkills, getEmployeeSkills, sumRaises } from '@/lib/skills';
 import { getBaseRate } from '@/lib/settings';
-import { getEmployeeEvents, getEstimatedWeekBonus, weekStartOf } from '@/lib/bonus';
+import { getEmployeeEvents, getEstimatedWeekBonus, weekStartOf, getBonusConfig } from '@/lib/bonus';
 import { Card, CardContent } from '@/components/ui/card';
+import { BonusMultiplierCard } from './bonus-multiplier-card';
 import { getWriteUpMonthCount } from '@/lib/admin-metrics';
 import { getEvaluationForEmployee, EVAL_WINDOW_DAYS } from '@/lib/new-crew-eval';
 import { isBackOfficeRole } from '@/lib/roles';
@@ -29,7 +30,7 @@ export default async function EditEmployeePage({
   const employee = await queryOne<Employee>('SELECT * FROM employees WHERE id = $1', [id]);
   if (!employee) notFound();
 
-  const [skills, earned, baseRate, events, writeUpsThisMonth, evaluation, estBonus] = await Promise.all([
+  const [skills, earned, baseRate, events, writeUpsThisMonth, evaluation, estBonus, bonusConfig] = await Promise.all([
     getSkills(),
     getEmployeeSkills(id),
     getBaseRate(),
@@ -37,9 +38,13 @@ export default async function EditEmployeePage({
     getWriteUpMonthCount(id),
     getEvaluationForEmployee(id),
     getEstimatedWeekBonus(id, weekStartOf(new Date())),
+    getBonusConfig(),
   ]);
   const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const derivedRate = baseRate + sumRaises(earned);
+  const earnedIds = new Set(earned.map((e) => e.skill_id));
+  const driverSkill = skills.find((s) => s.name === 'Driver') ?? null;
+  const leadSkill = skills.find((s) => s.name === '2-Truck Job Lead') ?? null;
   const isCrew = !isBackOfficeRole(employee.role) && !employee.is_admin;
   const flaggedForTermination = employee.is_active && writeUpsThisMonth >= 3;
   // pg returns DATE columns as Date objects; parse defensively so a missing or odd
@@ -80,6 +85,17 @@ export default async function EditEmployeePage({
           existing={evaluation}
         />
       )}
+      <BonusMultiplierCard
+        employeeId={employee.id}
+        companyBase={bonusConfig.baseMultiplier}
+        baseOverride={employee.base_multiplier != null ? Number(employee.base_multiplier) : null}
+        driverAmount={bonusConfig.driverWeekly}
+        leadAmount={bonusConfig.truckLeadWeekly}
+        driverSkillId={driverSkill?.id ?? null}
+        leadSkillId={leadSkill?.id ?? null}
+        isDriver={driverSkill ? earnedIds.has(driverSkill.id) : false}
+        isLead={leadSkill ? earnedIds.has(leadSkill.id) : false}
+      />
       <SkillsManager
         employeeId={employee.id}
         skills={skills}

@@ -107,7 +107,7 @@ export function WeeklyBonusCard({ week }: { week: EmployeeWeek }) {
             <p className="text-sm font-medium mb-1.5">{t('bonus.base_multiplier')}</p>
             <div className="flex flex-wrap gap-1.5">
               <Badge variant="outline">
-                {t('bonus.base_label')} +{week.config.baseMultiplier}×
+                {t('bonus.base_label')} +{week.baseMultiplier}×
               </Badge>
               {week.roleBonuses.map((r) => (
                 <Badge key={r.label} className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">

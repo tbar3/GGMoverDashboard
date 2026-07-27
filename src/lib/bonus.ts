@@ -173,7 +173,7 @@ export function computeWeek(
   events: WeekEvents,
   hours: number,
   config: BonusConfig,
-  opts?: { autoBonus?: number }
+  opts?: { autoBonus?: number; baseMultiplier?: number }
 ): WeekResult {
   const activeStrikes = events.strikes.filter((s) => !s.voided);
   const strikeCount = activeStrikes.length;
@@ -186,10 +186,13 @@ export function computeWeek(
   const discretionaryCount = events.positives.filter((p) => p.discretionary).length;
   const totalPositives = positivesCount;
 
+  // Per-employee base multiplier override falls back to the company default.
+  const base = opts?.baseMultiplier ?? config.baseMultiplier;
+
   // Automatic weekly role add-ons (Driver / 2-Truck Lead) count with the normal
   // bonus — a strike forfeits them like everything else.
   const autoBonus = Math.max(0, opts?.autoBonus ?? 0);
-  const normalMultiplier = config.baseMultiplier + config.increment * totalPositives + autoBonus;
+  const normalMultiplier = base + config.increment * totalPositives + autoBonus;
   const discretionaryValue = config.increment * discretionaryCount;
   const grossMultiplier = normalMultiplier + discretionaryValue;
 
@@ -237,8 +240,8 @@ export interface BoardRow {
 export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
   const config = await getBonusConfig();
   const [employees, positives, strikes, writeUps, payroll, estimated] = await Promise.all([
-    query<{ id: string; name: string }>(
-      'SELECT id, name FROM employees WHERE is_active = TRUE ORDER BY name'
+    query<{ id: string; name: string; base_multiplier: number | null }>(
+      'SELECT id, name, base_multiplier FROM employees WHERE is_active = TRUE ORDER BY name'
     ),
     query<PositiveRow & { employee_id: string }>(
       `SELECT id, employee_id, type, event_date::text, note, job_id, discretionary
@@ -287,7 +290,11 @@ export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
       writeUps: forEmp(writeUps, e.id),
     };
     const hours = hoursByEmployee.get(e.id) ?? 0;
-    const result = computeWeek(events, hours, config, { autoBonus: autoBonus.get(e.id) ?? 0 });
+    const baseMultiplier = e.base_multiplier != null ? Number(e.base_multiplier) : undefined;
+    const result = computeWeek(events, hours, config, {
+      autoBonus: autoBonus.get(e.id) ?? 0,
+      baseMultiplier,
+    });
     const estHours = estByEmployee.get(e.id) ?? 0;
     const estBonus = round2(estHours * config.baseRate * result.multiplier);
     return { employeeId: e.id, name: e.name, events, result, estHours, estBonus };
@@ -487,6 +494,7 @@ async function bonusHoursFor(employeeId: string, weekStart: string): Promise<{ h
 export interface EmployeeWeek {
   weekStart: string;
   result: WeekResult;
+  baseMultiplier: number; // effective base for this employee (override ?? default)
   hasPayroll: boolean;
   positives: (PositiveRow & { label: string })[];
   strikes: (StrikeRow & { label: string })[];
@@ -498,6 +506,7 @@ export interface EmployeeWeek {
 /** One employee's computed week + their events (with labels), for the crew card. */
 export async function getEmployeeWeek(employeeId: string, weekStart: string): Promise<EmployeeWeek> {
   const config = await getBonusConfig();
+  const baseMultiplier = await employeeBaseMultiplier(employeeId, config);
   const [positives, strikes, writeUps, hoursInfo] = await Promise.all([
     query<PositiveRow>(
       `SELECT id, type, event_date::text, note, job_id, discretionary FROM bonus_positives
@@ -521,11 +530,13 @@ export async function getEmployeeWeek(employeeId: string, weekStart: string): Pr
   const roleBonuses = await roleAutoBonusDetailFor(employeeId, config);
   const result = computeWeek(events, hoursInfo.hours, config, {
     autoBonus: roleBonuses.reduce((s, r) => s + r.amount, 0),
+    baseMultiplier,
   });
 
   return {
     weekStart,
     result,
+    baseMultiplier,
     hasPayroll: hoursInfo.hasPayroll,
     positives: positives.map((p) => ({ ...p, label: positiveLabel(p.type) })),
     strikes: strikes.map((s) => ({ ...s, label: strikeLabel(s.type) })),
@@ -533,6 +544,15 @@ export async function getEmployeeWeek(employeeId: string, weekStart: string): Pr
     roleBonuses,
     config,
   };
+}
+
+/** Effective base multiplier for an employee: their override, else the company default. */
+async function employeeBaseMultiplier(employeeId: string, config: BonusConfig): Promise<number> {
+  const row = await queryOne<{ base_multiplier: number | null }>(
+    'SELECT base_multiplier FROM employees WHERE id = $1',
+    [employeeId]
+  );
+  return row?.base_multiplier != null ? Number(row.base_multiplier) : config.baseMultiplier;
 }
 
 export interface BonusHistoryRow {
@@ -562,6 +582,7 @@ export async function getEmployeeBonusHistory(employeeId: string, limit = 12): P
   if (weeks.length === 0) return [];
 
   const autoBonus = await roleAutoBonusFor(employeeId, config);
+  const baseMultiplier = await employeeBaseMultiplier(employeeId, config);
   const weekStarts = weeks.map((w) => w.week_start);
   const [positives, strikes, writeUps] = await Promise.all([
     query<PositiveRow & { week_start: string }>(
@@ -588,7 +609,7 @@ export async function getEmployeeBonusHistory(employeeId: string, limit = 12): P
       writeUps: writeUps.filter((u) => u.week_start === w.week_start),
     };
     const hours = Number(w.hours) || 0;
-    const r = computeWeek(events, hours, config, { autoBonus });
+    const r = computeWeek(events, hours, config, { autoBonus, baseMultiplier });
     return {
       weekStart: w.week_start,
       weekEnd: w.week_end,

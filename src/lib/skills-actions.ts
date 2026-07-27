@@ -47,6 +47,28 @@ export async function revokeSkill(
 }
 
 /**
+ * Set (or clear) an employee's base bonus multiplier override. Pass null/'' to
+ * fall back to the company-wide default.
+ */
+export async function setEmployeeBaseMultiplier(
+  employeeId: string,
+  raw: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  let value: number | null = null;
+  if (raw != null && String(raw).trim() !== '') {
+    const n = parseFloat(String(raw));
+    if (isNaN(n) || n < 0 || n > 10) return { ok: false, error: 'Enter a base between 0 and 10' };
+    value = Math.round(n * 100) / 100;
+  }
+  await query('UPDATE employees SET base_multiplier = $2 WHERE id = $1', [employeeId, value]);
+  revalidateFor(employeeId);
+  return { ok: true };
+}
+
+/**
  * The signed-in employee dismisses their skill-celebration — marks all their
  * unacknowledged skills as seen. Scoped to their own row.
  */

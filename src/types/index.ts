@@ -11,6 +11,7 @@ export interface Employee {
   is_active: boolean;
   is_admin: boolean;
   hourly_rate: number | null;
+  base_multiplier: number | null; // per-employee base bonus multiplier override
   phone: string | null;
   terminated_at: string | null;
   last_day_worked: string | null;

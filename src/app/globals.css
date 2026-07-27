@@ -219,6 +219,9 @@
   .gg-btn-ghost {
     @apply inline-flex items-center justify-center rounded-md px-4 py-2.5 font-ui text-sm font-semibold transition-colors disabled:opacity-50 border-2 border-navy-700 bg-cream-50 text-navy-700 hover:bg-cream-200;
   }
+  .gg-btn-sm {
+    @apply inline-flex items-center justify-center rounded-md border-2 border-navy-700 bg-cream-50 px-3 py-1.5 font-ui text-sm font-semibold text-navy-700 transition-colors hover:bg-cream-200 disabled:opacity-50;
+  }
   .gg-surface {
     @apply rounded-xl border border-navy-100 bg-cream-50;
   }

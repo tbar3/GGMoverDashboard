@@ -653,3 +653,21 @@ export async function deleteJob(jobId: number) {
   revalidatePath('/admin/materials');
   revalidatePath('/admin/materials/history');
 }
+
+/** Save the "charged" amounts for a completed job's materials (Leakage report). */
+export async function saveLeakage(
+  jobId: number,
+  entries: { material_id: number; charged: number | null }[]
+) {
+  await assertBackOffice();
+  await withTransaction(async (client) => {
+    for (const e of entries) {
+      await client.query('UPDATE job_counts SET charged=$3 WHERE job_id=$1 AND material_id=$2', [
+        jobId,
+        e.material_id,
+        e.charged,
+      ]);
+    }
+  });
+  revalidatePath('/admin/materials/reporting');
+}

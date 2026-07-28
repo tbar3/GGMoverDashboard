@@ -1,6 +1,6 @@
 // Minimal Resend sender via their REST API (no extra dependency). Configure with
 // RESEND_API_KEY and RESEND_FROM (a verified sender, e.g.
-// "GoodGuys Materials <materials@goodguysserve.com>").
+// "GoodGuys Materials <materials@goodguysserve.com>"). Env vars apply on deploy.
 
 export interface EmailInput {
   to: string[];

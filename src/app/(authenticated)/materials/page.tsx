@@ -2,12 +2,9 @@ import Link from 'next/link';
 import { getCurrentEmployee } from '@/lib/auth';
 import { getTrucks, getCrewRecentJobs, getCrewEmployeeNames } from '@/lib/materials/queries';
 import { createJob } from '@/lib/materials/actions';
+import { CrewStartForm } from './crew-start-form';
 
 export const dynamic = 'force-dynamic';
-
-function today(): string {
-  return new Date().toLocaleDateString('en-CA');
-}
 
 export default async function MaterialsCrewHome() {
   const employee = await getCurrentEmployee();
@@ -58,86 +55,7 @@ export default async function MaterialsCrewHome() {
           No trucks set up yet — ask Trent.
         </p>
       ) : (
-        <form action={start} className="gg-card space-y-4 p-5">
-          <label className="block">
-            <span className="gg-eyebrow mb-1 block">Truck</span>
-            <select name="truckId" required defaultValue="" className="gg-input w-full">
-              <option value="" disabled>
-                Choose your truck…
-              </option>
-              {trucks.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="gg-eyebrow mb-1 block">Date</span>
-            <input
-              type="date"
-              name="date"
-              required
-              defaultValue={today()}
-              className="gg-input box-border block h-11 w-full min-w-0 appearance-none"
-            />
-          </label>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="gg-eyebrow mb-1 block">Customer name</span>
-              <input name="customer" placeholder="e.g. Amber Mirani" className="gg-input w-full" />
-            </label>
-            <label className="block">
-              <span className="gg-eyebrow mb-1 block">Job #</span>
-              <input name="jobNumber" placeholder="e.g. 1804-2" className="gg-input w-full" />
-            </label>
-          </div>
-
-          <label className="block">
-            <span className="gg-eyebrow mb-1 block">Crew Lead</span>
-            <select name="crewLead" defaultValue="" className="gg-input w-full">
-              <option value="">Select…</option>
-              {crewNames.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="block">
-            <span className="gg-eyebrow mb-1 block">Crew</span>
-            {crewNames.length === 0 ? (
-              <p className="font-ui text-sm text-navy-400">No crew members yet — add them under Employees.</p>
-            ) : (
-              <div className="max-h-44 space-y-1 overflow-y-auto rounded-md border-2 border-navy-100 bg-cream-50 p-2">
-                {crewNames.map((name) => (
-                  <label key={name} className="flex items-center gap-2 font-ui text-sm text-navy-700">
-                    <input type="checkbox" name="crew" value={name} className="h-4 w-4" />
-                    {name}
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <label className="flex items-start gap-2 rounded-md border-2 border-navy-100 bg-cream-50 p-3 font-ui text-sm text-navy-700">
-            <input type="checkbox" name="storageIn" className="mt-0.5 h-5 w-5" />
-            <span>
-              <span className="font-semibold">Storage-In job</span>
-              <span className="block text-navy-500">
-                Pads stay wrapped in storage — you&apos;ll record pads left in storage on the
-                Furniture Pads row in Step 2.
-              </span>
-            </span>
-          </label>
-
-          <button type="submit" className="gg-btn-cta w-full">
-            Open Count Sheet
-          </button>
-        </form>
+        <CrewStartForm trucks={trucks} crewNames={crewNames} action={start} />
       )}
 
       <div className="mt-8">

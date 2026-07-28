@@ -11,12 +11,12 @@ export interface EmailInput {
 export async function sendEmail(
   input: EmailInput
 ): Promise<{ ok: boolean; id?: string; error?: string }> {
-  const key = process.env.RESEND_API_KEY;
+  const key = process.env.RESEND_API_KEY || process.env.RESEND_API;
   const from =
     process.env.RESEND_FROM ||
     process.env.MATERIALS_ALERT_FROM ||
     'GoodGuys Materials <onboarding@resend.dev>';
-  if (!key) return { ok: false, error: 'RESEND_API_KEY not set' };
+  if (!key) return { ok: false, error: 'RESEND_API_KEY / RESEND_API not set' };
 
   const to = (input.to ?? []).map((s) => s.trim()).filter(Boolean);
   if (to.length === 0) return { ok: false, error: 'No recipients' };

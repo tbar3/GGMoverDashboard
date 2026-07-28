@@ -10,7 +10,6 @@ import {
   BarChart3,
   Sparkles,
   Briefcase,
-  DollarSign,
   Package,
   LogOut,
   Menu,
@@ -56,12 +55,7 @@ const employeeNavItems: NavItem[] = [
     href: '/checklists',
     icon: <ClipboardList className="h-5 w-5" />,
   },
-  {
-    titleKey: 'nav.my_payroll',
-    fallback: 'My Payroll',
-    href: '/payroll',
-    icon: <DollarSign className="h-5 w-5" />,
-  },
+  // "My Payroll" hidden from crew for now (bonus stays). Route also redirects.
   {
     titleKey: 'nav.my_bonus',
     fallback: 'My Bonus',

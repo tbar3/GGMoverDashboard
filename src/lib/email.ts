@@ -1,5 +1,5 @@
 // Minimal Resend sender via their REST API (no extra dependency). Configure with
-// RESEND_API_KEY and MATERIALS_ALERT_FROM (a verified sender, e.g.
+// RESEND_API_KEY and RESEND_FROM (a verified sender, e.g.
 // "GoodGuys Materials <materials@goodguysserve.com>").
 
 export interface EmailInput {
@@ -12,7 +12,10 @@ export async function sendEmail(
   input: EmailInput
 ): Promise<{ ok: boolean; id?: string; error?: string }> {
   const key = process.env.RESEND_API_KEY;
-  const from = process.env.MATERIALS_ALERT_FROM || 'GoodGuys Materials <onboarding@resend.dev>';
+  const from =
+    process.env.RESEND_FROM ||
+    process.env.MATERIALS_ALERT_FROM ||
+    'GoodGuys Materials <onboarding@resend.dev>';
   if (!key) return { ok: false, error: 'RESEND_API_KEY not set' };
 
   const to = (input.to ?? []).map((s) => s.trim()).filter(Boolean);

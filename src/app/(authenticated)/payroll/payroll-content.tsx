@@ -4,12 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
-import { format } from 'date-fns';
 import { Employee, PayrollEntry } from '@/types';
 import { DollarSign, TrendingUp } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { WeeklyBonusCard, PayrollCompCards, BonusHistoryTable } from '@/components/crew/weekly-bonus';
 import type { EmployeeWeek, PayrollComp, BonusHistoryRow } from '@/lib/bonus';
+import { formatDate } from '@/lib/utils';
 
 interface PayrollContentProps {
   employee: Employee;
@@ -66,7 +66,7 @@ export function PayrollContent({ employee, entries, thisWeekJobs, expectedHours,
             <div className="mt-2 flex flex-wrap gap-1.5">
               {thisWeekJobs.map((job, i) => (
                 <Badge key={i} variant="secondary" className="text-xs">
-                  {job.job_number || job.customer_name} — {format(new Date(job.date), 'EEE')} ({Number(job.estimated_hours) || 0}h)
+                  {job.job_number || job.customer_name} — {formatDate(job.date, 'EEE')} ({Number(job.estimated_hours) || 0}h)
                 </Badge>
               ))}
             </div>
@@ -94,7 +94,7 @@ export function PayrollContent({ employee, entries, thisWeekJobs, expectedHours,
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                {format(new Date(latestEntry.week_start), 'MMM d')} – {format(new Date(latestEntry.week_end), 'MMM d')}
+                {formatDate(latestEntry.week_start, 'MMM d')} – {formatDate(latestEntry.week_end, 'MMM d')}
               </p>
             </CardContent>
           </Card>
@@ -115,8 +115,8 @@ export function PayrollContent({ employee, entries, thisWeekJobs, expectedHours,
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><DollarSign className="h-5 w-5" />{t('pay.latest_period')}</CardTitle>
             <CardDescription>
-              {format(new Date(latestEntry.week_start), 'EEEE, MMM d')} – {format(new Date(latestEntry.week_end), 'EEEE, MMM d, yyyy')}
-              {' '}&middot; {t('pay.paid', { date: format(new Date(latestEntry.pay_date), 'EEEE, MMM d') })}
+              {formatDate(latestEntry.week_start, 'EEEE, MMM d')} – {formatDate(latestEntry.week_end, 'EEEE, MMM d, yyyy')}
+              {' '}&middot; {t('pay.paid', { date: formatDate(latestEntry.pay_date, 'EEEE, MMM d') })}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -212,8 +212,8 @@ export function PayrollContent({ employee, entries, thisWeekJobs, expectedHours,
                   const total = Number(entry.gross_pay) + reimb + Number(entry.tip);
                   return (
                     <TableRow key={entry.id}>
-                      <TableCell className="text-sm">{format(new Date(entry.week_start), 'MMM d')} – {format(new Date(entry.week_end), 'MMM d')}</TableCell>
-                      <TableCell className="text-sm">{format(new Date(entry.pay_date), 'MMM d')}</TableCell>
+                      <TableCell className="text-sm">{formatDate(entry.week_start, 'MMM d')} – {formatDate(entry.week_end, 'MMM d')}</TableCell>
+                      <TableCell className="text-sm">{formatDate(entry.pay_date, 'MMM d')}</TableCell>
                       <TableCell className="text-right">{Number(entry.travel_hours).toFixed(1)}</TableCell>
                       <TableCell className="text-right">{Number(entry.job_hours).toFixed(1)}</TableCell>
                       <TableCell className="text-right">{Number(entry.warehouse_hours).toFixed(1)}</TableCell>

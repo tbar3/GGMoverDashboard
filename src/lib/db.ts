@@ -19,7 +19,11 @@ const connectionString = baseUrl?.includes('?')
 
 const pool = new Pool({
   connectionString,
-  ssl: { rejectUnauthorized: false },
+  // Verify the server certificate (Neon is signed by a public CA in Node's trust
+  // store) so the sslmode=verify-full above is actually enforced — otherwise the
+  // DB connection would be open to a man-in-the-middle. Verified against the live
+  // Neon endpoint before enabling.
+  ssl: { rejectUnauthorized: true },
 });
 
 export async function query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]> {

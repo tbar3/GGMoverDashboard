@@ -1,6 +1,7 @@
 import { getCurrentEmployee } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { format } from 'date-fns';
+import { formatDate } from '@/lib/utils';
+import { PageHeader } from '@/components/page-header';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,7 @@ export default async function ProfilePage() {
   const rows: { label: string; value: string }[] = [
     { label: 'Name', value: employee.name },
     { label: 'Role', value: employee.role },
-    { label: 'Start date', value: format(new Date(employee.start_date), 'MMM d, yyyy') },
+    { label: 'Start date', value: formatDate(employee.start_date, 'MMM d, yyyy') },
     {
       label: 'Pay rate',
       value: employee.hourly_rate != null ? `$${employee.hourly_rate.toFixed(2)}/hr` : 'Not set',
@@ -33,12 +34,9 @@ export default async function ProfilePage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">My Profile</h1>
-        <p className="text-muted-foreground mt-1">
-          {employee.name} · <span className="capitalize">{employee.role}</span>
-        </p>
-      </div>
+      <PageHeader titleKey="profile.title">
+        {employee.name} · <span className="capitalize">{employee.role}</span>
+      </PageHeader>
       <Card className="max-w-lg">
         <CardHeader>
           <CardTitle>Your Details</CardTitle>

@@ -33,6 +33,7 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { Plus, Car, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { MileageEntry, Employee, Job, CONFIG } from '@/types';
+import { formatDate } from '@/lib/utils';
 
 export default function MileagePage() {
   const [entries, setEntries] = useState<MileageEntry[]>([]);
@@ -186,7 +187,7 @@ export default function MileagePage() {
                     <SelectItem value="">No job</SelectItem>
                     {jobs.map((job) => (
                       <SelectItem key={job.id} value={job.id}>
-                        {format(new Date(job.date), 'MMM d')} - {job.customer_name}
+                        {formatDate(job.date, 'MMM d')} - {job.customer_name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -310,7 +311,7 @@ export default function MileagePage() {
                 entries.slice(0, 50).map((entry) => (
                   <TableRow key={entry.id}>
                     <TableCell>
-                      {format(new Date(entry.date), 'MMM d, yyyy')}
+                      {formatDate(entry.date, 'MMM d, yyyy')}
                     </TableCell>
                     <TableCell className="font-medium">
                       {getEmployeeName(entry.employee_id)}

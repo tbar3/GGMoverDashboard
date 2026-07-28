@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { getAdminDashboard, getRecentDeclines, getTerminationFlags } from '@/lib/admin-metrics';
 import { getPendingNewCrewEvals } from '@/lib/new-crew-eval';
+import { formatDate } from '@/lib/utils';
 
 function money(n: number): string {
   return `$${Math.round(n).toLocaleString('en-US')}`;
@@ -165,7 +166,7 @@ export default async function AdminDashboardPage() {
                   <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
                     {d.alerts.rentalDays.map((r) => (
                       <span key={r.job_date}>
-                        {format(new Date(r.job_date), 'EEE M/d')}: {r.trucks} needed
+                        {formatDate(r.job_date, 'EEE M/d')}: {r.trucks} needed
                       </span>
                     ))}
                   </div>

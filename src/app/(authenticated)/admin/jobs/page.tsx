@@ -13,10 +13,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { format } from 'date-fns';
 import { Eye, ArrowUp, ArrowDown, ChevronsUpDown, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Job, Employee } from '@/types';
+import { formatDate } from '@/lib/utils';
 
 type SortKey =
   | 'job_number'
@@ -197,7 +197,7 @@ export default function JobsPage() {
                         <span className="text-muted-foreground/70 text-xs">—</span>
                       )}
                     </TableCell>
-                    <TableCell>{format(new Date(job.date), 'MMM d, yyyy')}</TableCell>
+                    <TableCell>{formatDate(job.date, 'MMM d, yyyy')}</TableCell>
                     <TableCell>{job.service_type || '-'}</TableCell>
                     <TableCell className="font-medium">{job.customer_name}</TableCell>
                     <TableCell className="max-w-[200px] truncate">

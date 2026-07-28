@@ -27,6 +27,7 @@ import { SkillCelebration, type CelebrationSkill } from '@/components/crew/skill
 import { WeeklyBonusCard } from '@/components/crew/weekly-bonus';
 import type { EmployeeWeek } from '@/lib/bonus';
 import { JobRow, type WeekJob } from './job-row';
+import { formatDate } from '@/lib/utils';
 
 export type { WeekJob };
 
@@ -239,7 +240,7 @@ export function DashboardContent({
                       <span className="text-sm">{event.description || t('dash.great_work')}</span>
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {format(new Date(event.date), 'MMM d')}
+                      {formatDate(event.date, 'MMM d')}
                     </span>
                   </div>
                 ))}

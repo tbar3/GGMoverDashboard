@@ -2,6 +2,14 @@ import { query, queryOne } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireEmployee, requireBackOffice, scopedEmployeeId } from '@/lib/auth';
 
+/** A positive integer row cap, or null if the param is missing/invalid. Interpolated
+ *  directly into SQL, so it must never be able to become "NaN" or anything unsafe. */
+function safeLimit(raw: string | null): number | null {
+  if (!raw) return null;
+  const n = parseInt(raw, 10);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 export async function GET(request: NextRequest) {
   const guard = await requireEmployee();
   if (!guard.ok) return guard.response;
@@ -9,7 +17,7 @@ export async function GET(request: NextRequest) {
   // Crew are always locked to their own payroll; back office may filter or see all.
   const employeeId = scopedEmployeeId(guard.employee, request.nextUrl.searchParams.get('employee_id'));
   const weekStart = request.nextUrl.searchParams.get('week_start');
-  const limit = request.nextUrl.searchParams.get('limit');
+  const limit = safeLimit(request.nextUrl.searchParams.get('limit'));
 
   let sql = `
     SELECT p.*, e.name as employee_name, e.role as employee_role
@@ -36,7 +44,7 @@ export async function GET(request: NextRequest) {
   sql += ' ORDER BY p.week_start DESC, e.name ASC';
 
   if (limit) {
-    sql += ` LIMIT ${parseInt(limit)}`;
+    sql += ` LIMIT ${limit}`;
   }
 
   return NextResponse.json(await query(sql, params));

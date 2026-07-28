@@ -9,6 +9,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { WeeklyBonusCard, BonusHistoryTable, PayrollCompCards } from '@/components/crew/weekly-bonus';
 import { EventsTable } from '@/components/crew/events-table';
+import { PageHeader } from '@/components/page-header';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,12 +38,7 @@ export default async function MyBonusPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">My Bonus</h1>
-        <p className="text-muted-foreground mt-1">
-          Your live weekly bonus, whether it&apos;s still on, and the events behind it.
-        </p>
-      </div>
+      <PageHeader titleKey="bonus.title" subtitleKey="bonus.subtitle" />
       <WeeklyBonusCard week={week} />
       <PayrollCompCards comp={comp} />
       <BonusHistoryTable history={history} />

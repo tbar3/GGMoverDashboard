@@ -17,7 +17,7 @@ import {
 import { CalendarSync, Check, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Job } from '@/types';
-import { format } from 'date-fns';
+import { formatDate } from '@/lib/utils';
 
 function offsetDay(days: number): string {
   const d = new Date();
@@ -269,7 +269,7 @@ export default function CalendarSyncPage() {
                       <TableCell>
                         <Badge variant="outline">{job.job_number || '-'}</Badge>
                       </TableCell>
-                      <TableCell>{format(new Date(job.date), 'MMM d, yyyy')}</TableCell>
+                      <TableCell>{formatDate(job.date, 'MMM d, yyyy')}</TableCell>
                       <TableCell>
                         <div>
                           <p className="font-medium">{job.customer_name}</p>

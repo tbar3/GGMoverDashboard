@@ -27,6 +27,7 @@ import { format } from 'date-fns';
 import { Plus, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Damage, Employee, Job, CONFIG } from '@/types';
+import { formatDate } from '@/lib/utils';
 
 export default function DamagesPage() {
   const [damages, setDamages] = useState<Damage[]>([]);
@@ -148,7 +149,7 @@ export default function DamagesPage() {
                     <option value="">Select job...</option>
                     {jobs.map((job) => (
                       <option key={job.id} value={job.id}>
-                        {format(new Date(job.date), 'MMM d')} - {job.customer_name}
+                        {formatDate(job.date, 'MMM d')} - {job.customer_name}
                       </option>
                     ))}
                   </select>

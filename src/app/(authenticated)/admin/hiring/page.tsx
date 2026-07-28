@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { POSITIONS, FIT_BAND_LABELS, MAX_SCORE, type FitBand } from '@/lib/interview-scorecard';
 import { getPendingNewCrewEvals } from '@/lib/new-crew-eval';
+import { formatDate } from '@/lib/utils';
 
 interface CandidateRow {
   id: string;
@@ -162,7 +163,7 @@ export default async function HiringPage() {
                     <TableCell>{positionLabel(c.position)}</TableCell>
                     <TableCell>
                       {c.latest_interview_date
-                        ? format(new Date(c.latest_interview_date), 'MMM d, yyyy')
+                        ? formatDate(c.latest_interview_date, 'MMM d, yyyy')
                         : '—'}
                     </TableCell>
                     <TableCell>

@@ -2,13 +2,22 @@ import { query, queryOne } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireEmployee, requireBackOffice, isBackOffice } from '@/lib/auth';
 
+/** A positive integer row cap, or null if the param is missing/invalid. Interpolated
+ *  directly into SQL, so it must never be able to become "NaN" or anything unsafe. */
+function safeLimit(raw: string | null): number | null {
+  if (!raw) return null;
+  const n = parseInt(raw, 10);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 export async function GET(request: NextRequest) {
   const guard = await requireEmployee();
   if (!guard.ok) return guard.response;
 
   const bo = isBackOffice(guard.employee);
   const date = request.nextUrl.searchParams.get('date');
-  const limit = request.nextUrl.searchParams.get('limit');
+  // Ignore non-numeric/negative ?limit so a bad value can't produce "LIMIT NaN".
+  const limit = safeLimit(request.nextUrl.searchParams.get('limit'));
   // Crew are locked to jobs they're assigned to; back office may query anyone / all.
   const employeeId = bo ? request.nextUrl.searchParams.get('employee_id') : guard.employee.id;
 
@@ -21,13 +30,13 @@ export async function GET(request: NextRequest) {
 
   if (employeeId) {
     let sql = 'SELECT * FROM jobs WHERE $1 = ANY(crew_ids) ORDER BY date DESC';
-    if (limit) sql += ` LIMIT ${parseInt(limit)}`;
+    if (limit) sql += ` LIMIT ${limit}`;
     return NextResponse.json(await query(sql, [employeeId]));
   }
 
   // Back office, no filter → all jobs.
   let sql = 'SELECT * FROM jobs ORDER BY date DESC';
-  if (limit) sql += ` LIMIT ${parseInt(limit)}`;
+  if (limit) sql += ` LIMIT ${limit}`;
 
   return NextResponse.json(await query(sql));
 }

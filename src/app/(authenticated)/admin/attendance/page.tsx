@@ -14,17 +14,27 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { Employee, Attendance, CONFIG } from '@/types';
 import { Save, Download } from 'lucide-react';
 
 const DEFAULT_START = `${CONFIG.TARDY_CUTOFF_HOUR.toString().padStart(2, '0')}:${CONFIG.TARDY_CUTOFF_MINUTE.toString().padStart(2, '0')}`;
 
+// Local calendar date as YYYY-MM-DD. Using toISOString() here would return the
+// UTC day, which flips to "tomorrow" on ET evenings and made the board header
+// disagree with the date picker.
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d
+    .getDate()
+    .toString()
+    .padStart(2, '0')}`;
+}
+
 function daysAgo(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
-  return d.toISOString().split('T')[0];
+  return ymd(d);
 }
 
 export default function AttendancePage() {
@@ -32,7 +42,7 @@ export default function AttendancePage() {
   const [exportEnd, setExportEnd] = useState(daysAgo(0));
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendance, setAttendance] = useState<Record<string, Attendance>>({});
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(ymd(new Date()));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -190,7 +200,7 @@ export default function AttendancePage() {
       <Card>
         <CardHeader>
           <CardTitle>
-            Attendance for {format(new Date(selectedDate), 'EEEE, MMMM d, yyyy')}
+            Attendance for {format(parseISO(selectedDate), 'EEEE, MMMM d, yyyy')}
           </CardTitle>
           <CardDescription>
             Enter arrival times and check uniform compliance

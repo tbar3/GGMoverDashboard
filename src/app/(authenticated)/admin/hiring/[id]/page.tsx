@@ -1,7 +1,6 @@
 import { queryOne } from '@/lib/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { format } from 'date-fns';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
@@ -20,6 +19,7 @@ import {
   FIT_BAND_LABELS,
   type FitBand,
 } from '@/lib/interview-scorecard';
+import { formatDate } from '@/lib/utils';
 
 interface ScorecardRow {
   id: string;
@@ -83,7 +83,7 @@ export default async function ScorecardPage({ params }: { params: Promise<{ id: 
         <div>
           <h1 className="text-2xl font-bold text-foreground">{s.candidate_name}</h1>
           <p className="text-muted-foreground mt-1">
-            {positionLabel} · interviewed {format(new Date(s.interview_date), 'MMMM d, yyyy')} by{' '}
+            {positionLabel} · interviewed {formatDate(s.interview_date, 'MMMM d, yyyy')} by{' '}
             {s.interviewer_name}
           </p>
         </div>

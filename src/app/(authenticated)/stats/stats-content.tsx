@@ -3,10 +3,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { differenceInMonths, format } from 'date-fns';
+import { differenceInMonths } from 'date-fns';
 import { CONFIG, Employee, Attendance, PerformanceEvent, PerfectWeek, MileageEntry } from '@/types';
 import { CalendarCheck, Clock, TrendingUp, Award } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { formatDate } from '@/lib/utils';
 
 interface StatsContentProps {
   employee: Employee;
@@ -121,7 +122,7 @@ export function StatsContent({
                 {attendance.length > 0 ? (
                   attendance.slice(0, 10).map((record) => (
                     <TableRow key={record.id}>
-                      <TableCell>{format(new Date(record.date), 'MMM d, yyyy')}</TableCell>
+                      <TableCell>{formatDate(record.date, 'MMM d, yyyy')}</TableCell>
                       <TableCell>{record.arrival_time || '-'}</TableCell>
                       <TableCell>
                         <Badge variant={record.is_tardy ? 'destructive' : 'default'}>
@@ -161,7 +162,7 @@ export function StatsContent({
                       </Badge>
                       <span className="text-sm">{event.description || t('dash.great_work')}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground">{format(new Date(event.date), 'MMM d')}</span>
+                    <span className="text-xs text-muted-foreground">{formatDate(event.date, 'MMM d')}</span>
                   </div>
                 ))}
               </div>
@@ -201,7 +202,7 @@ export function StatsContent({
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">{t('dash.start_date')}</span>
-              <span className="font-medium">{format(new Date(employee.start_date), 'MMM d, yyyy')}</span>
+              <span className="font-medium">{formatDate(employee.start_date, 'MMM d, yyyy')}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">{t('stats.tenure_shares')}</span>

@@ -3,11 +3,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { format } from 'date-fns';
 import { Job } from '@/types';
 import { Clock, MapPin, Phone, Truck, Users, FileText } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { JobsBrowser } from '../dashboard/jobs-browser';
+import { formatDate } from '@/lib/utils';
 
 interface JobsContentProps {
   pastJobs: Job[];
@@ -58,7 +58,7 @@ function JobCard({ job, isToday, t, compact }: { job: Job; isToday: boolean; t: 
           </div>
         </div>
         <CardDescription>
-          {format(new Date(job.date), 'EEEE, MMMM d, yyyy')}
+          {formatDate(job.date, 'EEEE, MMMM d, yyyy')}
           {job.start_time && job.end_time && ` \u00B7 ${job.start_time} \u2013 ${job.end_time}`}
         </CardDescription>
       </CardHeader>

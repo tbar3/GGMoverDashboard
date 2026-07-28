@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Job, Employee } from '@/types';
-import { format } from 'date-fns';
+import { formatDate } from '@/lib/utils';
 
 export default function JobDetailPage() {
   const params = useParams();
@@ -111,7 +111,7 @@ export default function JobDetailPage() {
             {job.service_type && <Badge>{job.service_type}</Badge>}
           </div>
           <p className="text-muted-foreground mt-1">
-            {format(new Date(job.date), 'EEEE, MMMM d, yyyy')}
+            {formatDate(job.date, 'EEEE, MMMM d, yyyy')}
             {job.start_time && job.end_time && ` \u00B7 ${job.start_time} \u2013 ${job.end_time}`}
           </p>
         </div>

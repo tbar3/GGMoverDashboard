@@ -6,10 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Clock, MapPin, Check, X } from 'lucide-react';
-import { format } from 'date-fns';
 import { useI18n } from '@/lib/i18n';
 import { respondToJob } from '@/lib/crew-actions';
 import type { Job } from '@/types';
+import { formatDate } from '@/lib/utils';
 
 export type WeekJob = Job & {
   response: 'accepted' | 'declined' | null;
@@ -79,7 +79,7 @@ export function JobRow({
             )}
           </div>
           <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-            <span>{format(new Date(job.date), 'EEE, MMM d')}</span>
+            <span>{formatDate(job.date, 'EEE, MMM d')}</span>
             {job.start_time && (
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />

@@ -1,12 +1,8 @@
 import { getTrucks } from '@/lib/materials/queries';
 import { createJob } from '@/lib/materials/actions';
+import { NewJobForm } from './new-job-form';
 
 export const dynamic = 'force-dynamic';
-
-function today(): string {
-  // Local date in YYYY-MM-DD (server timezone is fine for a single-warehouse app)
-  return new Date().toLocaleDateString('en-CA');
-}
 
 export default async function NewJobPage() {
   const trucks = await getTrucks();
@@ -16,67 +12,14 @@ export default async function NewJobPage() {
     const truckId = Number(formData.get('truckId'));
     const date = String(formData.get('date'));
     const storageIn = formData.get('storageIn') === 'on';
-    await createJob(truckId, date, storageIn);
+    // Header auto-filled from a linked calendar job (blank when entered manually).
+    await createJob(truckId, date, storageIn, 'crew', {
+      customer: String(formData.get('customer') ?? ''),
+      jobNumber: String(formData.get('jobNumber') ?? ''),
+      crewLead: String(formData.get('crewLead') ?? ''),
+      crew: String(formData.get('crew') ?? ''),
+    });
   }
 
-  return (
-    <div className="mx-auto max-w-md">
-      <p className="gg-eyebrow mb-1">New Job</p>
-      <h1 className="mb-1 font-display text-2xl font-bold tracking-tight text-navy-700">
-        Start a Job Count
-      </h1>
-      <p className="mb-5 font-ui text-sm text-navy-500">
-        Pick the truck and date. Pre-Dispatch counts pre-fill from what&apos;s currently on that
-        truck.
-      </p>
-
-      {trucks.length === 0 ? (
-        <p className="rounded-lg border-2 border-warning bg-warning/10 p-4 font-ui text-sm text-navy-700">
-          No trucks yet. Add one under <strong>Admin</strong> first.
-        </p>
-      ) : (
-        <form action={start} className="gg-card space-y-4 p-5">
-          <label className="block">
-            <span className="gg-eyebrow mb-1 block">Truck</span>
-            <select name="truckId" required defaultValue="" className="gg-input w-full">
-              <option value="" disabled>
-                Choose a truck…
-              </option>
-              {trucks.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="gg-eyebrow mb-1 block">Date</span>
-            <input
-              type="date"
-              name="date"
-              required
-              defaultValue={today()}
-              className="gg-input box-border block h-11 w-full min-w-0 appearance-none"
-            />
-          </label>
-
-          <label className="flex items-start gap-2 rounded-md border-2 border-navy-100 bg-cream-50 p-3 font-ui text-sm text-navy-700">
-            <input type="checkbox" name="storageIn" className="mt-0.5 h-5 w-5" />
-            <span>
-              <span className="font-semibold">Storage-In job</span>
-              <span className="block text-navy-500">
-                Pads stay wrapped in storage. In Step 2 the crew records pads left in storage on the
-                Furniture Pads row — charged to the customer and deducted from total pads on hand.
-              </span>
-            </span>
-          </label>
-
-          <button type="submit" className="gg-btn-cta w-full">
-            Open Count Sheet
-          </button>
-        </form>
-      )}
-    </div>
-  );
+  return <NewJobForm trucks={trucks} action={start} />;
 }

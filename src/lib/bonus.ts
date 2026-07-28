@@ -345,7 +345,7 @@ export interface JobCrewOption {
   jobNumber: string | null;
   customer: string | null;
   startTime: string | null;
-  crew: { id: string; name: string }[];
+  crew: { id: string; name: string; role?: string }[];
 }
 
 /**
@@ -360,11 +360,11 @@ export async function getJobsByDate(date: string): Promise<JobCrewOption[]> {
     job_number: string | null;
     customer_name: string | null;
     start_time: string | null;
-    crew: { id: string; name: string }[] | null;
+    crew: { id: string; name: string; role: string }[] | null;
   }>(
     `SELECT j.id, j.date::text, j.job_number, j.customer_name, j.start_time,
             COALESCE((
-              SELECT json_agg(json_build_object('id', e.id, 'name', e.name) ORDER BY e.name)
+              SELECT json_agg(json_build_object('id', e.id, 'name', e.name, 'role', e.role) ORDER BY e.name)
                 FROM employees e WHERE e.id = ANY(j.crew_ids)
             ), '[]'::json) AS crew
        FROM jobs j

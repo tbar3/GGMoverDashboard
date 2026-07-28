@@ -16,6 +16,8 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { Employee } from '@/types';
 import { getWeekBoard, weekStartOf } from '@/lib/bonus';
+import { getBaseRate } from '@/lib/settings';
+import { effectiveRate } from '@/lib/skills';
 
 function money(n: number): string {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -26,13 +28,21 @@ export default async function EmployeesPage() {
   if (!user) return null;
 
   const now = new Date();
-  const [employees, lastWeekBoard] = await Promise.all([
+  const [employees, lastWeekBoard, baseRate, raiseRows] = await Promise.all([
     query<Employee>('SELECT * FROM employees ORDER BY name'),
     getWeekBoard(weekStartOf(subWeeks(now, 1))),
+    getBaseRate(),
+    query<{ employee_id: string; raises: number }>(
+      `SELECT es.employee_id, COALESCE(SUM(s.raise_amount), 0)::float8 AS raises
+         FROM employee_skills es JOIN skills s ON s.id = es.skill_id
+        GROUP BY es.employee_id`
+    ),
   ]);
 
   // Last completed week's bonus per employee — the dispatch signal.
   const lastWeekBonus = new Map(lastWeekBoard.map((b) => [b.employeeId, b.result]));
+  // Calculated pay/hr = override, else base + earned-skill raises.
+  const raisesByEmp = new Map(raiseRows.map((r) => [r.employee_id, Number(r.raises)]));
 
   return (
     <div className="p-6 space-y-6">
@@ -75,6 +85,11 @@ export default async function EmployeesPage() {
                 employees.map((employee) => {
                   const tenureMonths = differenceInMonths(now, new Date(employee.start_date));
                   const bonus = lastWeekBonus.get(employee.id);
+                  const payPerHr = effectiveRate(
+                    employee.hourly_rate != null ? Number(employee.hourly_rate) : null,
+                    raisesByEmp.get(employee.id) ?? 0,
+                    baseRate
+                  );
                   return (
                     <TableRow key={employee.id}>
                       <TableCell className="font-medium">{employee.name}</TableCell>
@@ -93,7 +108,9 @@ export default async function EmployeesPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        {employee.hourly_rate != null ? `$${Number(employee.hourly_rate).toFixed(2)}` : <span className="text-muted-foreground">—</span>}
+                        <span title={employee.hourly_rate != null ? 'Manual override' : 'Base + earned skills'}>
+                          {money(payPerHr)}
+                        </span>
                       </TableCell>
                       <TableCell className="text-right">
                         {bonus ? (

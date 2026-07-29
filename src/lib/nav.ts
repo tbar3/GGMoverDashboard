@@ -16,6 +16,7 @@ import {
   Target,
   MessageSquare,
   Award,
+  Trophy,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -111,6 +112,12 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         href: '/admin/performance',
         description: 'Attendance, strikes, and positives that drive the weekly bonus',
         icon: Star,
+      },
+      {
+        title: 'Weekly Scoreboard',
+        href: '/admin/scoreboard',
+        description: 'One sortable score per crew member — best to worst last week',
+        icon: Trophy,
       },
       {
         title: 'Damages',

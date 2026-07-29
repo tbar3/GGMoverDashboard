@@ -232,6 +232,24 @@ export interface BoardRow {
 }
 
 /**
+ * A single sortable "who had the best/worst week" score for the crew scoreboard.
+ *
+ * Starts from the week's EFFECTIVE bonus multiplier (base + positives, with the
+ * normal strike rules already applied — a strike forfeits the normal bonus but keeps
+ * discretionary GG Points, and the forfeit threshold zeroes everything). Then, per
+ * Trent's rule, every strike AFTER the first knocks off another 0.1, so repeat
+ * offenders sort to the bottom (and can go negative):
+ *   0 strikes → multiplier
+ *   1 strike  → multiplier (already reflects the forfeit) − 0.0
+ *   2 strikes → − 0.1
+ *   3 strikes → multiplier is 0 at the forfeit threshold, then − 0.2
+ */
+export function crewWeekScore(result: WeekResult): number {
+  const extraStrikePenalty = 0.1 * Math.max(0, result.strikeCount - 1);
+  return round2(result.multiplier - extraStrikePenalty);
+}
+
+/**
  * Every active employee's events + computed result for one week, for the admin
  * Performance board. Hours come from the weekly payroll import (payroll_entries);
  * having imported hours for the week is also what turns on Perfect Week — you

@@ -13,7 +13,14 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { ChevronLeft, ChevronRight, ArrowUpDown, Trophy } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ArrowUpDown,
+  Trophy,
+  ShieldCheck,
+  CheckCircle2,
+} from 'lucide-react';
 
 export interface ScoreRow {
   employeeId: string;
@@ -50,6 +57,14 @@ export function ScoreboardTable({
 }) {
   const [sortKey, setSortKey] = useState<SortKey>('score');
   const [asc, setAsc] = useState(false); // score defaults high→low (best first)
+  const [view, setView] = useState<'board' | 'eligible'>('board');
+
+  // "Still eligible" = no strikes this week. A single strike forfeits the normal
+  // bonus, so a clean sheet is what keeps a crew member in the running.
+  const eligible = useMemo(
+    () => rows.filter((r) => r.strikes === 0).sort((a, b) => a.name.localeCompare(b.name)),
+    [rows]
+  );
 
   // Fixed rank by score (1 = best), independent of how the table is sorted.
   const rankById = useMemo(() => {
@@ -122,6 +137,36 @@ export function ScoreboardTable({
         </div>
       </div>
 
+      {/* View toggle: full scoreboard vs. the crew-facing "still eligible" list */}
+      <div className="inline-flex rounded-lg border p-1">
+        <button
+          type="button"
+          onClick={() => setView('board')}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+            view === 'board'
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <Trophy className="h-4 w-4" />
+          Scoreboard
+        </button>
+        <button
+          type="button"
+          onClick={() => setView('eligible')}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+            view === 'eligible'
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <ShieldCheck className="h-4 w-4" />
+          Still Eligible
+        </button>
+      </div>
+
       {/* Week navigator */}
       <Card>
         <CardContent className="flex items-center justify-between p-4">
@@ -148,6 +193,10 @@ export function ScoreboardTable({
         </CardContent>
       </Card>
 
+      {view === 'eligible' ? (
+        <EligibleView eligible={eligible} total={rows.length} />
+      ) : (
+        <>
       {/* How the score works */}
       <p className="text-sm text-muted-foreground">
         <span className="font-medium text-foreground">Score</span> = the week&apos;s bonus
@@ -220,6 +269,55 @@ export function ScoreboardTable({
           )}
         </CardContent>
       </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+function EligibleView({ eligible, total }: { eligible: ScoreRow[]; total: number }) {
+  return (
+    <div className="space-y-4">
+      <Card className="border-emerald-200 bg-emerald-50/50">
+        <CardContent className="flex items-center gap-3 p-4">
+          <ShieldCheck className="h-6 w-6 text-emerald-600" />
+          <div>
+            <p className="text-lg font-semibold text-foreground">
+              {eligible.length} of {total} still eligible for the bonus
+            </p>
+            <p className="text-sm text-muted-foreground">
+              A clean sheet — no strikes this week. One strike forfeits the bonus.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {eligible.length === 0 ? (
+        <Card>
+          <CardContent className="p-6 text-center text-muted-foreground">
+            No crew members are still eligible this week.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {eligible.map((r) => (
+            <Card key={r.employeeId} className="border-emerald-200">
+              <CardContent className="flex items-center gap-3 p-4">
+                <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-600" />
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold text-foreground">{r.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {r.role}
+                    {r.positives > 0 && (
+                      <span className="ml-1 text-emerald-600">· +{r.positives}</span>
+                    )}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

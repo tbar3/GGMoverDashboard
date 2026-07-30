@@ -28,16 +28,27 @@ export default async function ScoreboardPage({
   const weekStart =
     sp.week && /^\d{4}-\d{2}-\d{2}$/.test(sp.week) ? weekStartOf(sp.week) : lastWeek;
 
-  const [board, roleRows] = await Promise.all([
+  const [board, roleRows, assignedRows] = await Promise.all([
     getWeekBoard(weekStart),
     query<{ id: string; role: string }>(
       'SELECT id, role FROM employees WHERE is_active = TRUE'
     ),
+    // Crew assigned to at least one job during this week — the scoreboard only
+    // shows people who actually worked (were scheduled) this week.
+    query<{ employee_id: string }>(
+      `SELECT DISTINCT c.employee_id
+         FROM jobs j, unnest(j.crew_ids) AS c(employee_id)
+        WHERE j.date >= $1 AND j.date <= $1::date + 6`,
+      [weekStart]
+    ),
   ]);
 
   const roleById = new Map(roleRows.map((r) => [r.id, r.role]));
+  const assignedIds = new Set(assignedRows.map((r) => r.employee_id));
 
-  const rows: ScoreRow[] = board.map((b) => ({
+  const rows: ScoreRow[] = board
+    .filter((b) => assignedIds.has(b.employeeId))
+    .map((b) => ({
     employeeId: b.employeeId,
     name: b.name,
     role: roleLabel(roleById.get(b.employeeId) ?? ''),

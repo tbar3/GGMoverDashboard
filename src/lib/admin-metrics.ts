@@ -50,6 +50,46 @@ export async function getRecentDeclines(): Promise<DeclineAlert[]> {
   );
 }
 
+export interface CrewResponse {
+  jobId: string;
+  jobNumber: string | null;
+  customer: string | null;
+  jobDate: string;
+  startTime: string | null;
+  employeeId: string;
+  employeeName: string;
+  response: 'accepted' | 'declined';
+  reason: string | null;
+  respondedAt: string;
+}
+
+/**
+ * Every crew accept/decline, newest response first — the full audit trail behind
+ * the admin Responses page. `filter` narrows to one kind; 'all' returns both.
+ * Limited to a recent window so the table stays fast.
+ */
+export async function getCrewResponses(
+  filter: 'all' | 'accepted' | 'declined' = 'all',
+  limit = 300
+): Promise<CrewResponse[]> {
+  const where =
+    filter === 'all' ? '' : `WHERE r.response = '${filter === 'accepted' ? 'accepted' : 'declined'}'`;
+  return query<CrewResponse>(
+    `SELECT j.id AS "jobId", j.job_number AS "jobNumber", j.customer_name AS customer,
+            j.date::text AS "jobDate", j.start_time AS "startTime",
+            e.id AS "employeeId", e.name AS "employeeName",
+            r.response AS response, r.decline_reason AS reason,
+            r.responded_at::text AS "respondedAt"
+       FROM job_responses r
+       JOIN jobs j ON j.id = r.job_id
+       JOIN employees e ON e.id = r.employee_id
+      ${where}
+      ORDER BY r.responded_at DESC
+      LIMIT $1`,
+    [limit]
+  );
+}
+
 export interface TerminationFlag {
   employeeId: string;
   employeeName: string;

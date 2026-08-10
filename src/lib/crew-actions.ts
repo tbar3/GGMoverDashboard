@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { query, queryOne } from '@/lib/db';
 import { getCurrentEmployee } from '@/lib/auth';
+import { notifyAdminsOfDecline } from '@/lib/job-decline-alert';
 
 // Crew-facing self-service actions. Each self-guards: an employee acts only on
 // their own jobs / their own profile.
@@ -50,6 +51,14 @@ export async function respondToJob(
       await maybeAutoCallOutStrike(jobId, employee.id);
     } catch {
       /* strike automation is best-effort; the decline is already recorded */
+    }
+
+    // Email the back office so the job can be re-staffed. Best-effort — a mail
+    // failure must never break the decline the crew member just recorded.
+    try {
+      await notifyAdminsOfDecline(jobId, employee.name, declineReason!.trim());
+    } catch {
+      /* notification is best-effort; the decline is already recorded */
     }
   }
 

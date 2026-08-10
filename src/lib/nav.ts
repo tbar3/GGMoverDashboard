@@ -9,6 +9,7 @@ import {
   Link2,
   ShieldCheck,
   Briefcase,
+  ClipboardCheck,
   DollarSign,
   FileSpreadsheet,
   Package,
@@ -61,6 +62,12 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         href: '/admin/jobs',
         description: 'Every move, its crew, and its outcome',
         icon: Briefcase,
+      },
+      {
+        title: 'Crew Responses',
+        href: '/admin/responses',
+        description: 'Who accepted or declined jobs — and why they declined',
+        icon: ClipboardCheck,
       },
       {
         title: 'Profitability',

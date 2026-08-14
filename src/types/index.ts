@@ -233,7 +233,7 @@ export const HELPER_CHECKLIST: ChecklistItem[] = [
 // Configuration constants
 export const CONFIG = {
   WAREHOUSE_ADDRESS: '1285 Collier Rd NW, Atlanta, GA 30318',
-  MILEAGE_RATE: 0.60,
+  MILEAGE_RATE: 0.76,
   TARDY_CUTOFF_HOUR: 7,
   TARDY_CUTOFF_MINUTE: 15,
   DEFAULT_POOL_PERCENTAGE: 4.5,

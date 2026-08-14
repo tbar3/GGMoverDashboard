@@ -18,6 +18,7 @@ import {
   MessageSquare,
   Award,
   Trophy,
+  Megaphone,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -121,6 +122,18 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         icon: DollarSign,
       },
       {
+        title: 'Payroll Run',
+        href: '/admin/payroll/run',
+        description: 'SmartMoving report → ADP-ready W-2 & 1099 tables',
+        icon: FileSpreadsheet,
+      },
+      {
+        title: 'Marketing Hours',
+        href: '/admin/payroll/marketing',
+        description: 'Weekly marketing hours that feed payroll',
+        icon: Megaphone,
+      },
+      {
         title: 'Performance',
         href: '/admin/performance',
         description: 'Attendance, strikes, and positives that drive the weekly bonus',
@@ -141,7 +154,7 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
       {
         title: 'Mileage',
         href: '/admin/mileage',
-        description: 'Reimbursement at $0.60/mi',
+        description: 'Reimbursement at $0.76/mi',
         icon: Car,
       },
       {

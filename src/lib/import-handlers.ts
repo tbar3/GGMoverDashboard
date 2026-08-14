@@ -380,7 +380,7 @@ export async function importMileage(rows: Record<string, unknown>[]): Promise<Im
       continue;
     }
 
-    const rate = 0.60;
+    const rate = 0.76;
     const amount = getNumber(row, 'amount', 'reimbursement') || miles * rate;
 
     try {

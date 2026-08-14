@@ -17,6 +17,7 @@ import {
   UserX,
 } from 'lucide-react';
 import { getAdminDashboard, getRecentDeclines, getTerminationFlags } from '@/lib/admin-metrics';
+import { getQueuedReviews } from '@/lib/google-reviews';
 import { getPendingNewCrewEvals } from '@/lib/new-crew-eval';
 import { formatDate } from '@/lib/utils';
 
@@ -36,11 +37,12 @@ export default async function AdminDashboardPage() {
   const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
   const trialCutoff = format(subDays(now, 31), 'yyyy-MM-dd');
 
-  const [d, declines, terminationFlags, pendingEvals] = await Promise.all([
+  const [d, declines, terminationFlags, pendingEvals, queuedReviews] = await Promise.all([
     getAdminDashboard(monthStart, monthEnd, today, weekEnd, weekStart, trialCutoff),
     getRecentDeclines(),
     getTerminationFlags(),
     getPendingNewCrewEvals(),
+    getQueuedReviews(),
   ]);
   const dueEvals = pendingEvals.filter((e) => e.status !== 'upcoming');
 
@@ -50,6 +52,7 @@ export default async function AdminDashboardPage() {
     { count: d.alerts.lowInventory, label: 'low-inventory items', href: '/admin/materials' },
     { count: d.alerts.jobsNotInSmartMoving, label: 'jobs not in SmartMoving', href: '/admin/materials' },
     { count: d.alerts.damagesThisWeek, label: 'new damages this week', href: '/admin/damages' },
+    { count: queuedReviews.length, label: 'Google reviews to match', href: '/admin/reviews' },
   ].filter((a) => a.count > 0);
 
   const trucksToday = d.todaysJobs.reduce((s, j) => s + Number(j.quoted_trucks ?? 0), 0);

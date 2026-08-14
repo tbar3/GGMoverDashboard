@@ -70,6 +70,12 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         icon: ClipboardCheck,
       },
       {
+        title: 'Google Reviews',
+        href: '/admin/reviews',
+        description: '5-star reviews auto-credited to the crew who earned them',
+        icon: Star,
+      },
+      {
         title: 'Profitability',
         href: '/admin/profitability',
         description: 'P&L, job-by-job margins, weekly & monthly',

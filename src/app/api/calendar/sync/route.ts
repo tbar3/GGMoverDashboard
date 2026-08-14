@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireBackOffice } from '@/lib/auth';
 import { syncCalendarJobs } from '@/lib/calendar-sync';
 
+// A deep backfill upserts each event one at a time, so give it the full window.
+export const maxDuration = 300;
+
 export async function POST(request: NextRequest) {
   const guard = await requireBackOffice();
   if (!guard.ok) return guard.response;

@@ -25,6 +25,11 @@ function offsetDay(days: number): string {
   return d.toISOString().split('T')[0];
 }
 
+// A floor well before any SmartMoving calendar existed. Google's timeMin can be
+// any date — set it earlier than the first event and the sync pulls everything.
+// Used by "Sync all history" so late-arriving reviews can be matched to old jobs.
+const EARLIEST_DATE = '2015-01-01';
+
 export default function CalendarSyncPage() {
   const [connected, setConnected] = useState<boolean | null>(null);
   const [calendarFound, setCalendarFound] = useState<boolean | null>(null);
@@ -75,7 +80,10 @@ export default function CalendarSyncPage() {
     setLoading(false);
   }
 
-  async function handleSync() {
+  async function handleSync(overrideStart?: string, overrideEnd?: string) {
+    // Explicit args win over state so "Sync all history" doesn't race a setState.
+    const from = overrideStart ?? startDate;
+    const to = overrideEnd ?? endDate;
     setSyncing(true);
     setLastSyncResult(null);
 
@@ -83,7 +91,7 @@ export default function CalendarSyncPage() {
       const res = await fetch('/api/calendar/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ startDate, endDate }),
+        body: JSON.stringify({ startDate: from, endDate: to }),
       });
 
       const data = await res.json();
@@ -101,6 +109,16 @@ export default function CalendarSyncPage() {
     } finally {
       setSyncing(false);
     }
+  }
+
+  // Pull the entire calendar history (through 90 days out) in one go, so reviews
+  // that arrive months after a move can still be matched to the original job.
+  async function handleBackfillAll() {
+    const from = EARLIEST_DATE;
+    const to = offsetDay(90);
+    setStartDate(from);
+    setEndDate(to);
+    await handleSync(from, to);
   }
 
   return (
@@ -170,7 +188,7 @@ export default function CalendarSyncPage() {
           <CardHeader>
             <CardTitle>Sync Jobs</CardTitle>
             <CardDescription>
-              Select a date range to import jobs from your calendar
+              Select a date range to import jobs — or pull your entire history at once.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -193,7 +211,7 @@ export default function CalendarSyncPage() {
                   onChange={(e) => setEndDate(e.target.value)}
                 />
               </div>
-              <Button onClick={handleSync} disabled={syncing}>
+              <Button onClick={() => handleSync()} disabled={syncing}>
                 {syncing ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
@@ -201,7 +219,19 @@ export default function CalendarSyncPage() {
                 )}
                 {syncing ? 'Syncing...' : 'Sync Now'}
               </Button>
+              <Button variant="outline" onClick={handleBackfillAll} disabled={syncing}>
+                {syncing ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Sync all history
+              </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              &ldquo;Sync all history&rdquo; pulls every job back to {EARLIEST_DATE} — use it once to
+              backfill past moves so late-arriving 5-star reviews can be matched to the right job.
+            </p>
 
             {lastSyncResult && (
               <div className="rounded-lg border p-4 bg-muted space-y-1">

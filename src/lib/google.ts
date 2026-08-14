@@ -7,7 +7,13 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_URI
 );
 
-const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
+const SCOPES = [
+  'https://www.googleapis.com/auth/calendar.readonly',
+  // Read the business's own Google reviews (Business Profile API). Requires the
+  // Cloud project to be granted Basic API access; adding it here means the next
+  // consent re-issues a token carrying both scopes.
+  'https://www.googleapis.com/auth/business.manage',
+];
 
 export function getAuthUrl() {
   return oauth2Client.generateAuthUrl({
@@ -22,7 +28,12 @@ export async function getTokensFromCode(code: string) {
   return tokens;
 }
 
-export async function getCalendarClient() {
+/**
+ * The single shared, authorized OAuth2 client (or null if Google isn't connected).
+ * Loads the one stored token and wires up refresh-persistence, so any Google API —
+ * Calendar, Business Profile — can reuse the same credentials with no user present.
+ */
+export async function getGoogleAuthClient() {
   const stored = await queryOne<{
     access_token: string;
     refresh_token: string;
@@ -47,7 +58,13 @@ export async function getCalendarClient() {
     }
   });
 
-  return google.calendar({ version: 'v3', auth: oauth2Client });
+  return oauth2Client;
+}
+
+export async function getCalendarClient() {
+  const auth = await getGoogleAuthClient();
+  if (!auth) return null;
+  return google.calendar({ version: 'v3', auth });
 }
 
 export async function storeTokens(tokens: {

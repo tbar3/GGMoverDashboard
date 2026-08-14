@@ -40,16 +40,40 @@ export async function syncCalendarJobs(startDate: string, endDate: string): Prom
       };
     }
 
-    const response = await calendar.events.list({
+    // Page through the whole range. Google returns at most 250 events per call,
+    // so without following nextPageToken a wide backfill (e.g. a year of history)
+    // would silently stop at the first 250. MAX_PAGES caps a runaway pull at
+    // 10,000 events — far more than any real range.
+    const MAX_PAGES = 40;
+    const timeMin = new Date(startDate).toISOString();
+    const timeMax = new Date(endDate + 'T23:59:59').toISOString();
+
+    const firstPage = await calendar.events.list({
       calendarId: smartMovingCal.id,
-      timeMin: new Date(startDate).toISOString(),
-      timeMax: new Date(endDate + 'T23:59:59').toISOString(),
+      timeMin,
+      timeMax,
       singleEvents: true,
       orderBy: 'startTime',
       maxResults: 250,
     });
+    const events = firstPage.data.items ? [...firstPage.data.items] : [];
+    let pageToken: string | undefined = firstPage.data.nextPageToken ?? undefined;
+    let pages = 1;
+    while (pageToken && pages < MAX_PAGES) {
+      const next = await calendar.events.list({
+        calendarId: smartMovingCal.id,
+        timeMin,
+        timeMax,
+        singleEvents: true,
+        orderBy: 'startTime',
+        maxResults: 250,
+        pageToken,
+      });
+      if (next.data.items) events.push(...next.data.items);
+      pageToken = next.data.nextPageToken ?? undefined;
+      pages++;
+    }
 
-    const events = response.data.items || [];
     let synced = 0;
     let skipped = 0;
     const errors: string[] = [];

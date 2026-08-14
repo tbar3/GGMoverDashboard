@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { addDays, format } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,6 +13,7 @@ import { AlertTriangle, Download, Upload } from 'lucide-react';
 import { getPayrollRun, getPayrollRunWeeks } from '@/lib/payroll-run';
 import { ReportUpload } from './report-upload';
 import { CorrectionsTable } from './corrections-table';
+import { PeriodSelect } from './period-select';
 
 function money(n: number): string {
   return `$${n.toFixed(2)}`;
@@ -79,34 +79,25 @@ export default async function PayrollRunPage({
       </Card>
 
       {weeks.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground">Payroll period:</span>
-          {weeks.map((w) => (
-            <Link
-              key={w.weekStart}
-              href={`/admin/payroll/run?week=${w.weekStart}`}
-              className={`rounded-md border px-3 py-1.5 text-sm ${
-                w.weekStart === weekStart ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-              }`}
-            >
-              {fmtDate(w.weekStart, 'MMM d')} – {fmtDate(periodInfo(w.weekStart).end, 'MMM d')}
-            </Link>
-          ))}
-        </div>
-      )}
-
-      {run && weekStart && (
-        <div className="flex flex-wrap gap-4">
-          <div className="rounded-lg border px-4 py-2">
-            <p className="text-xs text-muted-foreground">Payroll period</p>
-            <p className="font-semibold">
-              {fmtDate(weekStart)} – {fmtDate(periodInfo(weekStart).end)}
-            </p>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Payroll period</span>
+            <PeriodSelect
+              weekStart={weekStart!}
+              weeks={weeks.map((w) => ({
+                weekStart: w.weekStart,
+                label: `${fmtDate(w.weekStart, 'MMM d')} – ${fmtDate(periodInfo(w.weekStart).end, 'MMM d, yyyy')}`,
+              }))}
+            />
           </div>
-          <div className="rounded-lg border px-4 py-2">
-            <p className="text-xs text-muted-foreground">Check date</p>
-            <p className="font-semibold">{fmtDate(periodInfo(weekStart).checkDate, 'EEE, MMM d, yyyy')}</p>
-          </div>
+          {weekStart && (
+            <div className="text-sm">
+              <span className="text-muted-foreground">Check date: </span>
+              <span className="font-semibold">
+                {fmtDate(periodInfo(weekStart).checkDate, 'EEE, MMM d, yyyy')}
+              </span>
+            </div>
+          )}
         </div>
       )}
 

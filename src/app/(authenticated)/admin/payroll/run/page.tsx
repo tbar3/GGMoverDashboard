@@ -1,6 +1,6 @@
 import Link from 'next/link';
+import { addDays, format } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -20,6 +20,18 @@ function money(n: number): string {
 }
 function hrs(n: number): string {
   return n.toFixed(2);
+}
+function fmtDate(d: string, pattern = 'MMM d, yyyy'): string {
+  return format(new Date(`${d}T12:00:00`), pattern);
+}
+// A pay period is the Mon–Sun week; the check date is the following-following Friday
+// (period start + 11 days) — matches the existing payroll convention.
+function periodInfo(weekStart: string) {
+  const start = new Date(`${weekStart}T12:00:00`);
+  return {
+    end: format(addDays(start, 6), 'yyyy-MM-dd'),
+    checkDate: format(addDays(start, 11), 'yyyy-MM-dd'),
+  };
 }
 
 export default async function PayrollRunPage({
@@ -68,7 +80,7 @@ export default async function PayrollRunPage({
 
       {weeks.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground">Week:</span>
+          <span className="text-sm text-muted-foreground">Payroll period:</span>
           {weeks.map((w) => (
             <Link
               key={w.weekStart}
@@ -77,9 +89,24 @@ export default async function PayrollRunPage({
                 w.weekStart === weekStart ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
               }`}
             >
-              {w.periodStart ?? w.weekStart}
+              {fmtDate(w.weekStart, 'MMM d')} – {fmtDate(periodInfo(w.weekStart).end, 'MMM d')}
             </Link>
           ))}
+        </div>
+      )}
+
+      {run && weekStart && (
+        <div className="flex flex-wrap gap-4">
+          <div className="rounded-lg border px-4 py-2">
+            <p className="text-xs text-muted-foreground">Payroll period</p>
+            <p className="font-semibold">
+              {fmtDate(weekStart)} – {fmtDate(periodInfo(weekStart).end)}
+            </p>
+          </div>
+          <div className="rounded-lg border px-4 py-2">
+            <p className="text-xs text-muted-foreground">Check date</p>
+            <p className="font-semibold">{fmtDate(periodInfo(weekStart).checkDate, 'EEE, MMM d, yyyy')}</p>
+          </div>
         </div>
       )}
 

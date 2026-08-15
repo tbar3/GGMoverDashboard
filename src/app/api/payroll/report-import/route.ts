@@ -67,6 +67,8 @@ export async function POST(request: NextRequest) {
   const periodEnd = jobDates[jobDates.length - 1];
   const weekStart = weekStartOf(periodStart);
   const weekEnd = format(addDays(new Date(`${weekStart}T12:00:00`), 6), 'yyyy-MM-dd');
+  // Check date = the Friday of the second following week (period start + 11 days).
+  const payDate = format(addDays(new Date(`${weekStart}T12:00:00`), 11), 'yyyy-MM-dd');
 
   // Resolve report names (incl. sales aliases) to employees.
   const employees = await query<EmpRow>(
@@ -122,37 +124,43 @@ export async function POST(request: NextRequest) {
       miles: 0,
     });
 
-    await query(
-      `INSERT INTO payroll_entries (
-         employee_id, week_start, week_end, period_start, period_end, source_file,
-         billable_hours, warehouse_hours, marketing_hours, total_hours, overtime_hours,
-         hourly_rate, standard_pay, overtime_rate, overtime_pay, gross_pay,
-         tip, commissions, miles, total_compensation, job_hours, travel_hours,
-         lunch_reimbursement, mileage_reimbursement, other_reimbursement
-       ) VALUES (
-         $1,$2,$3,$4,$5,$6,
-         $7,$8,$9,$10,$11,
-         $12,$13,$14,$15,$16,
-         $17,$18,$19,$20,$21,0,
-         0,0,0
-       )
-       ON CONFLICT (employee_id, week_start) DO UPDATE SET
-         week_end = EXCLUDED.week_end, period_start = EXCLUDED.period_start,
-         period_end = EXCLUDED.period_end, source_file = EXCLUDED.source_file,
-         billable_hours = EXCLUDED.billable_hours, warehouse_hours = EXCLUDED.warehouse_hours,
-         total_hours = EXCLUDED.total_hours, overtime_hours = EXCLUDED.overtime_hours,
-         hourly_rate = EXCLUDED.hourly_rate, standard_pay = EXCLUDED.standard_pay,
-         overtime_rate = EXCLUDED.overtime_rate, overtime_pay = EXCLUDED.overtime_pay,
-         gross_pay = EXCLUDED.gross_pay, tip = EXCLUDED.tip, commissions = EXCLUDED.commissions,
-         total_compensation = EXCLUDED.total_compensation, job_hours = EXCLUDED.job_hours`,
-      [
-        emp.id, weekStart, weekEnd, periodStart, periodEnd, file.name,
-        round2(agg.jobHours), round2(warehouse), 0, pay.totalHours, pay.overtimeHours,
-        rate, pay.standardPay, round2(rate / 2), pay.overtimePay, round2(pay.standardPay + pay.overtimePay),
-        round2(agg.tips), round2(agg.commissions), 0, pay.totalCompensation, round2(agg.jobHours),
-      ]
-    );
-    imported++;
+    try {
+      await query(
+        `INSERT INTO payroll_entries (
+           employee_id, week_start, week_end, pay_date, period_start, period_end, source_file,
+           billable_hours, warehouse_hours, marketing_hours, total_hours, overtime_hours,
+           hourly_rate, standard_pay, overtime_rate, overtime_pay, gross_pay,
+           tip, commissions, miles, total_compensation, job_hours, travel_hours,
+           lunch_reimbursement, mileage_reimbursement, other_reimbursement
+         ) VALUES (
+           $1,$2,$3,$4,$5,$6,$7,
+           $8,$9,0,$10,$11,
+           $12,$13,$14,$15,$16,
+           $17,$18,0,$19,$20,0,
+           0,0,0
+         )
+         ON CONFLICT (employee_id, week_start) DO UPDATE SET
+           week_end = EXCLUDED.week_end, pay_date = EXCLUDED.pay_date,
+           period_start = EXCLUDED.period_start, period_end = EXCLUDED.period_end,
+           source_file = EXCLUDED.source_file,
+           billable_hours = EXCLUDED.billable_hours, warehouse_hours = EXCLUDED.warehouse_hours,
+           total_hours = EXCLUDED.total_hours, overtime_hours = EXCLUDED.overtime_hours,
+           hourly_rate = EXCLUDED.hourly_rate, standard_pay = EXCLUDED.standard_pay,
+           overtime_rate = EXCLUDED.overtime_rate, overtime_pay = EXCLUDED.overtime_pay,
+           gross_pay = EXCLUDED.gross_pay, tip = EXCLUDED.tip, commissions = EXCLUDED.commissions,
+           total_compensation = EXCLUDED.total_compensation, job_hours = EXCLUDED.job_hours`,
+        [
+          emp.id, weekStart, weekEnd, payDate, periodStart, periodEnd, file.name,
+          round2(agg.jobHours), round2(warehouse), pay.totalHours, pay.overtimeHours,
+          rate, pay.standardPay, round2(rate / 2), pay.overtimePay, round2(pay.standardPay + pay.overtimePay),
+          round2(agg.tips), round2(agg.commissions), pay.totalCompensation, round2(agg.jobHours),
+        ]
+      );
+      imported++;
+    } catch (err) {
+      flags.push(`${emp.name}: could not save (${err instanceof Error ? err.message : 'error'})`);
+      continue;
+    }
 
     // Audit checks (mirror the spreadsheet's data-validation column).
     if (emp.is_active && !emp.classification) flags.push(`${emp.name}: no W-2/1099 classification (won't pull into ADP)`);

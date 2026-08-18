@@ -1,26 +1,12 @@
 import { addDays, format } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { AlertTriangle, Download, Upload } from 'lucide-react';
+import { AlertTriangle, Upload } from 'lucide-react';
 import { getPayrollRun, getPayrollRunWeeks } from '@/lib/payroll-run';
 import { ReportUpload } from './report-upload';
 import { CorrectionsTable } from './corrections-table';
 import { PeriodSelect } from './period-select';
+import { AdpTables } from './adp-tables';
 
-function money(n: number): string {
-  return `$${n.toFixed(2)}`;
-}
-function hrs(n: number): string {
-  return n.toFixed(2);
-}
 function fmtDate(d: string, pattern = 'MMM d, yyyy'): string {
   return format(new Date(`${d}T12:00:00`), pattern);
 }
@@ -43,15 +29,6 @@ export default async function PayrollRunPage({
   const weeks = await getPayrollRunWeeks();
   const weekStart = week ?? weeks[0]?.weekStart ?? null;
   const run = weekStart ? await getPayrollRun(weekStart) : null;
-
-  const w2Tot = run?.w2.reduce(
-    (a, r) => ({ reg: a.reg + r.regularHours, ot: a.ot + r.overtimeHours, bonus: a.bonus + r.bonus }),
-    { reg: 0, ot: 0, bonus: 0 }
-  );
-  const c99Tot = run?.contractors1099.reduce(
-    (a, r) => ({ hours: a.hours + r.compHours, amt: a.amt + r.compAmount }),
-    { hours: 0, amt: 0 }
-  );
 
   return (
     <div className="p-6 space-y-6">
@@ -141,127 +118,11 @@ export default async function PayrollRunPage({
             </CardContent>
           </Card>
 
-          {/* ADP 1099 contractors */}
-          <Card>
-            <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <CardTitle>ADP — 1099 Contractors</CardTitle>
-                  <CardDescription>
-                    {run.contractors1099.length} contractors · Comp Hours = total hours + ½ OT
-                  </CardDescription>
-                </div>
-                <a href={`/api/payroll/export?type=1099&week=${run.weekStart}`}>
-                  <Button variant="outline" size="sm">
-                    <Download className="h-4 w-4 mr-2" />
-                    Export CSV
-                  </Button>
-                </a>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Contractor</TableHead>
-                    <TableHead className="text-right">Comp Hours</TableHead>
-                    <TableHead className="text-right">Comp Amount</TableHead>
-                    <TableHead className="text-right">Reimbursement</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {run.contractors1099.map((r) => (
-                    <TableRow key={r.contractor}>
-                      <TableCell className="font-medium">{r.contractor}</TableCell>
-                      <TableCell className="text-right">{hrs(r.compHours)}</TableCell>
-                      <TableCell className="text-right">{money(r.compAmount)}</TableCell>
-                      <TableCell className="text-right">{money(r.reimbursement)}</TableCell>
-                    </TableRow>
-                  ))}
-                  {c99Tot && run.contractors1099.length > 0 && (
-                    <TableRow className="font-semibold border-t-2">
-                      <TableCell>Total</TableCell>
-                      <TableCell className="text-right">{hrs(c99Tot.hours)}</TableCell>
-                      <TableCell className="text-right">{money(c99Tot.amt)}</TableCell>
-                      <TableCell></TableCell>
-                    </TableRow>
-                  )}
-                  {run.contractors1099.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
-                        No 1099 contractors this week.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          {/* ADP W-2 employees */}
-          <Card>
-            <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <CardTitle>ADP — W-2 Employees</CardTitle>
-                  <CardDescription>
-                    {run.w2.length} employees · Regular (≤40) + Overtime (&gt;40) hours
-                  </CardDescription>
-                </div>
-                <a href={`/api/payroll/export?type=w2&week=${run.weekStart}`}>
-                  <Button variant="outline" size="sm">
-                    <Download className="h-4 w-4 mr-2" />
-                    Export CSV
-                  </Button>
-                </a>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead className="text-right">Reg Hrs</TableHead>
-                    <TableHead className="text-right">OT Hrs</TableHead>
-                    <TableHead className="text-right">Tips</TableHead>
-                    <TableHead className="text-right">Bonus</TableHead>
-                    <TableHead className="text-right">Commissions</TableHead>
-                    <TableHead className="text-right">Reimb.</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {run.w2.map((r) => (
-                    <TableRow key={r.employee}>
-                      <TableCell className="font-medium">{r.employee}</TableCell>
-                      <TableCell className="text-right">{hrs(r.regularHours)}</TableCell>
-                      <TableCell className="text-right">{hrs(r.overtimeHours)}</TableCell>
-                      <TableCell className="text-right">{money(r.tips)}</TableCell>
-                      <TableCell className="text-right">{money(r.bonus)}</TableCell>
-                      <TableCell className="text-right">{money(r.commissions)}</TableCell>
-                      <TableCell className="text-right">{money(r.reimbursement)}</TableCell>
-                    </TableRow>
-                  ))}
-                  {w2Tot && run.w2.length > 0 && (
-                    <TableRow className="font-semibold border-t-2">
-                      <TableCell>Total</TableCell>
-                      <TableCell className="text-right">{hrs(w2Tot.reg)}</TableCell>
-                      <TableCell className="text-right">{hrs(w2Tot.ot)}</TableCell>
-                      <TableCell></TableCell>
-                      <TableCell className="text-right">{money(w2Tot.bonus)}</TableCell>
-                      <TableCell colSpan={2}></TableCell>
-                    </TableRow>
-                  )}
-                  {run.w2.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
-                        No W-2 employees this week.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <AdpTables
+            weekStart={run.weekStart}
+            w2={run.w2}
+            contractors1099={run.contractors1099}
+          />
 
           <p className="text-xs text-muted-foreground">
             Bonus is the weekly performance bonus from the bonus engine. Tenure bonus (bi-annual)

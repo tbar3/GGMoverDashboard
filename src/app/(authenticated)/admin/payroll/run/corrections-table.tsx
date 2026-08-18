@@ -12,10 +12,25 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PayrollDetailRow } from '@/lib/payroll-run';
 import { saveOverride, saveMarketingHours, setClassification } from './actions';
+
+type SortKey =
+  | 'name'
+  | 'classification'
+  | 'billableHours'
+  | 'warehouseHours'
+  | 'marketingHours'
+  | 'tips'
+  | 'commissions'
+  | 'bonus'
+  | 'miles'
+  | 'totalHours'
+  | 'overtimeHours'
+  | 'rate'
+  | 'totalCompensation';
 
 /** A number cell that saves on blur; an amber ring marks an active override. */
 function EditableNumber({
@@ -85,6 +100,49 @@ export function CorrectionsTable({
   detail: PayrollDetailRow[];
 }) {
   const router = useRouter();
+  const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+
+  const sorted = [...detail].sort((a, b) => {
+    const av = a[sortKey] ?? '';
+    const bv = b[sortKey] ?? '';
+    const cmp =
+      typeof av === 'number' && typeof bv === 'number'
+        ? av - bv
+        : String(av).toLowerCase().localeCompare(String(bv).toLowerCase());
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
+
+  const sortHead = (label: string, col: SortKey, align: 'left' | 'right' = 'right') => (
+    <TableHead key={col} className={align === 'right' ? 'text-right' : ''}>
+      <button
+        type="button"
+        onClick={() => toggleSort(col)}
+        className={`inline-flex items-center gap-1 hover:text-foreground select-none ${
+          align === 'right' ? 'flex-row-reverse' : ''
+        }`}
+      >
+        {label}
+        {sortKey === col ? (
+          sortDir === 'asc' ? (
+            <ArrowUp className="h-3.5 w-3.5" />
+          ) : (
+            <ArrowDown className="h-3.5 w-3.5" />
+          )
+        ) : (
+          <ChevronsUpDown className="h-3.5 w-3.5 opacity-40" />
+        )}
+      </button>
+    </TableHead>
+  );
 
   async function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     const res = await fn();
@@ -100,23 +158,23 @@ export function CorrectionsTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Employee</TableHead>
-            <TableHead>Class</TableHead>
-            <TableHead className="text-right">Billable</TableHead>
-            <TableHead className="text-right">Warehouse</TableHead>
-            <TableHead className="text-right">Marketing</TableHead>
-            <TableHead className="text-right">Tips</TableHead>
-            <TableHead className="text-right">Commissions</TableHead>
-            <TableHead className="text-right">Bonus</TableHead>
-            <TableHead className="text-right">Miles $</TableHead>
-            <TableHead className="text-right">Total</TableHead>
-            <TableHead className="text-right">Reg / OT</TableHead>
-            <TableHead className="text-right">Rate</TableHead>
-            <TableHead className="text-right">Total Comp</TableHead>
+            {sortHead('Employee', 'name', 'left')}
+            {sortHead('Class', 'classification', 'left')}
+            {sortHead('Billable', 'billableHours')}
+            {sortHead('Warehouse', 'warehouseHours')}
+            {sortHead('Marketing', 'marketingHours')}
+            {sortHead('Tips', 'tips')}
+            {sortHead('Commissions', 'commissions')}
+            {sortHead('Bonus', 'bonus')}
+            {sortHead('Miles $', 'miles')}
+            {sortHead('Total', 'totalHours')}
+            {sortHead('Reg / OT', 'overtimeHours')}
+            {sortHead('Rate', 'rate')}
+            {sortHead('Total Comp', 'totalCompensation')}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {detail.map((r) => (
+          {sorted.map((r) => (
             <TableRow key={r.employeeId}>
               <TableCell className="font-medium whitespace-nowrap">{r.name}</TableCell>
               <TableCell>

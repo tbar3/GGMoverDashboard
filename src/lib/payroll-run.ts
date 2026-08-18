@@ -39,6 +39,7 @@ export interface PayrollDetailRow {
   totalHours: number;
   regularHours: number;
   overtimeHours: number;
+  totalCompensation: number; // base (hours×rate) + OT premium + tips + commissions + bonus + miles
   // Which fields are currently overridden (raw override value, or null).
   ov: {
     warehouse: number | null;
@@ -164,6 +165,8 @@ export async function getPayrollRun(weekStart: string): Promise<PayrollRun> {
     const total = round2(billable + warehouse + marketingHours);
     const ot = round2(Math.max(0, total - 40));
     const reg = round2(total - ot);
+    // Actual pay: all hours at the standard rate + the OT half-premium + earnings.
+    const totalCompensation = round2(total * rate + ot * (rate / 2) + tips + commissions + bonus + miles);
 
     // Audit (surface, don't block).
     if (e.is_active && !e.classification) audit.push(`${e.name}: no W-2/1099 classification — not in either ADP table`);
@@ -186,6 +189,7 @@ export async function getPayrollRun(weekStart: string): Promise<PayrollRun> {
       totalHours: total,
       regularHours: reg,
       overtimeHours: ot,
+      totalCompensation,
       ov: {
         warehouse: ov?.warehouse_hours != null ? num(ov.warehouse_hours) : null,
         tips: ov?.tips != null ? num(ov.tips) : null,

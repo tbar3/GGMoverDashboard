@@ -111,6 +111,8 @@ export function CorrectionsTable({
             <TableHead className="text-right">Miles $</TableHead>
             <TableHead className="text-right">Total</TableHead>
             <TableHead className="text-right">Reg / OT</TableHead>
+            <TableHead className="text-right">Rate</TableHead>
+            <TableHead className="text-right">Total Comp</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -193,11 +195,27 @@ export function CorrectionsTable({
               <TableCell className="text-right whitespace-nowrap text-muted-foreground">
                 {r.regularHours.toFixed(2)} / {r.overtimeHours.toFixed(2)}
               </TableCell>
+              <TableCell className="text-right text-muted-foreground">
+                ${r.rate.toFixed(2)}
+              </TableCell>
+              <TableCell className="text-right font-semibold">
+                ${r.totalCompensation.toFixed(2)}
+              </TableCell>
             </TableRow>
           ))}
+          {detail.length > 0 && (
+            <TableRow className="font-semibold border-t-2">
+              <TableCell colSpan={12} className="text-right">
+                Total compensation this period
+              </TableCell>
+              <TableCell className="text-right">
+                ${detail.reduce((s, r) => s + r.totalCompensation, 0).toFixed(2)}
+              </TableCell>
+            </TableRow>
+          )}
           {detail.length === 0 && (
             <TableRow>
-              <TableCell colSpan={11} className="text-center py-6 text-muted-foreground">
+              <TableCell colSpan={13} className="text-center py-6 text-muted-foreground">
                 No employees imported for this week.
               </TableCell>
             </TableRow>

@@ -35,6 +35,7 @@ export default function DamagesPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [jobSearch, setJobSearch] = useState('');
   const [formData, setFormData] = useState({
     job_id: '',
     employee_ids: [] as string[],
@@ -51,7 +52,7 @@ export default function DamagesPage() {
     const [damagesRes, employeesRes, jobsRes] = await Promise.all([
       fetch('/api/damages'),
       fetch('/api/employees?active=true'),
-      fetch('/api/jobs?limit=50'),
+      fetch('/api/jobs'), // all jobs, so any past move can be attributed
     ]);
 
     if (damagesRes.ok) setDamages(await damagesRes.json());
@@ -109,6 +110,21 @@ export default function DamagesPage() {
 
   const totalPoolImpact = damages.reduce((sum, d) => sum + getPoolImpact(d), 0);
 
+  const jobById = new Map(jobs.map((j) => [j.id, j]));
+  function jobLabel(job: Job): string {
+    return `${formatDate(job.date, 'MMM d, yyyy')} · ${job.customer_name ?? 'Customer'}${
+      job.job_number ? ` · #${job.job_number}` : ''
+    }`;
+  }
+  const q = jobSearch.trim().toLowerCase();
+  const filteredJobs = q
+    ? jobs.filter(
+        (j) =>
+          jobLabel(j).toLowerCase().includes(q) ||
+          (j.pickup_address ?? '').toLowerCase().includes(q)
+      )
+    : jobs;
+
   if (loading) {
     return <div className="p-6">Loading...</div>;
   }
@@ -137,35 +153,52 @@ export default function DamagesPage() {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="job">Related Job (optional)</Label>
-                  <select
-                    id="job"
-                    value={formData.job_id}
-                    onChange={(e) => setFormData({ ...formData, job_id: e.target.value })}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="">Select job...</option>
-                    {jobs.map((job) => (
-                      <option key={job.id} value={job.id}>
-                        {formatDate(job.date, 'MMM d')} - {job.customer_name}
+              <div className="space-y-2">
+                <Label htmlFor="job">Related Job (optional)</Label>
+                <Input
+                  placeholder="Search by customer, date, job #, or address…"
+                  value={jobSearch}
+                  onChange={(e) => setJobSearch(e.target.value)}
+                />
+                <select
+                  id="job"
+                  value={formData.job_id}
+                  onChange={(e) => setFormData({ ...formData, job_id: e.target.value })}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  size={Math.min(8, Math.max(3, filteredJobs.length + 1))}
+                >
+                  <option value="">Select job…</option>
+                  {/* Keep the chosen job visible even if the current search would hide it. */}
+                  {formData.job_id &&
+                    !filteredJobs.some((j) => j.id === formData.job_id) &&
+                    jobById.get(formData.job_id) && (
+                      <option value={formData.job_id}>
+                        {jobLabel(jobById.get(formData.job_id)!)}
                       </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Damage Amount ($)</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    step="0.01"
-                    value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                    placeholder="0.00"
-                    required
-                  />
-                </div>
+                    )}
+                  {filteredJobs.slice(0, 300).map((job) => (
+                    <option key={job.id} value={job.id}>
+                      {jobLabel(job)}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  {filteredJobs.length} of {jobs.length} jobs
+                  {filteredJobs.length > 300 ? ' · showing first 300, refine your search' : ''}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="amount">Damage Amount ($)</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  step="0.01"
+                  value={formData.amount}
+                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                  placeholder="0.00"
+                  required
+                />
               </div>
 
               <div className="space-y-2">
@@ -250,6 +283,7 @@ export default function DamagesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Date</TableHead>
+                <TableHead>Job</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Reported</TableHead>
@@ -263,6 +297,11 @@ export default function DamagesPage() {
                   <TableRow key={damage.id}>
                     <TableCell>
                       {format(new Date(damage.created_at), 'MMM d, yyyy')}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {damage.job_id && jobById.get(damage.job_id)
+                        ? jobLabel(jobById.get(damage.job_id)!)
+                        : <span className="text-muted-foreground/70">—</span>}
                     </TableCell>
                     <TableCell className="font-medium max-w-[200px] truncate">
                       {damage.description}
@@ -285,7 +324,7 @@ export default function DamagesPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No damages recorded. Great job protecting customer property!
                   </TableCell>
                 </TableRow>

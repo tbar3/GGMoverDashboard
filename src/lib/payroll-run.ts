@@ -1,5 +1,5 @@
 import { addDays, format } from 'date-fns';
-import { query } from '@/lib/db';
+import { query, queryOne } from '@/lib/db';
 import { getWeekBoard } from '@/lib/bonus';
 import type { AdpW2Row, Adp1099Row } from '@/lib/payroll-compute';
 
@@ -65,6 +65,71 @@ function round2(n: number): number {
 }
 function num(v: unknown): number {
   return v == null ? 0 : Number(v);
+}
+
+// ── Week business summary (jobs / revenue / payroll gross / labor ratio) ───────
+
+export interface WeekSummary {
+  weekStart: string;
+  jobs: number | null;
+  revenue: number | null;
+  payrollGross: number; // effective (entered override, else computed from the run)
+  computedGross: number; // the run's computed gross_pay sum
+  grossIsOverride: boolean;
+  laborRatio: number | null; // payrollGross / revenue
+  prior: {
+    jobs: number | null;
+    revenue: number | null;
+    payrollGross: number | null;
+    laborRatio: number | null;
+  };
+}
+
+async function grossFor(weekStart: string): Promise<number> {
+  const r = await queryOne<{ g: number }>(
+    'SELECT COALESCE(SUM(gross_pay), 0) AS g FROM payroll_entries WHERE week_start = $1',
+    [weekStart]
+  );
+  return Number(r?.g ?? 0);
+}
+
+export async function getWeekSummary(weekStart: string): Promise<WeekSummary> {
+  const prior = format(addDays(new Date(`${weekStart}T12:00:00`), -7), 'yyyy-MM-dd');
+  type Row = { jobs: number | null; revenue: number | null; payroll_gross: number | null };
+  const [computedGross, computedGrossPrior, s, sp] = await Promise.all([
+    grossFor(weekStart),
+    grossFor(prior),
+    queryOne<Row>(
+      'SELECT jobs, revenue, payroll_gross FROM payroll_week_summary WHERE week_start = $1',
+      [weekStart]
+    ),
+    queryOne<Row>(
+      'SELECT jobs, revenue, payroll_gross FROM payroll_week_summary WHERE week_start = $1',
+      [prior]
+    ),
+  ]);
+
+  const payrollGross = s?.payroll_gross != null ? Number(s.payroll_gross) : computedGross;
+  const priorGross = sp?.payroll_gross != null ? Number(sp.payroll_gross) : computedGrossPrior;
+  const revenue = s?.revenue != null ? Number(s.revenue) : null;
+  const priorRevenue = sp?.revenue != null ? Number(sp.revenue) : null;
+  const hasPriorGross = sp?.payroll_gross != null || computedGrossPrior > 0;
+
+  return {
+    weekStart,
+    jobs: s?.jobs ?? null,
+    revenue,
+    payrollGross,
+    computedGross,
+    grossIsOverride: s?.payroll_gross != null,
+    laborRatio: revenue && revenue > 0 ? payrollGross / revenue : null,
+    prior: {
+      jobs: sp?.jobs ?? null,
+      revenue: priorRevenue,
+      payrollGross: hasPriorGross ? priorGross : null,
+      laborRatio: priorRevenue && priorRevenue > 0 ? priorGross / priorRevenue : null,
+    },
+  };
 }
 
 /** Weeks that have imported payroll data, newest first. */

@@ -1,11 +1,12 @@
 import { addDays, format } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertTriangle, Upload } from 'lucide-react';
-import { getPayrollRun, getPayrollRunWeeks } from '@/lib/payroll-run';
+import { getPayrollRun, getPayrollRunWeeks, getWeekSummary } from '@/lib/payroll-run';
 import { ReportUpload } from './report-upload';
 import { CorrectionsTable } from './corrections-table';
 import { PeriodSelect } from './period-select';
 import { AdpTables } from './adp-tables';
+import { WeekSummaryPanel } from './week-summary';
 
 function fmtDate(d: string, pattern = 'MMM d, yyyy'): string {
   return format(new Date(`${d}T12:00:00`), pattern);
@@ -29,6 +30,7 @@ export default async function PayrollRunPage({
   const weeks = await getPayrollRunWeeks();
   const weekStart = week ?? weeks[0]?.weekStart ?? null;
   const run = weekStart ? await getPayrollRun(weekStart) : null;
+  const summary = weekStart ? await getWeekSummary(weekStart) : null;
 
   return (
     <div className="p-6 space-y-6">
@@ -129,6 +131,21 @@ export default async function PayrollRunPage({
             and marketing hours are layered in separately. Every value can be corrected before you
             key it into ADP.
           </p>
+
+          {summary && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Week Summary</CardTitle>
+                <CardDescription>
+                  Overall numbers for the period, vs. the prior week. Enter jobs and revenue (from
+                  SmartMoving); payroll gross comes from the run and the labor-cost ratio is computed.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <WeekSummaryPanel weekStart={run.weekStart} summary={summary} />
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
     </div>

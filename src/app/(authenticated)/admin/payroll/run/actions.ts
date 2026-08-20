@@ -70,6 +70,37 @@ export async function saveMarketingHours(
   return { ok: true };
 }
 
+const SUMMARY_COLUMNS: Record<string, string> = {
+  jobs: 'jobs',
+  revenue: 'revenue',
+  gross: 'payroll_gross',
+};
+
+/** Save one week-summary business figure (jobs / revenue / payroll-gross override). */
+export async function saveWeekSummary(
+  weekStart: string,
+  field: string,
+  value: number | null
+): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  const col = SUMMARY_COLUMNS[field];
+  if (!col) return { ok: false, error: 'Unknown field' };
+  if (!validWeek(weekStart)) return { ok: false, error: 'Bad week' };
+  if (value != null && (!Number.isFinite(value) || value < 0)) {
+    return { ok: false, error: 'Must be a number ≥ 0' };
+  }
+
+  await query(
+    `INSERT INTO payroll_week_summary (week_start, ${col}, updated_by)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (week_start) DO UPDATE SET ${col} = $2, updated_by = $3, updated_at = NOW()`,
+    [weekStart, value, guard.employee.id]
+  );
+  revalidatePath('/admin/payroll/run');
+  return { ok: true };
+}
+
 /** Set an employee's W-2 / 1099 classification (fixes the "unclassified" audit flag). */
 export async function setClassification(
   employeeId: string,

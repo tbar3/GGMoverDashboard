@@ -20,25 +20,45 @@ export function ReportUpload() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function onFile(file: File) {
     setBusy(true);
     setResult(null);
+    setError(null);
     try {
       const fd = new FormData();
       fd.append('file', file);
       const res = await fetch('/api/payroll/report-import', { method: 'POST', body: fd });
-      const data = await res.json();
+      // Read as text first so a non-JSON error response (timeout, 500 HTML, etc.) is
+      // still surfaced instead of throwing on res.json().
+      const text = await res.text();
+      let data: (ImportResult & { error?: string }) | null = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        /* response wasn't JSON */
+      }
       if (!res.ok) {
-        toast.error(data.error || 'Import failed');
+        const msg =
+          data?.error ||
+          `Upload failed (HTTP ${res.status})${text && !data ? `: ${text.slice(0, 300)}` : ''}`;
+        setError(msg);
+        toast.error(msg);
+        return;
+      }
+      if (!data) {
+        setError('Upload returned no data.');
         return;
       }
       setResult(data);
       toast.success(`Imported ${data.imported} employees for week of ${data.weekStart}`);
       router.push(`/admin/payroll/run?week=${data.weekStart}`);
       router.refresh();
-    } catch {
-      toast.error('Import failed');
+    } catch (e) {
+      const msg = `Upload error: ${e instanceof Error ? e.message : 'unknown error'}`;
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -63,6 +83,12 @@ export function ReportUpload() {
           {busy ? 'Importing…' : 'Upload SmartMoving payroll report'}
         </Button>
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive whitespace-pre-wrap break-words">
+          {error}
+        </div>
+      )}
 
       {result && (
         <div className="rounded-lg border p-3 text-sm space-y-1 bg-muted">

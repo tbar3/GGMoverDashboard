@@ -18,7 +18,9 @@ import {
 } from 'lucide-react';
 import { getAdminDashboard, getRecentDeclines, getTerminationFlags } from '@/lib/admin-metrics';
 import { getQueuedReviews } from '@/lib/google-reviews';
+import { getWeeklyTrends } from '@/lib/payroll-run';
 import { getPendingNewCrewEvals } from '@/lib/new-crew-eval';
+import { WeeklyTrends } from './weekly-trends';
 import { formatDate } from '@/lib/utils';
 
 function money(n: number): string {
@@ -37,12 +39,13 @@ export default async function AdminDashboardPage() {
   const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
   const trialCutoff = format(subDays(now, 31), 'yyyy-MM-dd');
 
-  const [d, declines, terminationFlags, pendingEvals, queuedReviews] = await Promise.all([
+  const [d, declines, terminationFlags, pendingEvals, queuedReviews, weeklyTrends] = await Promise.all([
     getAdminDashboard(monthStart, monthEnd, today, weekEnd, weekStart, trialCutoff),
     getRecentDeclines(),
     getTerminationFlags(),
     getPendingNewCrewEvals(),
     getQueuedReviews(),
+    getWeeklyTrends(12),
   ]);
   const dueEvals = pendingEvals.filter((e) => e.status !== 'upcoming');
 
@@ -221,6 +224,23 @@ export default async function AdminDashboardPage() {
           />
         </div>
       </div>
+
+      {/* Weekly trends — revenue, payroll & labor-cost ratio over time (from SmartMoving) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            Weekly Trends
+          </CardTitle>
+          <CardDescription>
+            Revenue, payroll gross, and labor-cost ratio week over week — builds up as you run
+            payroll each week.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <WeeklyTrends points={weeklyTrends} />
+        </CardContent>
+      </Card>
 
       {/* Today's operations — from the live SmartMoving Google Calendar sync */}
       <Card>

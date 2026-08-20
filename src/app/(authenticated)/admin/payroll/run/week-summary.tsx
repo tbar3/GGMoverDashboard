@@ -56,13 +56,13 @@ function Bars({ label, cur, prior }: { label: string; cur: number; prior: number
       <p className="text-xs text-muted-foreground">{label}</p>
       <div className="space-y-1">
         <div className="flex items-center gap-2">
-          <span className="w-14 text-xs">This</span>
+          <span className="w-20 text-xs">This Week</span>
           <div className="h-3 flex-1 rounded bg-muted overflow-hidden">
             <div className="h-full rounded bg-primary" style={{ width: `${(cur / max) * 100}%` }} />
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-14 text-xs text-muted-foreground">Prior</span>
+          <span className="w-20 text-xs text-muted-foreground">Last Week</span>
           <div className="h-3 flex-1 rounded bg-muted overflow-hidden">
             <div className="h-full rounded bg-muted-foreground/40" style={{ width: `${(prior / max) * 100}%` }} />
           </div>

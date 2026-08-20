@@ -132,6 +132,61 @@ export async function getWeekSummary(weekStart: string): Promise<WeekSummary> {
   };
 }
 
+export interface WeeklyTrendPoint {
+  weekStart: string;
+  weekLabel: string;
+  jobs: number | null;
+  revenue: number | null;
+  payrollGross: number | null;
+  laborRatio: number | null; // percent
+}
+
+/** The last `limit` weeks of business metrics for the dashboard trend charts,
+ *  oldest → newest. Revenue/jobs come from payroll_week_summary; payroll gross is
+ *  the entered override or the run's computed gross. */
+export async function getWeeklyTrends(limit = 12): Promise<WeeklyTrendPoint[]> {
+  const weeks = await query<{ w: string }>(
+    `SELECT week_start::text AS w FROM (
+        SELECT week_start FROM payroll_week_summary
+        UNION SELECT week_start FROM payroll_entries
+     ) u GROUP BY week_start ORDER BY week_start DESC LIMIT $1`,
+    [limit]
+  );
+  if (weeks.length === 0) return [];
+  const list = weeks.map((r) => r.w);
+
+  const [summaries, gross] = await Promise.all([
+    query<{ week_start: string; jobs: number | null; revenue: number | null; payroll_gross: number | null }>(
+      'SELECT week_start::text, jobs, revenue, payroll_gross FROM payroll_week_summary WHERE week_start = ANY($1)',
+      [list]
+    ),
+    query<{ week_start: string; g: number }>(
+      'SELECT week_start::text, COALESCE(SUM(gross_pay), 0) AS g FROM payroll_entries WHERE week_start = ANY($1) GROUP BY week_start',
+      [list]
+    ),
+  ]);
+  const sumBy = new Map(summaries.map((s) => [s.week_start, s]));
+  const grossBy = new Map(gross.map((g) => [g.week_start, Number(g.g)]));
+
+  return list
+    .slice()
+    .sort() // ascending (oldest → newest)
+    .map((w) => {
+      const s = sumBy.get(w);
+      const computed = grossBy.get(w) ?? 0;
+      const payrollGross = s?.payroll_gross != null ? Number(s.payroll_gross) : computed || null;
+      const revenue = s?.revenue != null ? Number(s.revenue) : null;
+      return {
+        weekStart: w,
+        weekLabel: format(new Date(`${w}T12:00:00`), 'MMM d'),
+        jobs: s?.jobs ?? null,
+        revenue,
+        payrollGross,
+        laborRatio: revenue && revenue > 0 && payrollGross != null ? (payrollGross / revenue) * 100 : null,
+      };
+    });
+}
+
 /** Weeks that have imported payroll data, newest first. */
 export async function getPayrollRunWeeks(): Promise<PayrollRunWeek[]> {
   return query<PayrollRunWeek>(

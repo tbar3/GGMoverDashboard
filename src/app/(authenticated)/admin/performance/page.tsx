@@ -6,7 +6,7 @@ import {
   getWeekResults,
   getWeekAdjustments,
 } from '@/lib/bonus';
-import { query } from '@/lib/db';
+import { query, queryOne } from '@/lib/db';
 import { addDays, format } from 'date-fns';
 import PerformanceBoard from './performance-board';
 
@@ -24,8 +24,18 @@ export default async function PerformancePage({
   searchParams: Promise<{ week?: string }>;
 }) {
   const sp = await searchParams;
-  const weekStart =
-    sp.week && /^\d{4}-\d{2}-\d{2}$/.test(sp.week) ? weekStartOf(sp.week) : weekStartOf(new Date());
+  // Default to the most recent week that has imported payroll — bonuses are computed
+  // from payroll hours, so the current week is empty until its payroll is imported.
+  // Falls back to the current week only if no payroll has ever been imported.
+  let weekStart: string;
+  if (sp.week && /^\d{4}-\d{2}-\d{2}$/.test(sp.week)) {
+    weekStart = weekStartOf(sp.week);
+  } else {
+    const latest = await queryOne<{ w: string | null }>(
+      'SELECT MAX(week_start)::text AS w FROM payroll_entries'
+    );
+    weekStart = latest?.w ? weekStartOf(latest.w) : weekStartOf(new Date());
+  }
 
   const [board, employees, config, weekStatus, lockedResults, adjustments] = await Promise.all([
     getWeekBoard(weekStart),

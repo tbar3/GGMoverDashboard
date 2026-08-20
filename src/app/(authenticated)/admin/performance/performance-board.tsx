@@ -417,6 +417,17 @@ export default function PerformanceBoard({
         </div>
       </div>
 
+      {!locked && !displayRows.some((r) => r.hasHours) && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-500">
+          No payroll imported for this week yet, so bonuses show $0. The weekly bonus is calculated
+          from each week&apos;s payroll hours — import this week&apos;s report on{' '}
+          <Link href="/admin/payroll/run" className="underline font-medium">
+            Payroll Run
+          </Link>{' '}
+          to see bonuses here.
+        </div>
+      )}
+
       {/* Week close status */}
       <Card className={locked ? 'border-primary' : ''}>
         <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">

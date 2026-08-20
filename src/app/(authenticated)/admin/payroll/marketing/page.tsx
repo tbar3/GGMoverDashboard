@@ -8,6 +8,7 @@ interface EmpMarketing {
   id: string;
   name: string;
   hours: number | null;
+  token: string;
 }
 
 export default async function MarketingHoursPage({
@@ -19,7 +20,7 @@ export default async function MarketingHoursPage({
   const weekStart = week && /^\d{4}-\d{2}-\d{2}$/.test(week) ? weekStartOf(week) : weekStartOf(format(new Date(), 'yyyy-MM-dd'));
 
   const employees = await query<EmpMarketing>(
-    `SELECT e.id, e.name, mh.hours
+    `SELECT e.id, e.name, e.marketing_token AS token, mh.hours
        FROM employees e
        LEFT JOIN marketing_hours mh ON mh.employee_id = e.id AND mh.week_start = $1
       WHERE e.is_active = TRUE
@@ -27,15 +28,21 @@ export default async function MarketingHoursPage({
     [weekStart]
   );
 
-  const rows = employees.map((e) => ({ id: e.id, name: e.name, hours: e.hours == null ? null : Number(e.hours) }));
+  const rows = employees.map((e) => ({
+    id: e.id,
+    name: e.name,
+    token: e.token,
+    hours: e.hours == null ? null : Number(e.hours),
+  }));
 
   return (
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Marketing Hours</h1>
         <p className="text-muted-foreground mt-1">
-          Enter weekly marketing hours. These feed the payroll run just like warehouse and job
-          hours (and count toward overtime).
+          Enter weekly marketing hours, or send each person their own link so they can fill in their
+          days themselves. These feed the payroll run like warehouse and job hours (and count toward
+          overtime).
         </p>
       </div>
 

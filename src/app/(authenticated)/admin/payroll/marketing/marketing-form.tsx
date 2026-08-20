@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -12,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { saveMarketingHours } from '../run/actions';
 
@@ -19,6 +21,7 @@ interface Row {
   id: string;
   name: string;
   hours: number | null;
+  token: string;
 }
 
 export function MarketingForm({ weekStart, employees }: { weekStart: string; employees: Row[] }) {
@@ -42,6 +45,7 @@ export function MarketingForm({ weekStart, employees }: { weekStart: string; emp
           <TableRow>
             <TableHead>Employee</TableHead>
             <TableHead className="text-right">Marketing Hours</TableHead>
+            <TableHead className="text-right">Personal link</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -103,6 +107,33 @@ function MarketingRow({
           className="h-8 w-24 text-right ml-auto"
         />
       </TableCell>
+      <TableCell className="text-right">
+        <CopyLinkButton token={row.token} name={row.name} />
+      </TableCell>
     </TableRow>
+  );
+}
+
+function CopyLinkButton({ token, name }: { token: string; name: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    const url = `${window.location.origin}/marketing/${token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      toast.success(`Copied ${name}'s marketing link`);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard blocked — show the URL so it can be copied manually.
+      toast.message(url);
+    }
+  }
+
+  return (
+    <Button variant="outline" size="sm" className="h-8" onClick={copy}>
+      {copied ? <Check className="h-3.5 w-3.5 mr-1" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
+      Copy link
+    </Button>
   );
 }

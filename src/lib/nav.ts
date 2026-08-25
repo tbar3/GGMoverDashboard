@@ -19,6 +19,8 @@ import {
   Award,
   Trophy,
   Megaphone,
+  Sunrise,
+  FileText,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -58,6 +60,12 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
     icon: Briefcase,
     status: 'live',
     items: [
+      {
+        title: 'Morning Meeting',
+        href: '/admin/morning-meeting',
+        description: 'The 7:15 walk-through — recognition, reminders, policy of the day',
+        icon: Sunrise,
+      },
       {
         title: 'Jobs',
         href: '/admin/jobs',
@@ -215,8 +223,21 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
     label: 'Policies',
     description: 'The handbook, SOPs, and standing company policy in one searchable place.',
     icon: BookOpen,
-    status: 'planned',
-    items: [],
+    status: 'live',
+    items: [
+      {
+        title: 'Policies',
+        href: '/admin/policies',
+        description: 'Write and publish company policy — crew read it, and it feeds the morning rotation',
+        icon: BookOpen,
+      },
+      {
+        title: 'Documents',
+        href: '/admin/documents',
+        description: 'The handbook file, SOPs, and forms — stored privately, shared with crew',
+        icon: FileText,
+      },
+    ],
   },
   {
     key: 'traction',

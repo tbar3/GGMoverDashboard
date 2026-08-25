@@ -16,6 +16,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'nav.my_bonus': 'My Bonus',
     'nav.my_performance': 'My Performance',
     'nav.materials': 'Materials',
+    'nav.handbook': 'Handbook',
     'nav.crew': 'Crew',
 
     // Dashboard
@@ -289,6 +290,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'nav.my_bonus': 'Mi Bono',
     'nav.my_performance': 'Mi Desempeño',
     'nav.materials': 'Materiales',
+    'nav.handbook': 'Manual',
     'nav.crew': 'Equipo',
 
     // Dashboard

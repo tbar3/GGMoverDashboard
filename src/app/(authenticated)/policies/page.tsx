@@ -1,27 +1,23 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BookOpen } from 'lucide-react';
+import { redirect } from 'next/navigation';
+import { getCurrentEmployee, isBackOffice } from '@/lib/auth';
+import { getPublishedPolicies, getDocuments } from '@/lib/policies';
+import PoliciesReader from './policies-reader';
 
-export default function PoliciesPlaceholderPage() {
-  return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Handbook &amp; Policies</h1>
-        <p className="text-muted-foreground mt-1">Company handbook, SOPs, and standing policy</p>
-      </div>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-primary" />
-            Coming soon
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-sm">
-            The employee handbook and company policies will live here — readable in English and
-            Spanish, with a record of who&apos;s reviewed each one. This module is being built.
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-  );
+export const dynamic = 'force-dynamic';
+
+/**
+ * The crew-facing handbook. This is the first hub surface crew see that back
+ * office also uses, so the audience filter is applied from the caller's own
+ * identity — never from anything the browser sends.
+ */
+export default async function PoliciesPage() {
+  const employee = await getCurrentEmployee();
+  if (!employee) redirect('/login');
+
+  const [policies, documents] = await Promise.all([
+    getPublishedPolicies(),
+    getDocuments(isBackOffice(employee)),
+  ]);
+
+  return <PoliciesReader policies={policies} documents={documents} />;
 }

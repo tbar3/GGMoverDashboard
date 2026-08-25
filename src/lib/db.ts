@@ -26,6 +26,16 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: true },
 });
 
+/**
+ * A pooled client can die while idle — a Neon idle timeout, a laptop sleeping, a
+ * network blip. `pg` emits 'error' on the pool for that, and with no listener
+ * Node turns it into an uncaughtException that takes the whole process down.
+ * Log it and let the pool discard the client; the next query opens a fresh one.
+ */
+pool.on('error', (err) => {
+  console.error('[db] idle client error (connection discarded):', err.message);
+});
+
 export async function query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]> {
   const result = await pool.query(text, params);
   return result.rows as T[];

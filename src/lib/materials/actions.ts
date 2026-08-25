@@ -134,17 +134,25 @@ export async function createJob(
   const createdBy = await currentUserId();
   const base = basePath(area);
 
-  // No duplicate sheets WITHIN A DAY: a truck may have only ONE unfinished job
-  // for a date. If one exists, resume it. Across days this does not apply — a
-  // stale open sheet from a prior day must not block today's.
-  const openRows = await query<{ id: number }>(
-    `SELECT id FROM materials_jobs WHERE truck_id=$1 AND job_date=$2 AND status <> 'complete'
-      ORDER BY id DESC LIMIT 1`,
+  // Avoid duplicate sheets for the SAME job, but allow a genuine 2nd job of the day.
+  // A truck can run multiple jobs in a day: if the open (unfinished) sheet is a
+  // DIFFERENT job (different job number), fall through and create a new sheet — the
+  // sequence + count carry-over below handles it. We only resume the existing sheet
+  // when it's the same job number, or when this start didn't specify a job (a manual
+  // re-entry, where resuming avoids an accidental duplicate). Prior-day stale sheets
+  // never apply.
+  const newJobNumber = header?.jobNumber?.trim() || null;
+  const openRows = await query<{ id: number; job_number: string | null }>(
+    `SELECT id, job_number FROM materials_jobs
+       WHERE truck_id=$1 AND job_date=$2 AND status <> 'complete'
+       ORDER BY id DESC LIMIT 1`,
     [truckId, date]
   );
-  if (openRows[0]) {
+  const open = openRows[0];
+  const sameJob = open && (!newJobNumber || (!!open.job_number && open.job_number === newJobNumber));
+  if (open && sameJob) {
     revalidatePath(base);
-    redirect(`${base}/jobs/${openRows[0].id}`);
+    redirect(`${base}/jobs/${open.id}`);
   }
 
   let jobId: number;

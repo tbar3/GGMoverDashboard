@@ -11,12 +11,13 @@ import {
   Sparkles,
   Briefcase,
   Package,
+  BookOpen,
   LogOut,
   Menu,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useClerk } from '@clerk/nextjs';
 import { useI18n } from '@/lib/i18n';
 import { LIVE_AREAS } from '@/lib/nav';
@@ -74,6 +75,12 @@ const employeeNavItems: NavItem[] = [
     href: '/materials',
     icon: <Package className="h-5 w-5" />,
   },
+  {
+    titleKey: 'nav.handbook',
+    fallback: 'Handbook',
+    href: '/policies',
+    icon: <BookOpen className="h-5 w-5" />,
+  },
 ];
 
 /** The hub home — the back-office landing page that sits above the grouped areas. */
@@ -97,6 +104,35 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
     return item.fallback;
   }
 
+  const navRef = useRef<HTMLElement>(null);
+
+  /**
+   * Keep the current page's link visible in the nav.
+   *
+   * The back-office nav is 25 links across four groups — taller than the viewport —
+   * and its scroll position survives client-side navigation. Without this you can
+   * land on a page with the nav parked somewhere unrelated and no hint that there
+   * is more above, which reads as "the link isn't there".
+   *
+   * Only the nav's own scrollTop is touched; scrollIntoView would also move the
+   * page behind it.
+   *
+   * Measured with getBoundingClientRect, NOT offsetTop: the nav is not a
+   * positioned element, so offsetTop resolves against the fixed <aside> and is in
+   * a different coordinate space from scrollTop. Rects are always comparable.
+   */
+  useEffect(() => {
+    const nav = navRef.current;
+    const active = nav?.querySelector<HTMLElement>('[data-active="true"]');
+    if (!nav || !active) return;
+    const navBox = nav.getBoundingClientRect();
+    const itemBox = active.getBoundingClientRect();
+    if (itemBox.top < navBox.top || itemBox.bottom > navBox.bottom) {
+      // Leave a little context above rather than pinning it to the very edge.
+      nav.scrollTop += itemBox.top - navBox.top - nav.clientHeight / 3;
+    }
+  }, [pathname]);
+
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       {/* Logo */}
@@ -115,7 +151,7 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-4">
+      <nav ref={navRef} className="flex-1 overflow-y-auto p-4">
         {/* Crew section — crew only. Back office get the admin nav instead and
             never see the crew "My Dashboard" surface. */}
         {!isAdmin && (
@@ -127,6 +163,7 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
               <Link
                 key={item.href}
                 href={item.href}
+                data-active={pathname === item.href}
                 className={cn(linkClass, pathname === item.href ? activeClass : idleClass)}
               >
                 {item.icon}
@@ -142,6 +179,7 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
             <div className="mt-6 space-y-1">
               <Link
                 href={hubHome.href}
+                data-active={pathname === hubHome.href}
                 className={cn(linkClass, pathname === hubHome.href ? activeClass : idleClass)}
               >
                 {hubHome.icon}
@@ -160,6 +198,7 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
                     <Link
                       key={item.href}
                       href={item.href}
+                      data-active={pathname === item.href}
                       className={cn(
                         linkClass,
                         pathname === item.href ? activeClass : idleClass

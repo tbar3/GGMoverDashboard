@@ -40,9 +40,12 @@ export default async function MaterialsCrewJobSheet({
   const job = await getJob(jobId);
   if (!job) notFound();
 
+  const admin = isBackOffice(employee);
+
   // Crew 24h window: completed sheets older than 24h drop off the crew view
   // (they live forever in the admin History). Open sheets are always reachable.
-  if (job.status === 'complete' && (job.age_hours ?? 0) > 24) notFound();
+  // Back office is exempt — History links straight here to review old sheets.
+  if (!admin && job.status === 'complete' && (job.age_hours ?? 0) > 24) notFound();
 
   const [counts, dayJobs, routines, equipment, crew, trucks] = await Promise.all([
     getJobCounts(jobId),
@@ -65,12 +68,22 @@ export default async function MaterialsCrewJobSheet({
 
   return (
     <div className="p-6">
-      <Link
-        href="/materials"
-        className="mb-3 inline-block font-ui text-sm text-navy-500 hover:text-navy-700"
-      >
-        ← All trucks
-      </Link>
+      <div className="mb-3 flex flex-wrap items-center gap-4">
+        <Link
+          href="/materials"
+          className="inline-block font-ui text-sm text-navy-500 hover:text-navy-700"
+        >
+          ← All trucks
+        </Link>
+        {admin && (
+          <Link
+            href="/admin/materials/history"
+            className="inline-block font-ui text-sm text-navy-500 hover:text-navy-700"
+          >
+            ← History
+          </Link>
+        )}
+      </div>
 
       {dayJobs.length > 1 && (
         <div className="mb-4 flex flex-wrap items-center gap-2 font-ui text-sm">
@@ -115,7 +128,7 @@ export default async function MaterialsCrewJobSheet({
         jobDate={job.job_date}
         sequenceNo={job.sequence_no}
         status={job.status}
-        isAdmin={isBackOffice(employee)}
+        isAdmin={admin}
         isFirstOfDay={isFirstOfDay}
         morningItems={morningItems}
         closeItems={closeItems}

@@ -1,6 +1,8 @@
 import { addDays, format } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertTriangle, Upload } from 'lucide-react';
+import Link from 'next/link';
+import { AlertTriangle, ShieldCheck, Upload } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { getPayrollRun, getPayrollRunWeeks, getWeekSummary } from '@/lib/payroll-run';
 import { ReportUpload } from './report-upload';
 import { CorrectionsTable } from './corrections-table';
@@ -34,11 +36,18 @@ export default async function PayrollRunPage({
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Payroll Run</h1>
-        <p className="text-muted-foreground mt-1">
-          Import your SmartMoving payroll report, then key the two tables below into ADP RUN.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Payroll Run</h1>
+          <p className="text-muted-foreground mt-1">
+            Import your SmartMoving payroll report, then key the two tables below into ADP RUN.
+          </p>
+        </div>
+        <Link href={weekStart ? `/admin/payroll/audit?week=${weekStart}` : '/admin/payroll/audit'}>
+          <Button variant="outline">
+            <ShieldCheck className="h-4 w-4 mr-1.5" /> Audit view
+          </Button>
+        </Link>
       </div>
 
       <Card>

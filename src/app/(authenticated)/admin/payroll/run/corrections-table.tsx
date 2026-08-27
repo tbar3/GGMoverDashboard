@@ -188,7 +188,7 @@ export function CorrectionsTable({
                         size="sm"
                         variant="outline"
                         className="h-6 px-2 text-xs"
-                        onClick={() => run(() => setClassification(r.employeeId, c))}
+                        onClick={() => run(() => setClassification(r.employeeId, c, weekStart))}
                       >
                         {c}
                       </Button>

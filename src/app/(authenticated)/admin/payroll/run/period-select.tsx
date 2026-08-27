@@ -6,15 +6,18 @@ import { useRouter } from 'next/navigation';
 export function PeriodSelect({
   weeks,
   weekStart,
+  basePath = '/admin/payroll/run',
 }: {
   weeks: { weekStart: string; label: string }[];
   weekStart: string;
+  /** Where the selection navigates — lets the audit view reuse this control. */
+  basePath?: string;
 }) {
   const router = useRouter();
   return (
     <select
       value={weekStart}
-      onChange={(e) => router.push(`/admin/payroll/run?week=${e.target.value}`)}
+      onChange={(e) => router.push(`${basePath}?week=${e.target.value}`)}
       className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
       {weeks.map((w) => (

@@ -136,6 +136,12 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         icon: FileSpreadsheet,
       },
       {
+        title: 'Payroll Audit',
+        href: '/admin/payroll/audit',
+        description: 'Where every payroll figure came from, reconciliation, and the change log',
+        icon: ShieldCheck,
+      },
+      {
         title: 'Marketing Hours',
         href: '/admin/payroll/marketing',
         description: 'Weekly marketing hours that feed payroll',

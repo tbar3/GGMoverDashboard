@@ -11,6 +11,10 @@ export interface Employee {
   is_active: boolean;
   is_admin: boolean;
   hourly_rate: number | null;
+  /** Gross annual salary; NULL = hourly. Set = salaried and exempt from OT. */
+  annual_salary?: number | null;
+  /** TRUE = portal login account, hidden from the Employees roster. Never affects access. */
+  exclude_from_roster?: boolean;
   base_multiplier: number | null; // per-employee base bonus multiplier override
   phone: string | null;
   terminated_at: string | null;

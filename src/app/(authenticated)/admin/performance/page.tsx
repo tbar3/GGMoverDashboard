@@ -40,7 +40,8 @@ export default async function PerformancePage({
   const [board, employees, config, weekStatus, lockedResults, adjustments] = await Promise.all([
     getWeekBoard(weekStart),
     query<{ id: string; name: string }>(
-      'SELECT id, name FROM employees WHERE is_active = TRUE ORDER BY name'
+      // One entry per person to log against — their crew record, never the login row.
+      'SELECT id, name FROM employees WHERE is_active = TRUE AND exclude_from_roster = FALSE ORDER BY name'
     ),
     getBonusConfig(),
     getWeekStatus(weekStart),

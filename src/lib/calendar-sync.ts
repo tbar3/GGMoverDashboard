@@ -80,7 +80,7 @@ export async function syncCalendarJobs(startDate: string, endDate: string): Prom
     const unmatchedCrew: string[] = [];
 
     const employees = await query<{ id: string; name: string }>(
-      'SELECT id, name FROM employees WHERE is_active = true'
+      'SELECT id, name FROM employees WHERE is_active = true AND exclude_from_roster = FALSE'
     );
     const nameToId = new Map<string, string>();
     for (const emp of employees) {

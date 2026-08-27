@@ -272,7 +272,11 @@ export async function getWeekBoard(weekStart: string): Promise<BoardRow[]> {
   const config = await getBonusConfig();
   const [employees, positives, strikes, writeUps, payroll, estimated] = await Promise.all([
     query<{ id: string; name: string; base_multiplier: number | null }>(
-      'SELECT id, name, base_multiplier FROM employees WHERE is_active = TRUE ORDER BY name'
+      // Portal-only login accounts are a second row for someone already on the crew
+      // roster; their crew record is the one that carries hours and events, so the
+      // login row is excluded to keep one row per person on the board.
+      `SELECT id, name, base_multiplier FROM employees
+        WHERE is_active = TRUE AND exclude_from_roster = FALSE ORDER BY name`
     ),
     query<PositiveRow & { employee_id: string }>(
       `SELECT id, employee_id, type, event_date::text, note, job_id, discretionary

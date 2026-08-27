@@ -248,9 +248,12 @@ export async function getAdminDashboard(
          FROM damages WHERE created_at >= $1`,
       [weekStart]
     ),
-    queryOne<{ c: number }>('SELECT COUNT(*)::int AS c FROM employees WHERE is_active = TRUE'),
     queryOne<{ c: number }>(
-      'SELECT COUNT(*)::int AS c FROM employees WHERE is_active = TRUE AND start_date >= $1',
+      'SELECT COUNT(*)::int AS c FROM employees WHERE is_active = TRUE AND exclude_from_roster = FALSE'
+    ),
+    queryOne<{ c: number }>(
+      `SELECT COUNT(*)::int AS c FROM employees
+        WHERE is_active = TRUE AND exclude_from_roster = FALSE AND start_date >= $1`,
       [trialCutoff]
     ),
     queryOne<{ c: number }>(

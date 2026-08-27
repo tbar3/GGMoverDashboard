@@ -85,7 +85,7 @@ export async function importPayroll(rows: Record<string, unknown>[]): Promise<Im
 
   // Load employees for name matching
   const employees = await query<{ id: string; name: string; hourly_rate: number | null }>(
-    'SELECT id, name, hourly_rate FROM employees WHERE is_active = true'
+    'SELECT id, name, hourly_rate FROM employees WHERE is_active = true AND exclude_from_roster = FALSE'
   );
   const nameToEmp = new Map(employees.map(e => [e.name.toLowerCase(), e]));
 
@@ -235,7 +235,7 @@ export async function importAttendance(rows: Record<string, unknown>[]): Promise
   const errors: string[] = [];
 
   const employees = await query<{ id: string; name: string }>(
-    'SELECT id, name FROM employees WHERE is_active = true'
+    'SELECT id, name FROM employees WHERE is_active = true AND exclude_from_roster = FALSE'
   );
   const nameToId = new Map(employees.map(e => [e.name.toLowerCase(), e.id]));
 
@@ -312,7 +312,7 @@ export async function importPerformance(rows: Record<string, unknown>[]): Promis
   const errors: string[] = [];
 
   const employees = await query<{ id: string; name: string }>(
-    'SELECT id, name FROM employees WHERE is_active = true'
+    'SELECT id, name FROM employees WHERE is_active = true AND exclude_from_roster = FALSE'
   );
   const nameToId = new Map(employees.map(e => [e.name.toLowerCase(), e.id]));
 
@@ -359,7 +359,7 @@ export async function importMileage(rows: Record<string, unknown>[]): Promise<Im
   const errors: string[] = [];
 
   const employees = await query<{ id: string; name: string }>(
-    'SELECT id, name FROM employees WHERE is_active = true'
+    'SELECT id, name FROM employees WHERE is_active = true AND exclude_from_roster = FALSE'
   );
   const nameToId = new Map(employees.map(e => [e.name.toLowerCase(), e.id]));
 

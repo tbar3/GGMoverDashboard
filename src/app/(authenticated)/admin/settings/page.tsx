@@ -16,8 +16,8 @@ export default async function AdminSettingsPage() {
 
   const roles = BACK_OFFICE_ROLES as string[];
   const [team, locations] = await Promise.all([
-    query<{ id: string; name: string; email: string; role: string }>(
-      `SELECT id, name, email, role FROM employees
+    query<{ id: string; name: string; email: string; role: string; exclude_from_roster: boolean }>(
+      `SELECT id, name, email, role, exclude_from_roster FROM employees
         WHERE role = ANY($1) OR is_admin = TRUE
         ORDER BY name`,
       [roles]

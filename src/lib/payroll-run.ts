@@ -31,6 +31,10 @@ export interface PayrollDetailRow {
   warehouseHours: number; // effective (override ?? computed)
   marketingHours: number; // from marketing_hours
   rate: number;
+  /** Gross annual salary, or null for hourly staff. Set => salaried and exempt. */
+  annualSalary: number | null;
+  /** annual_salary / 52 — the week's base pay for salaried staff, else 0. */
+  weeklySalary: number;
   tips: number; // effective
   commissions: number; // effective
   bonus: number; // effective (override ?? engine)
@@ -208,6 +212,7 @@ interface BaseRow {
   billable_hours: number | null;
   warehouse_hours: number | null;
   hourly_rate: number | null;
+  annual_salary: number | null;
   tip: number | null;
   commissions: number | null;
   miles: number | null;
@@ -227,7 +232,7 @@ export async function getPayrollRun(weekStart: string): Promise<PayrollRun> {
   const weekEnd = format(addDays(new Date(`${weekStart}T12:00:00`), 6), 'yyyy-MM-dd');
   const [entries, board, overrides, marketing, mileage] = await Promise.all([
     query<BaseRow>(
-      `SELECT pe.employee_id, e.name, e.classification, e.is_active,
+      `SELECT pe.employee_id, e.name, e.classification, e.is_active, e.annual_salary,
               pe.billable_hours, pe.warehouse_hours, pe.hourly_rate, pe.tip, pe.commissions, pe.miles,
               pe.period_start::text, pe.period_end::text
          FROM payroll_entries pe
@@ -282,16 +287,25 @@ export async function getPayrollRun(weekStart: string): Promise<PayrollRun> {
     const bonus = ov?.bonus != null ? num(ov.bonus) : computedBonus;
     const miles = ov?.miles != null ? num(ov.miles) : (milesByEmp.get(e.employee_id) ?? 0);
 
+    // Salaried staff (annual_salary set) are exempt: their week is annual/52 whatever
+    // the hours, and no overtime premium accrues. Hours are still totalled because the
+    // weekly bonus is driven by them. Hourly staff are computed exactly as before.
+    const annualSalary = e.annual_salary != null ? num(e.annual_salary) : null;
+    const salaried = annualSalary != null;
+    const weeklySalary = salaried ? round2(annualSalary / 52) : 0;
+
     const total = round2(billable + warehouse + marketingHours);
-    const ot = round2(Math.max(0, total - 40));
+    const ot = salaried ? 0 : round2(Math.max(0, total - 40));
     const reg = round2(total - ot);
-    // Actual pay: all hours at the standard rate + the OT half-premium + earnings.
-    const totalCompensation = round2(total * rate + ot * (rate / 2) + tips + commissions + bonus + miles);
+    // Actual pay: salary for exempt staff, else all hours at the standard rate plus
+    // the OT half-premium; earnings are added the same way for both.
+    const basePay = salaried ? weeklySalary : round2(total * rate + ot * (rate / 2));
+    const totalCompensation = round2(basePay + tips + commissions + bonus + miles);
 
     // Audit (surface, don't block).
     if (e.is_active && !e.classification) audit.push(`${e.name}: no W-2/1099 classification — not in either ADP table`);
     if (total > 80) audit.push(`${e.name}: ${total} hours > 80`);
-    if (rate === 0) audit.push(`${e.name}: $0 hourly rate`);
+    if (rate === 0 && !salaried) audit.push(`${e.name}: $0 hourly rate`);
 
     detail.push({
       employeeId: e.employee_id,
@@ -301,6 +315,8 @@ export async function getPayrollRun(weekStart: string): Promise<PayrollRun> {
       warehouseHours: warehouse,
       marketingHours,
       rate,
+      annualSalary,
+      weeklySalary,
       tips,
       commissions,
       bonus,
@@ -320,7 +336,17 @@ export async function getPayrollRun(weekStart: string): Promise<PayrollRun> {
     });
 
     if (e.classification === 'W-2') {
-      w2.push({ employee: e.name, regularHours: reg, overtimeHours: ot, tips, bonus: round2(bonus), commissions, reimbursement: miles });
+      // ADP already carries the salary and auto-pays it, so a salaried person's hours
+      // columns stay empty — keying them would pay the hours on top of the salary.
+      w2.push({
+        employee: e.name,
+        regularHours: salaried ? 0 : reg,
+        overtimeHours: salaried ? 0 : ot,
+        tips,
+        bonus: round2(bonus),
+        commissions,
+        reimbursement: miles,
+      });
     } else if (e.classification === '1099') {
       contractors1099.push({ contractor: e.name, compHours: round2(total + ot / 2), compAmount: round2(tips + commissions + bonus), reimbursement: miles });
     }

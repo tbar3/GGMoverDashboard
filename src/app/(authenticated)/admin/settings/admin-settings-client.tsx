@@ -39,6 +39,8 @@ interface TeamMember {
   name: string;
   email: string;
   role: string;
+  /** A portal login for someone already on the roster — hidden from Employees. */
+  exclude_from_roster?: boolean;
 }
 interface Location {
   id: string;
@@ -124,7 +126,17 @@ export function AdminTeamManager({ team }: { team: TeamMember[] }) {
             ) : (
               team.map((m) => (
                 <TableRow key={m.id}>
-                  <TableCell className="font-medium">{m.name}</TableCell>
+                  <TableCell className="font-medium">
+                    {m.name}
+                    {m.exclude_from_roster && (
+                      <span
+                        className="ml-2 inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs font-normal text-muted-foreground"
+                        title="This is a portal login for someone already on the crew roster, so it is hidden from the Employees list. Access is unaffected."
+                      >
+                        portal login · not on roster
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{m.email}</TableCell>
                   <TableCell>
                     <Select value={m.role} onValueChange={(v) => changeRole(m.id, v)} disabled={pending}>

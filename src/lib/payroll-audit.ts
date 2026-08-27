@@ -168,15 +168,25 @@ function inputsFor(
       overridden: false,
       systemValue: null,
     },
-    {
-      label: 'Hourly rate',
-      value: d.rate,
-      kind: 'rate',
-      source: report,
-      derivation: 'The rate under which the most hours were worked; falls back to the roster rate',
-      overridden: false,
-      systemValue: null,
-    },
+    d.annualSalary != null
+      ? {
+          label: 'Weekly salary',
+          value: d.weeklySalary,
+          kind: 'money' as const,
+          source: 'Employee record (annual salary)',
+          derivation: `$${d.annualSalary.toLocaleString('en-US')} per year / 52 weeks — salaried and exempt, so hours do not change this and no overtime accrues`,
+          overridden: false,
+          systemValue: null,
+        }
+      : {
+          label: 'Hourly rate',
+          value: d.rate,
+          kind: 'rate' as const,
+          source: report,
+          derivation: 'The rate under which the most hours were worked; falls back to the roster rate',
+          overridden: false,
+          systemValue: null,
+        },
     {
       label: 'Tips',
       value: d.tips,
@@ -221,8 +231,32 @@ function inputsFor(
 
 /** How this employee's figures land in ADP, and the proof the row reproduces the gross. */
 function adpTieFor(d: PayrollDetailRow): AdpTie {
-  const basePay = round2(d.totalHours * d.rate + d.overtimeHours * (d.rate / 2));
+  const salaried = d.annualSalary != null;
+  const basePay = salaried
+    ? d.weeklySalary
+    : round2(d.totalHours * d.rate + d.overtimeHours * (d.rate / 2));
   const earnings = round2(d.tips + d.commissions + d.bonus);
+
+  // A salaried W-2 person is paid their salary by ADP directly, so the hours columns
+  // are intentionally blank and there is no hours-based gross to tie out. What must
+  // be checked instead is that the hours were NOT keyed (which would double-pay).
+  if (salaried && d.classification === 'W-2') {
+    return {
+      table: 'ADP W-2',
+      columns: [
+        { label: 'Regular Hours', value: 0, kind: 'hours', from: 'blank — salary is paid by ADP directly' },
+        { label: 'Overtime Hours', value: 0, kind: 'hours', from: 'blank — exempt, no overtime' },
+        { label: 'Tips', value: d.tips, kind: 'money', from: 'tips' },
+        { label: 'Bonus', value: d.bonus, kind: 'money', from: 'weekly bonus' },
+        { label: 'Commissions', value: d.commissions, kind: 'money', from: 'commissions' },
+        { label: 'Reimbursement', value: d.miles, kind: 'money', from: 'mileage' },
+      ],
+      check:
+        `Salaried at $${d.annualSalary!.toLocaleString('en-US')}/yr = $${money(d.weeklySalary)} for the week, paid by ADP from the salary on file. ` +
+        `The ${d.totalHours} hours worked are tracked for the bonus but deliberately not keyed into ADP — keying them would pay the hours on top of the salary.`,
+      ok: true,
+    };
+  }
 
   if (d.classification === 'W-2') {
     // ADP applies the 1.5x itself, so reg + OT at 1.5x must reproduce our base pay.
@@ -324,9 +358,13 @@ export async function getPayrollAudit(weekStart: string): Promise<PayrollAudit> 
     const adp = adpTieFor(d);
     const overriddenFields = inputs.filter((i) => i.overridden).map((i) => i.label);
 
+    const salaried = d.annualSalary != null;
     const flags: string[] = [];
     if (!d.classification) flags.push('No W-2 / 1099 classification — appears in neither ADP table');
-    if (d.rate === 0) flags.push('$0 hourly rate');
+    if (d.rate === 0 && !salaried) flags.push('$0 hourly rate');
+    if (salaried && d.classification === '1099') {
+      flags.push('Salaried but classified 1099 — salary is a W-2 concept, check the classification');
+    }
     if (d.totalHours > 80) flags.push(`${d.totalHours} hours in one week (over 80)`);
     if (!adp.ok && d.classification) flags.push('ADP row does not reproduce the computed gross');
     if (d.ov.bonus != null && !ties(d.ov.bonus, d.computedBonus)) {
@@ -342,16 +380,23 @@ export async function getPayrollAudit(weekStart: string): Promise<PayrollAudit> 
       name: d.name,
       classification: d.classification,
       inputs,
-      hoursMath:
-        `${d.billableHours} billable + ${d.warehouseHours} warehouse + ${d.marketingHours} marketing = ` +
-        `${d.totalHours} total → ${d.regularHours} regular + ${d.overtimeHours} overtime ` +
-        `(hours above ${OT_WEEKLY_THRESHOLD})`,
-      payMath:
-        `${d.totalHours} x $${money(d.rate)} (all hours at standard) + ${d.overtimeHours} x $${money(
-          d.rate / 2
-        )} (OT half-premium) + $${money(d.tips)} tips + $${money(d.commissions)} commissions + $${money(
-          d.bonus
-        )} bonus + $${money(d.miles)} mileage = $${money(d.totalCompensation)}`,
+      hoursMath: salaried
+        ? `${d.billableHours} billable + ${d.warehouseHours} warehouse + ${d.marketingHours} marketing = ` +
+          `${d.totalHours} total — tracked for the bonus only; salaried and exempt, so no overtime accrues`
+        : `${d.billableHours} billable + ${d.warehouseHours} warehouse + ${d.marketingHours} marketing = ` +
+          `${d.totalHours} total → ${d.regularHours} regular + ${d.overtimeHours} overtime ` +
+          `(hours above ${OT_WEEKLY_THRESHOLD})`,
+      payMath: salaried
+        ? `$${d.annualSalary!.toLocaleString('en-US')}/yr / 52 = $${money(d.weeklySalary)} salary + $${money(
+            d.tips
+          )} tips + $${money(d.commissions)} commissions + $${money(d.bonus)} bonus + $${money(
+            d.miles
+          )} mileage = $${money(d.totalCompensation)}`
+        : `${d.totalHours} x $${money(d.rate)} (all hours at standard) + ${d.overtimeHours} x $${money(
+            d.rate / 2
+          )} (OT half-premium) + $${money(d.tips)} tips + $${money(d.commissions)} commissions + $${money(
+            d.bonus
+          )} bonus + $${money(d.miles)} mileage = $${money(d.totalCompensation)}`,
       totalHours: d.totalHours,
       regularHours: d.regularHours,
       overtimeHours: d.overtimeHours,
@@ -413,6 +458,13 @@ export async function getPayrollAudit(weekStart: string): Promise<PayrollAudit> 
     runFlags: run.audit,
     totals,
   };
+}
+
+/** Base pay for one person, priced the way the run prices them (salary or hours). */
+function basePayOf(d: PayrollDetailRow): number {
+  return d.annualSalary != null
+    ? d.weeklySalary
+    : round2(d.totalHours * d.rate + d.overtimeHours * (d.rate / 2));
 }
 
 /** The cross-foot checks an F&A reviewer would otherwise redo by hand. */
@@ -523,7 +575,7 @@ function buildChecks(
   // 8. Per-employee total comp adds to the week's total comp.
   const recomputed = round2(
     run.detail.reduce(
-      (t, d) => t + round2(d.totalHours * d.rate + d.overtimeHours * (d.rate / 2) + d.tips + d.commissions + d.bonus + d.miles),
+      (t, d) => t + round2(basePayOf(d) + d.tips + d.commissions + d.bonus + d.miles),
       0
     )
   );
@@ -538,8 +590,9 @@ function buildChecks(
   // 9. Bridge the gross frozen at import to the run's live base pay. They are SUPPOSED
   //    to differ: marketing hours and manual corrections are layered on after import.
   //    An audit wants the bridge itemized, not a bare pass/fail on two unlike figures.
-  const liveBase = round2(
-    run.detail.reduce((t, d) => t + d.totalHours * d.rate + d.overtimeHours * (d.rate / 2), 0)
+  const liveBase = round2(run.detail.reduce((t, d) => t + basePayOf(d), 0));
+  const salaryPay = round2(
+    run.detail.reduce((t, d) => t + (d.annualSalary != null ? d.weeklySalary : 0), 0)
   );
   // Marketing hours don't only add straight time — they push people over 40 and
   // create OT premium that wasn't in the imported gross. Both legs are itemized so
@@ -547,13 +600,14 @@ function buildChecks(
   let marketingStraight = 0;
   let marketingInducedOt = 0;
   for (const d of run.detail) {
+    if (d.annualSalary != null) continue; // exempt: hours change neither pay nor OT
     marketingStraight += d.marketingHours * d.rate;
     const otWithoutMarketing = Math.max(0, round2(d.billableHours + d.warehouseHours) - OT_WEEKLY_THRESHOLD);
     marketingInducedOt += Math.max(0, d.overtimeHours - otWithoutMarketing) * (d.rate / 2);
   }
   marketingStraight = round2(marketingStraight);
   marketingInducedOt = round2(marketingInducedOt);
-  const bridged = round2(round2(computedGross) + marketingStraight + marketingInducedOt);
+  const bridged = round2(round2(computedGross) + marketingStraight + marketingInducedOt + salaryPay);
   const residual = round2(liveBase - bridged);
   checks.push({
     label: 'Import gross + marketing = live base pay',
@@ -563,7 +617,9 @@ function buildChecks(
     detail:
       `Gross frozen at import $${money(round2(computedGross))} + marketing straight time $${money(
         marketingStraight
-      )} + overtime premium created by marketing hours $${money(marketingInducedOt)} = $${money(bridged)}. ` +
+      )} + overtime premium created by marketing hours $${money(marketingInducedOt)}` +
+      (salaryPay > 0 ? ` + salaried pay not in the hourly import $${money(salaryPay)}` : '') +
+      ` = $${money(bridged)}. ` +
       (Math.abs(residual) <= 0.05
         ? 'Bridges to live base pay.'
         : `Unexplained residual of $${money(residual)} — a warehouse-hours or rate correction made since the import would explain it.`),
@@ -645,7 +701,7 @@ export function renderPayrollAuditCsv(a: PayrollAudit): string {
       'Total Hrs',
       'Regular Hrs',
       'OT Hrs',
-      'Rate',
+      'Rate / Salary',
       'Tips',
       'Commissions',
       'Bonus',
@@ -671,7 +727,9 @@ export function renderPayrollAuditCsv(a: PayrollAudit): string {
         e.totalHours.toFixed(2),
         e.regularHours.toFixed(2),
         e.overtimeHours.toFixed(2),
-        money(e.rate),
+        e.inputs.some((i) => i.label === 'Weekly salary')
+          ? `${money(pick(e, 'Weekly salary'))}/wk salary`
+          : money(e.rate),
         money(pick(e, 'Tips')),
         money(pick(e, 'Commissions')),
         money(pick(e, 'Weekly bonus')),

@@ -55,6 +55,8 @@ interface UpdateEmployeeInput {
   startDate: string;
   isActive: boolean;
   hourlyRate: number | null;
+  /** Gross annual salary, or null for hourly staff. */
+  annualSalary?: number | null;
   phone?: string | null;
   email?: string;
 }
@@ -75,7 +77,8 @@ export async function updateEmployee(input: UpdateEmployeeInput) {
       `UPDATE employees
           SET name = $2, role = $3, start_date = $4,
               is_active = $5, hourly_rate = $6, phone = $7,
-              email = COALESCE($8, email)
+              email = COALESCE($8, email),
+              annual_salary = $9
         WHERE id = $1`,
       [
         input.id,
@@ -86,6 +89,7 @@ export async function updateEmployee(input: UpdateEmployeeInput) {
         input.hourlyRate,
         input.phone ?? null,
         input.email?.trim().toLowerCase() || null,
+        input.annualSalary ?? null,
       ]
     );
   } catch (err: unknown) {

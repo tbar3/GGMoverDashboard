@@ -8,7 +8,9 @@ export async function GET(request: NextRequest) {
 
   const activeOnly = request.nextUrl.searchParams.get('active') === 'true';
   const rows = activeOnly
-    ? await query('SELECT * FROM employees WHERE is_active = true ORDER BY name')
+    ? await query(
+        'SELECT * FROM employees WHERE is_active = true AND exclude_from_roster = FALSE ORDER BY name'
+      )
     : await query('SELECT * FROM employees ORDER BY name');
 
   return NextResponse.json(rows);

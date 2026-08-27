@@ -29,7 +29,10 @@ export default async function EmployeesPage() {
 
   const now = new Date();
   const [employees, lastWeekBoard, baseRate, raiseRows] = await Promise.all([
-    query<Employee>('SELECT * FROM employees ORDER BY name'),
+    // Portal-only login accounts (a second @goodguysserve.com row for someone who is
+    // already on the roster) are hidden here — they are logins, not people. They stay
+    // active and keep full portal access; this filter is presentational only.
+    query<Employee>('SELECT * FROM employees WHERE exclude_from_roster = FALSE ORDER BY name'),
     getWeekBoard(weekStartOf(subWeeks(now, 1))),
     getBaseRate(),
     query<{ employee_id: string; raises: number }>(

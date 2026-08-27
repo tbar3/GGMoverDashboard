@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     id: string;
     name: string;
     hourly_rate: number | null;
-  }>('SELECT id, name, hourly_rate FROM employees WHERE is_active = true');
+  }>('SELECT id, name, hourly_rate FROM employees WHERE is_active = true AND exclude_from_roster = FALSE');
 
   // Build per-employee expected data
   const expected: Record<string, {

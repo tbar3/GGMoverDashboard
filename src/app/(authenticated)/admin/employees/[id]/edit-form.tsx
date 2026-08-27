@@ -31,6 +31,9 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
   const [hourlyRate, setHourlyRate] = useState(
     employee.hourly_rate != null ? String(employee.hourly_rate) : ''
   );
+  const [annualSalary, setAnnualSalary] = useState(
+    employee.annual_salary != null ? String(employee.annual_salary) : ''
+  );
   const [isActive, setIsActive] = useState(employee.is_active);
   const [phone, setPhone] = useState(employee.phone ?? '');
   const [email, setEmail] = useState(employee.email);
@@ -58,6 +61,11 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
         toast.error('Enter a valid hourly rate.');
         return;
       }
+      const salary = annualSalary.trim() === '' ? null : parseFloat(annualSalary.replace(/[$,]/g, ''));
+      if (salary !== null && (isNaN(salary) || salary < 0)) {
+        toast.error('Enter a valid annual salary.');
+        return;
+      }
       const result = await updateEmployee({
         id: employee.id,
         name,
@@ -65,6 +73,7 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
         startDate,
         isActive,
         hourlyRate: rate,
+        annualSalary: salary,
         phone: phone.trim() || null,
         email: email.trim().toLowerCase(),
       });
@@ -164,7 +173,31 @@ export function EditEmployeeForm({ employee }: { employee: Employee }) {
                 placeholder="blank = use skill-based rate"
                 value={hourlyRate}
                 onChange={(e) => setHourlyRate(e.target.value)}
+                disabled={annualSalary.trim() !== ''}
               />
+              {annualSalary.trim() !== '' && (
+                <p className="text-xs text-muted-foreground">
+                  Not used — this person is salaried.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="salary">Annual Salary</Label>
+              <Input
+                id="salary"
+                inputMode="decimal"
+                placeholder="blank = paid hourly"
+                value={annualSalary}
+                onChange={(e) => setAnnualSalary(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                {annualSalary.trim() !== '' && !isNaN(parseFloat(annualSalary.replace(/[$,]/g, '')))
+                  ? `$${(parseFloat(annualSalary.replace(/[$,]/g, '')) / 52).toLocaleString('en-US', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })} per week · exempt, no overtime`
+                  : 'Leave blank for hourly staff. Setting it makes this person salaried and exempt from overtime.'}
+              </p>
             </div>
           </div>
 

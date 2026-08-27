@@ -71,8 +71,17 @@ export async function POST(request: NextRequest) {
   const payDate = format(addDays(new Date(`${weekStart}T12:00:00`), 11), 'yyyy-MM-dd');
 
   // Resolve report names (incl. sales aliases) to employees.
+  //
+  // Some people have more than one active row (e.g. a crew record plus a later
+  // manager record with a company email). The map is keyed by name, so without a
+  // deterministic order the winner varied between imports — and picking the newer,
+  // empty record would drop that person out of the ADP tables. Order so the best
+  // candidate is written LAST and therefore wins: active over inactive, classified
+  // over unclassified, then oldest first (the record carrying the pay history).
   const employees = await query<EmpRow>(
-    'SELECT id, name, aliases, hourly_rate, classification, is_active FROM employees'
+    `SELECT id, name, aliases, hourly_rate, classification, is_active
+       FROM employees
+      ORDER BY is_active ASC, (classification IS NOT NULL) ASC, created_at DESC`
   );
   const byName = new Map<string, EmpRow>();
   for (const e of employees) {

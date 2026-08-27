@@ -31,7 +31,7 @@ export default async function ScoreboardPage({
   const [board, roleRows, assignedRows] = await Promise.all([
     getWeekBoard(weekStart),
     query<{ id: string; role: string }>(
-      'SELECT id, role FROM employees WHERE is_active = TRUE'
+      'SELECT id, role FROM employees WHERE is_active = TRUE AND exclude_from_roster = FALSE'
     ),
     // Crew assigned to at least one job during this week — the scoreboard only
     // shows people who actually worked (were scheduled) this week.

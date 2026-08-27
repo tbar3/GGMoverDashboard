@@ -253,8 +253,17 @@ export function CorrectionsTable({
               <TableCell className="text-right whitespace-nowrap text-muted-foreground">
                 {r.regularHours.toFixed(2)} / {r.overtimeHours.toFixed(2)}
               </TableCell>
-              <TableCell className="text-right text-muted-foreground">
-                ${r.rate.toFixed(2)}
+              <TableCell className="text-right text-muted-foreground whitespace-nowrap">
+                {r.annualSalary != null ? (
+                  // Salaried staff have no hourly rate — show the weekly salary that
+                  // is actually being paid instead of a meaningless $0.00.
+                  <span title={`$${r.annualSalary.toLocaleString('en-US')}/yr salaried`}>
+                    ${r.weeklySalary.toFixed(2)}
+                    <span className="text-xs"> /wk</span>
+                  </span>
+                ) : (
+                  `$${r.rate.toFixed(2)}`
+                )}
               </TableCell>
               <TableCell className="text-right font-semibold">
                 ${r.totalCompensation.toFixed(2)}

@@ -76,7 +76,7 @@ export default function MileagePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         employee_id: formData.employee_id,
-        job_id: formData.job_id || null,
+        job_id: formData.job_id && formData.job_id !== 'none' ? formData.job_id : null,
         date: formData.date,
         miles,
         amount,
@@ -184,7 +184,7 @@ export default function MileagePage() {
                     <SelectValue placeholder="Select job..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No job</SelectItem>
+                    <SelectItem value="none">No job</SelectItem>
                     {jobs.map((job) => (
                       <SelectItem key={job.id} value={job.id}>
                         {formatDate(job.date, 'MMM d')} - {job.customer_name}

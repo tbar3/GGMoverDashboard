@@ -344,7 +344,7 @@ export async function approveWeek(weekStartRaw: string): Promise<Result> {
   const weekStart = validWeek(weekStartRaw);
   if (!weekStart) return { ok: false, error: 'Invalid week' };
 
-  const board = await getWeekBoard(weekStart);
+  const [board, config] = await Promise.all([getWeekBoard(weekStart), getBonusConfig()]);
   // Only snapshot people who have something for the week (hours or events) —
   // an empty $0 row for everyone else is just noise on the export.
   const rows = board.filter(
@@ -359,8 +359,9 @@ export async function approveWeek(weekStartRaw: string): Promise<Result> {
   for (const b of rows) {
     await query(
       `INSERT INTO bonus_week_results
-         (week_start, employee_id, hours, positives_count, perfect_week, multiplier, has_strike, bonus, locked_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+         (week_start, employee_id, hours, positives_count, perfect_week, multiplier, has_strike, bonus, locked_by,
+          base_rate, base_multiplier, discretionary_count, auto_bonus, strike_count, gross_multiplier)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [
         weekStart,
         b.employeeId,
@@ -371,6 +372,14 @@ export async function approveWeek(weekStartRaw: string): Promise<Result> {
         b.result.hasStrike,
         b.result.bonus,
         guard.employee.id,
+        // Freeze the inputs, not just the answer, so the week's report can always
+        // show the arithmetic even after settings or skills change.
+        config.baseRate,
+        b.result.baseMultiplier,
+        b.result.discretionaryCount,
+        b.result.autoBonus,
+        b.result.strikeCount,
+        b.result.grossMultiplier,
       ]
     );
   }

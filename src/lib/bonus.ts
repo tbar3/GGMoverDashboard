@@ -74,18 +74,29 @@ export async function getBonusConfig(): Promise<BonusConfig> {
   return { baseRate, increment, baseMultiplier, forfeitThreshold, driverWeekly, truckLeadWeekly };
 }
 
-// Automatic weekly role add-ons from a crew member's certifications.
-async function roleAutoBonusMap(config: BonusConfig): Promise<Map<string, number>> {
+// Automatic weekly role add-ons from a crew member's certifications, itemized so
+// the bonus report can name which add-on earned which slice of the multiplier.
+export async function roleAutoBonusDetailMap(config: BonusConfig): Promise<Map<string, RoleBonus[]>> {
   const rows = await query<{ employee_id: string; name: string }>(
     `SELECT es.employee_id, s.name FROM employee_skills es JOIN skills s ON s.id = es.skill_id
       WHERE s.name IN ('Driver', '2-Truck Job Lead')`
   );
-  const map = new Map<string, number>();
+  const map = new Map<string, RoleBonus[]>();
   for (const r of rows) {
-    const add = r.name === 'Driver' ? config.driverWeekly : config.truckLeadWeekly;
-    map.set(r.employee_id, (map.get(r.employee_id) ?? 0) + add);
+    const detail: RoleBonus =
+      r.name === 'Driver'
+        ? { label: 'Driver', amount: config.driverWeekly }
+        : { label: '2-Truck Lead', amount: config.truckLeadWeekly };
+    map.set(r.employee_id, [...(map.get(r.employee_id) ?? []), detail]);
   }
   return map;
+}
+
+async function roleAutoBonusMap(config: BonusConfig): Promise<Map<string, number>> {
+  const detail = await roleAutoBonusDetailMap(config);
+  return new Map(
+    [...detail].map(([id, rows]) => [id, rows.reduce((sum, r) => sum + r.amount, 0)])
+  );
 }
 
 async function roleAutoBonusFor(employeeId: string, config: BonusConfig): Promise<number> {
@@ -148,6 +159,7 @@ export interface WeekResult {
   positivesCount: number; // GG points logged (non-discretionary)
   discretionaryCount: number; // discretionary GG points
   autoBonus: number; // automatic role add-ons (driver / 2-truck lead), in multiplier units
+  baseMultiplier: number; // the base actually used — per-employee override or company default
   perfectWeek: boolean; // deprecated by policy; kept false
   totalPositives: number;
   strikeCount: number;
@@ -212,6 +224,7 @@ export function computeWeek(
     positivesCount,
     discretionaryCount,
     autoBonus,
+    baseMultiplier: base,
     perfectWeek,
     totalPositives,
     strikeCount,
@@ -432,6 +445,17 @@ export interface SnapshotRow {
   multiplier: number;
   hasStrike: boolean;
   bonus: number;
+  /**
+   * The frozen inputs behind the multiplier. NULL on weeks locked before the
+   * breakdown columns existed — the report reconstructs those from live events
+   * and labels them as reconstructed rather than frozen.
+   */
+  baseRate: number | null;
+  baseMultiplier: number | null;
+  discretionaryCount: number | null;
+  autoBonus: number | null;
+  strikeCount: number | null;
+  grossMultiplier: number | null;
 }
 
 /** The frozen figures for an approved week (empty if not yet locked). */
@@ -445,13 +469,22 @@ export async function getWeekResults(weekStart: string): Promise<SnapshotRow[]> 
     multiplier: number;
     has_strike: boolean;
     bonus: number;
+    base_rate: number | null;
+    base_multiplier: number | null;
+    discretionary_count: number | null;
+    auto_bonus: number | null;
+    strike_count: number | null;
+    gross_multiplier: number | null;
   }>(
     `SELECT r.employee_id, e.name, r.hours, r.positives_count, r.perfect_week,
-            r.multiplier, r.has_strike, r.bonus
+            r.multiplier, r.has_strike, r.bonus,
+            r.base_rate, r.base_multiplier, r.discretionary_count,
+            r.auto_bonus, r.strike_count, r.gross_multiplier
        FROM bonus_week_results r JOIN employees e ON e.id = r.employee_id
       WHERE r.week_start = $1 ORDER BY e.name`,
     [weekStart]
   );
+  const num = (v: number | null) => (v == null ? null : Number(v));
   return rows.map((r) => ({
     employeeId: r.employee_id,
     name: r.name,
@@ -461,6 +494,12 @@ export async function getWeekResults(weekStart: string): Promise<SnapshotRow[]> 
     multiplier: Number(r.multiplier),
     hasStrike: r.has_strike,
     bonus: Number(r.bonus),
+    baseRate: num(r.base_rate),
+    baseMultiplier: num(r.base_multiplier),
+    discretionaryCount: r.discretionary_count == null ? null : Number(r.discretionary_count),
+    autoBonus: num(r.auto_bonus),
+    strikeCount: r.strike_count == null ? null : Number(r.strike_count),
+    grossMultiplier: num(r.gross_multiplier),
   }));
 }
 

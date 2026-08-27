@@ -9,6 +9,7 @@ import { CorrectionsTable } from './corrections-table';
 import { PeriodSelect } from './period-select';
 import { AdpTables } from './adp-tables';
 import { WeekSummaryPanel } from './week-summary';
+import { JobsReportUpload } from './jobs-report-upload';
 
 function fmtDate(d: string, pattern = 'MMM d, yyyy'): string {
   return format(new Date(`${d}T12:00:00`), pattern);
@@ -146,11 +147,13 @@ export default async function PayrollRunPage({
               <CardHeader>
                 <CardTitle>Week Summary</CardTitle>
                 <CardDescription>
-                  Overall numbers for the period, vs. the prior week. Enter jobs and revenue (from
-                  SmartMoving); payroll gross comes from the run and the labor-cost ratio is computed.
+                  Overall numbers for the period, vs. the prior week. Import a SmartMoving jobs
+                  report to fill jobs and revenue, or type them in; payroll gross comes from the
+                  run and the labor-cost ratio is computed.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-6">
+                <JobsReportUpload />
                 <WeekSummaryPanel weekStart={run.weekStart} summary={summary} />
               </CardContent>
             </Card>

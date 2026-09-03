@@ -20,7 +20,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Select,
@@ -30,10 +29,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
-import { Plus, Car, MapPin } from 'lucide-react';
+import { Plus, Car, MapPin, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { MileageEntry, Employee, Job, CONFIG } from '@/types';
 import { formatDate } from '@/lib/utils';
+
+// A function, not a constant: the default date has to be "today" at the moment the
+// form opens, not whenever the module happened to load.
+const emptyForm = () => ({
+  employee_id: '',
+  job_id: '',
+  date: new Date().toISOString().split('T')[0],
+  miles: '',
+});
 
 export default function MileagePage() {
   const [entries, setEntries] = useState<MileageEntry[]>([]);
@@ -41,12 +49,10 @@ export default function MileagePage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [formData, setFormData] = useState({
-    employee_id: '',
-    job_id: '',
-    date: new Date().toISOString().split('T')[0],
-    miles: '',
-  });
+  const [editing, setEditing] = useState<MileageEntry | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MileageEntry | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState(emptyForm());
 
   useEffect(() => {
     fetchData();
@@ -65,33 +71,72 @@ export default function MileagePage() {
     setLoading(false);
   }
 
+  function openAdd() {
+    setEditing(null);
+    setFormData(emptyForm());
+    setDialogOpen(true);
+  }
+
+  function openEdit(entry: MileageEntry) {
+    setEditing(entry);
+    setFormData({
+      employee_id: entry.employee_id,
+      job_id: entry.job_id ?? 'none',
+      date: entry.date.split('T')[0],
+      miles: String(Number(entry.miles)),
+    });
+    setDialogOpen(true);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     const miles = parseFloat(formData.miles);
     const amount = miles * CONFIG.MILEAGE_RATE;
+    const payload = {
+      employee_id: formData.employee_id,
+      job_id: formData.job_id && formData.job_id !== 'none' ? formData.job_id : null,
+      date: formData.date,
+      miles,
+      amount,
+    };
 
-    const res = await fetch('/api/mileage', {
-      method: 'POST',
+    setSaving(true);
+    const res = await fetch(editing ? `/api/mileage/${editing.id}` : '/api/mileage', {
+      method: editing ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        employee_id: formData.employee_id,
-        job_id: formData.job_id && formData.job_id !== 'none' ? formData.job_id : null,
-        date: formData.date,
-        miles,
-        amount,
-      }),
+      body: JSON.stringify(payload),
     });
+    setSaving(false);
 
     if (!res.ok) {
-      const err = await res.json();
-      toast.error(err.error || 'Failed to add mileage');
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error || `Failed to ${editing ? 'update' : 'add'} mileage`);
       return;
     }
 
-    toast.success('Mileage entry added');
+    toast.success(editing ? 'Mileage entry updated' : 'Mileage entry added');
     setDialogOpen(false);
-    setFormData({ employee_id: '', job_id: '', date: new Date().toISOString().split('T')[0], miles: '' });
+    setEditing(null);
+    setFormData(emptyForm());
+    fetchData();
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+
+    setSaving(true);
+    const res = await fetch(`/api/mileage/${deleteTarget.id}`, { method: 'DELETE' });
+    setSaving(false);
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error || 'Failed to delete mileage');
+      return;
+    }
+
+    toast.success('Mileage entry deleted');
+    setDeleteTarget(null);
     fetchData();
   }
 
@@ -132,16 +177,14 @@ export default function MileagePage() {
             Track personal vehicle mileage at ${CONFIG.MILEAGE_RATE}/mile
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Mileage
-            </Button>
-          </DialogTrigger>
+        <Button onClick={openAdd}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Mileage
+        </Button>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditing(null); }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Log Mileage</DialogTitle>
+              <DialogTitle>{editing ? 'Edit Mileage' : 'Log Mileage'}</DialogTitle>
               <DialogDescription>
                 Record roundtrip mileage from the warehouse at ${CONFIG.MILEAGE_RATE}/mile
               </DialogDescription>
@@ -228,8 +271,8 @@ export default function MileagePage() {
               )}
 
               <div className="flex gap-4 pt-4">
-                <Button type="submit" disabled={!formData.employee_id || !formData.miles}>
-                  Add Mileage
+                <Button type="submit" disabled={saving || !formData.employee_id || !formData.miles}>
+                  {saving ? 'Saving...' : editing ? 'Save Changes' : 'Add Mileage'}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
@@ -304,6 +347,7 @@ export default function MileagePage() {
                 <TableHead>Miles</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Job</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -325,11 +369,32 @@ export default function MileagePage() {
                         ? jobs.find(j => j.id === entry.job_id)?.customer_name || 'Unknown'
                         : '-'}
                     </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openEdit(entry)}
+                          aria-label={`Edit mileage for ${getEmployeeName(entry.employee_id)}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setDeleteTarget(entry)}
+                          aria-label={`Delete mileage for ${getEmployeeName(entry.employee_id)}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     No mileage entries yet
                   </TableCell>
                 </TableRow>
@@ -338,6 +403,35 @@ export default function MileagePage() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete mileage entry?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget && (
+                <>
+                  {getEmployeeName(deleteTarget.employee_id)} &middot;{' '}
+                  {formatDate(deleteTarget.date, 'MMM d, yyyy')} &middot;{' '}
+                  {Number(deleteTarget.miles).toFixed(1)} mi (${Number(deleteTarget.amount).toFixed(2)})
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This removes the reimbursement from any payroll period that has not been paid yet. It
+            cannot be undone.
+          </p>
+          <div className="flex gap-4 pt-4">
+            <Button variant="destructive" onClick={handleDelete} disabled={saving}>
+              {saving ? 'Deleting...' : 'Delete Entry'}
+            </Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

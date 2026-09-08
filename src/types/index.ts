@@ -143,6 +143,10 @@ export interface Damage {
   description: string;
   amount: number;
   was_reported: boolean;
+  /** Date of the move the damage happened on. Null when it isn't tied to a job. */
+  job_date: string | null;
+  /** Date the damage actually came out of the pool — drives the payout period. */
+  effective_date: string;
   created_at: string;
 }
 

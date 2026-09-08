@@ -293,10 +293,16 @@ export async function importDamages(rows: Record<string, unknown>[]): Promise<Im
 
     const wasReported = row['was_reported'] !== false && row['was_reported'] !== 'false' && row['reported'] !== false && row['reported'] !== 'false';
 
+    const jobDate = getDate(row, 'job_date', 'date_of_job', 'move_date', 'date');
+    // No effective date in the file = it lands in today's payout period, matching
+    // the column default and what the Log Damage form does.
+    const effectiveDate = getDate(row, 'effective_date', 'paid_date', 'payout_date');
+
     try {
       await query(
-        `INSERT INTO damages (description, amount, was_reported) VALUES ($1, $2, $3)`,
-        [description, amount, wasReported]
+        `INSERT INTO damages (description, amount, was_reported, job_date, effective_date)
+         VALUES ($1, $2, $3, $4, COALESCE($5::date, CURRENT_DATE))`,
+        [description, amount, wasReported, jobDate, effectiveDate]
       );
       imported++;
     } catch (err) {
@@ -578,7 +584,7 @@ export const IMPORT_TYPES = [
   { value: 'payroll', label: 'Payroll', description: 'Employee, week start, travel/job/warehouse hours, reimbursements, tips' },
   { value: 'jobs', label: 'Jobs', description: 'Date, customer, address, revenue, service type' },
   { value: 'attendance', label: 'Attendance', description: 'Employee, date, arrival time, tardy status' },
-  { value: 'damages', label: 'Damages', description: 'Description, amount, reported status' },
+  { value: 'damages', label: 'Damages', description: 'Description, amount, reported status, job date, effective date' },
   { value: 'performance', label: 'Performance Events', description: 'Employee, date, type (5-star, customer, crew), description' },
   { value: 'mileage', label: 'Mileage', description: 'Employee, date, miles' },
   { value: 'smartmoving_jobs', label: 'SmartMoving Jobs Report', description: 'SmartMoving "all jobs" export — status, trucks, financials (back office)' },

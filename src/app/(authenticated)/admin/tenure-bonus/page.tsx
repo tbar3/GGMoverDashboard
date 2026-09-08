@@ -68,7 +68,7 @@ export default async function TenureBonusPage({
           <PoolInput periodKey={t.periodKey} poolAmount={t.poolAmount} />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Stat label="Pool (entered)" value={money(t.poolAmount)} />
-            <Stat label="Damages (window)" value={`− ${money(t.damages)}`} />
+            <Stat label="Damages (by effective date)" value={`− ${money(t.damages)}`} />
             <Stat label="Net pool" value={money(t.netPool)} highlight />
             <Stat label="Total shares" value={`${t.totalShares} mo`} />
           </div>

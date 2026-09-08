@@ -123,8 +123,14 @@ CREATE TABLE IF NOT EXISTS damages (
   description TEXT NOT NULL,
   amount DECIMAL(10, 2) NOT NULL,
   was_reported BOOLEAN DEFAULT true,
+  -- job_date = when the move happened (NULL if the damage isn't tied to a job);
+  -- effective_date = when the damage actually came out of the pool.
+  job_date DATE,
+  effective_date DATE NOT NULL DEFAULT CURRENT_DATE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_damages_effective_date ON damages(effective_date);
+CREATE INDEX IF NOT EXISTS idx_damages_job_date ON damages(job_date);
 
 -- Performance events
 CREATE TABLE IF NOT EXISTS performance_events (

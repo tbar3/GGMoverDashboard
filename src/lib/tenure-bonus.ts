@@ -4,7 +4,10 @@ import { differenceInDays } from 'date-fns';
 // Bi-annual, strictly tenure-based bonus pool.
 //   Pool  = 1% of revenue, ENTERED by the admin per payout (tenure_bonus_periods).
 //   Net   = Pool − damages in the window (unreported damages count 2×, the standard
-//           penalty — this pool is where damages come out of).
+//           penalty — this pool is where damages come out of). A damage lands in
+//           the window by its effective_date — the day it was actually paid out —
+//           not the day it was typed in, so a late-discovered damage can be booked
+//           to the period it belongs to.
 //   Split = strictly proportional to each active employee's total months of tenure
 //           (1 month = 1 share; rounded to the nearest whole month), among employees
 //           active on the payout date.
@@ -74,7 +77,7 @@ export async function getTenureBonus(periodKey: string): Promise<TenureBonus> {
     ),
     queryOne<{ dmg: number }>(
       `SELECT COALESCE(SUM(CASE WHEN was_reported THEN amount ELSE amount * 2 END), 0)::float8 AS dmg
-         FROM damages WHERE created_at >= $1 AND created_at <= ($2::date + 1)`,
+         FROM damages WHERE effective_date >= $1 AND effective_date <= $2`,
       [meta.windowStart, meta.windowEnd]
     ),
     // Crew/staff only — owners (and the system admin account) are excluded from the

@@ -8,6 +8,8 @@ type ImportResult = {
   imported: number;
   skipped: number;
   errors: string[];
+  /** SmartMoving import only: rows copied through into `jobs` (see bridgeSmartMovingJobsIntoJobs). */
+  bridgedIntoJobs?: number;
 };
 
 // Normalize column names: lowercase, trim, replace spaces/special chars with underscores
@@ -181,12 +183,33 @@ export async function importJobs(rows: Record<string, unknown>[]): Promise<Impor
 
     try {
       if (jobNumber) {
-        // Upsert by job_number
+        // Genuine upsert on job_number (idx_jobs_job_number_unique). The old
+        // ON CONFLICT (calendar_event_id) could never fire here — an imported row
+        // has a NULL calendar_event_id and Postgres treats NULLs as distinct — so
+        // re-running a file duplicated every row.
+        //
+        // COALESCE(EXCLUDED.x, jobs.x) on update: a blank cell in the CSV means
+        // "the export didn't carry this", not "clear it". Without it, importing a
+        // thin spreadsheet over a calendar-synced job would wipe the address,
+        // phone and crew detail the sync had already filled in.
         await query(
           `INSERT INTO jobs (date, customer_name, pickup_address, dropoff_address, revenue, job_number, service_type,
             customer_phone, customer_email, estimated_hours, volume_cuft, weight_lbs, pricing_type, truck_name)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-           ON CONFLICT (calendar_event_id) DO NOTHING`,
+           ON CONFLICT (job_number) WHERE job_number IS NOT NULL DO UPDATE SET
+             date             = EXCLUDED.date,
+             customer_name    = EXCLUDED.customer_name,
+             pickup_address   = COALESCE(NULLIF(EXCLUDED.pickup_address, ''), jobs.pickup_address),
+             dropoff_address  = COALESCE(NULLIF(EXCLUDED.dropoff_address, ''), jobs.dropoff_address),
+             revenue          = COALESCE(EXCLUDED.revenue, jobs.revenue),
+             service_type     = COALESCE(EXCLUDED.service_type, jobs.service_type),
+             customer_phone   = COALESCE(EXCLUDED.customer_phone, jobs.customer_phone),
+             customer_email   = COALESCE(EXCLUDED.customer_email, jobs.customer_email),
+             estimated_hours  = COALESCE(EXCLUDED.estimated_hours, jobs.estimated_hours),
+             volume_cuft      = COALESCE(EXCLUDED.volume_cuft, jobs.volume_cuft),
+             weight_lbs       = COALESCE(EXCLUDED.weight_lbs, jobs.weight_lbs),
+             pricing_type     = COALESCE(EXCLUDED.pricing_type, jobs.pricing_type),
+             truck_name       = COALESCE(EXCLUDED.truck_name, jobs.truck_name)`,
           [
             date, customerName,
             getString(row, 'pickup_address', 'origin', 'address', 'origin_address') || '',
@@ -565,7 +588,72 @@ export async function importSmartMovingJobs(
     }
   }
 
-  return { imported, skipped: rows.length - imported - errors.length, errors };
+  // Bridge the SmartMoving history into `jobs`, which is what the job pickers
+  // (Damages, Mileage, Materials) and review-matching actually read. Without this
+  // the two tables never meet: `jobs` is fed only by the Google Calendar sync,
+  // whose SmartMoving calendar carries no events before 2026-06-24, so any job
+  // older than that was invisible in the app even though its row was sitting in
+  // smartmoving_jobs the whole time.
+  const bridged = await bridgeSmartMovingJobsIntoJobs();
+
+  return {
+    imported,
+    skipped: rows.length - imported - errors.length,
+    errors,
+    bridgedIntoJobs: bridged,
+  };
+}
+
+/**
+ * Copy performed/scheduled SmartMoving jobs into `jobs` for any job_number that
+ * isn't there yet. Returns how many rows were added.
+ *
+ * DO NOTHING, not DO UPDATE: where a job_number already exists it came from the
+ * Google Calendar sync, which carries real street addresses, crew assignments and
+ * arrival windows. SmartMoving only has origin/destination city + state, so
+ * updating would trade richer data for poorer. This fills gaps, it never overwrites.
+ *
+ * crew_ids is deliberately left empty. SmartMoving stores crew as free text
+ * (crew_member_names) and resolving it to employee ids would change the per-crew
+ * job counts that weekly bonus math reads for already-paid weeks. The names stay
+ * available on smartmoving_jobs if they're ever needed.
+ *
+ * Status filter is narrower than profitability.ts's REAL_JOB (which also counts
+ * 'Opportunity'): a P&L wants pipeline value, but `jobs` is an operational record
+ * of work actually performed or scheduled, and an unbooked quote has no business
+ * in a damage-attribution picker.
+ */
+export async function bridgeSmartMovingJobsIntoJobs(): Promise<number> {
+  const rows = await query<{ id: string }>(
+    `INSERT INTO jobs (
+       date, customer_name, pickup_address, dropoff_address, revenue,
+       job_number, service_type, customer_phone, customer_email,
+       volume_cuft, weight_lbs, pricing_type, truck_name, crew_ids
+     )
+     SELECT
+       s.job_date,
+       s.customer_name,
+       COALESCE(NULLIF(concat_ws(', ', s.origin_city, s.origin_state), ''), ''),
+       COALESCE(NULLIF(concat_ws(', ', s.destination_city, s.destination_state), ''), ''),
+       s.total_actual_cost,
+       s.job_number,
+       s.job_type,
+       s.customer_phone,
+       s.customer_email,
+       s.volume,
+       s.weight,
+       s.pricing_method,
+       s.truck_names,
+       '{}'
+       FROM smartmoving_jobs s
+      WHERE s.job_number IS NOT NULL
+        AND s.job_date IS NOT NULL
+        AND s.customer_name IS NOT NULL
+        AND s.opportunity_status IN ('Closed', 'Booked')
+     ON CONFLICT (job_number) WHERE job_number IS NOT NULL DO NOTHING
+     RETURNING id`
+  );
+  return rows.length;
 }
 
 export const IMPORT_HANDLERS: Record<string, (rows: Record<string, unknown>[]) => Promise<ImportResult>> = {

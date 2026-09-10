@@ -1,0 +1,13 @@
+-- Temporarily drop the truck_stock non-negative CHECK added in
+-- 20260909_1030_materials_offload_and_variance.sql.
+--
+-- The schema change is live but the count-wins code is not deployed yet. The OLD
+-- applyJobEffect still writes truck_stock as a delta, which can land below zero —
+-- and would now fail the constraint, erroring a crew mid-sheet instead of saving.
+-- Removing the constraint restores the old (drifting but non-erroring) behavior
+-- for the deploy window. Everything else from that migration stays: the columns,
+-- indexes, and the one-time reconciliation are all backward-compatible.
+--
+-- RE-ADD with 20260909_1131_readd_truck_stock_check.sql IMMEDIATELY after the
+-- new code is deployed to production.
+ALTER TABLE truck_stock DROP CONSTRAINT IF EXISTS truck_stock_non_negative;

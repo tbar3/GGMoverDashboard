@@ -326,46 +326,105 @@ type JobRef = {
   storage_pads_used?: number | null;
 };
 
-// Apply a job's inventory effect as DELTAS (reversible, order-independent):
-//   warehouse -= loadDelta (post_dispatch - pre_dispatch)  [stock pulled onto truck]
-//   truck     += (post_job - pre_dispatch)                 [net change on the truck]
-// Total nets to -used. Ledger rows record load + use.
+// Apply a job's inventory effect. The crew physically counts the truck at
+// Pre-Dispatch, so THAT COUNT IS THE TRUTH — not a delta to apply on top of a
+// balance the system may already have wrong. Per material:
+//   variance  = pre_dispatch - (what we thought the truck held)  [logged, not silent]
+//   warehouse -= loaded (post_dispatch - pre_dispatch)           [pulled onto the truck]
+//   truck      = post_job                                        [absolute set]
+// This is what stops negative truck stock: the balance is re-anchored to a
+// physical count on every sheet instead of drifting forever.
+//
+// Returns human-readable warnings for anything that saved but needs attention.
 async function applyJobEffect(
   client: PoolClient,
   job: JobRef,
   counts: CountInput[],
   createdBy: string | null
-) {
-  for (const c of counts) {
-    const pre = c.pre_dispatch ?? 0;
-    const postD = c.post_dispatch ?? 0;
-    const postJ = c.post_job ?? 0;
-    const loadDelta = postD - pre;
-    const truckDelta = postJ - pre;
-    const used = postD - postJ;
+): Promise<string[]> {
+  const warnings: string[] = [];
 
-    if (loadDelta !== 0) {
-      await client.query(
-        `UPDATE warehouse_stock SET on_hand = on_hand - $3, updated_at=NOW()
-          WHERE warehouse_id=$1 AND material_id=$2`,
-        [job.warehouse_id, c.material_id, loadDelta]
-      );
+  for (const c of counts) {
+    // A blank Pre-Dispatch means "not counted", NOT "zero on the truck". The
+    // old `?? 0` turned every skipped row into a phantom delta.
+    if (c.pre_dispatch == null) continue;
+
+    const pre = c.pre_dispatch;
+    const postD = c.post_dispatch ?? pre;
+    const postJ = c.post_job ?? postD;
+    if (postJ < 0 || postD < 0 || pre < 0) {
+      throw new Error('Counts cannot be negative — re-check the sheet.');
+    }
+
+    const { rows: ts } = await client.query(
+      `SELECT on_hand FROM truck_stock WHERE truck_id=$1 AND material_id=$2 FOR UPDATE`,
+      [job.truck_id, c.material_id]
+    );
+    const expected: number = ts[0]?.on_hand ?? 0;
+    const variance = pre - expected;
+
+    // Snapshot so an absolute set is still reversible on a back-office edit.
+    await client.query(
+      `UPDATE job_counts SET truck_on_hand_before=$3 WHERE job_id=$1 AND material_id=$2`,
+      [job.id, c.material_id, expected]
+    );
+
+    // The gap between what we expected and what the crew found is the whole
+    // point of the change: shrinkage becomes a reportable number, not silent drift.
+    if (variance !== 0) {
       await client.query(
         `INSERT INTO inventory_transactions
-           (material_id, truck_id, job_id, type, qty_delta, created_by)
-         VALUES ($1, $2, $3, 'load', $4, $5)`,
-        [c.material_id, job.truck_id, job.id, loadDelta, createdBy]
+           (material_id, truck_id, job_id, type, qty_delta, note, created_by)
+         VALUES ($1, $2, $3, 'variance', $4, $5, $6)`,
+        [
+          c.material_id,
+          job.truck_id,
+          job.id,
+          variance,
+          `Counted ${pre}, expected ${expected}`,
+          createdBy,
+        ]
       );
     }
-    if (truckDelta !== 0) {
+
+    const loaded = postD - pre; // negative = crew took material off at dispatch
+    const used = postD - postJ;
+
+    if (loaded !== 0) {
+      const { rows: wr } = await client.query(
+        `UPDATE warehouse_stock SET on_hand = on_hand - $3, updated_at=NOW()
+          WHERE warehouse_id=$1 AND material_id=$2
+        RETURNING on_hand`,
+        [job.warehouse_id, c.material_id, loaded]
+      );
+      // Deliberately allowed to go negative: it means material left the
+      // warehouse that was never recorded as received. Blocking here would
+      // strand a crew in the field, so save it and flag it for the office.
+      if (wr[0] && wr[0].on_hand < 0) {
+        const { rows: mr } = await client.query(`SELECT name FROM materials WHERE id=$1`, [
+          c.material_id,
+        ]);
+        warnings.push(
+          `Warehouse is short ${Math.abs(wr[0].on_hand)} ${mr[0]?.name ?? 'unit(s)'} — needs a Receive entry or a physical count.`
+        );
+      }
       await client.query(
-        `INSERT INTO truck_stock (truck_id, material_id, on_hand, updated_at)
-         VALUES ($1, $2, $3, NOW())
-         ON CONFLICT (truck_id, material_id)
-           DO UPDATE SET on_hand = truck_stock.on_hand + $3, updated_at=NOW()`,
-        [job.truck_id, c.material_id, truckDelta]
+        `INSERT INTO inventory_transactions
+           (material_id, truck_id, warehouse_id, job_id, type, qty_delta, created_by)
+         VALUES ($1, $2, $3, $4, 'load', $5, $6)`,
+        [c.material_id, job.truck_id, job.warehouse_id, job.id, loaded, createdBy]
       );
     }
+
+    // Absolute set: the truck ends the job holding exactly what was counted.
+    await client.query(
+      `INSERT INTO truck_stock (truck_id, material_id, on_hand, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (truck_id, material_id)
+         DO UPDATE SET on_hand = EXCLUDED.on_hand, updated_at=NOW()`,
+      [job.truck_id, c.material_id, postJ]
+    );
+
     if (used !== 0) {
       await client.query(
         `INSERT INTO inventory_transactions
@@ -378,18 +437,24 @@ async function applyJobEffect(
 
   // Storage-In: furniture pads left in the customer's storage are deducted from
   // the Furniture Pads EQUIPMENT total-on-hand (count only; charged in SmartMoving).
+  // Scoped to a single row — the old query hit every is_storage_pad row at once.
   const pads = job.is_storage_in ? job.storage_pads_used ?? 0 : 0;
   if (pads > 0) {
     await client.query(
-      `UPDATE equipment SET total_on_hand = total_on_hand - $1, updated_at=NOW()
-        WHERE is_storage_pad = TRUE`,
+      `UPDATE equipment SET total_on_hand = GREATEST(total_on_hand - $1, 0), updated_at=NOW()
+        WHERE id = (SELECT id FROM equipment WHERE is_storage_pad = TRUE ORDER BY id LIMIT 1)`,
       [pads]
     );
   }
+
+  return warnings;
 }
 
-// Undo a job's effect using its CURRENTLY-SAVED counts (negates applyJobEffect)
-// and removes its load/use ledger rows. Call BEFORE overwriting counts on edit.
+// Undo a job's effect using its CURRENTLY-SAVED counts and remove its ledger
+// rows. Call BEFORE overwriting counts on edit. The truck is restored from the
+// snapshot applyJobEffect took (an absolute set can't be un-added), the
+// warehouse by negating the load. Any residual imprecision self-heals: the next
+// count sheet re-anchors the truck to a physical count.
 async function reverseJobEffect(client: PoolClient, jobId: number) {
   const { rows: jr } = await client.query(
     `SELECT j.id, j.truck_id, t.warehouse_id, j.is_storage_in, j.storage_pads_used
@@ -400,42 +465,52 @@ async function reverseJobEffect(client: PoolClient, jobId: number) {
   const truckId = jr[0].truck_id;
   const warehouseId = jr[0].warehouse_id;
   const { rows: counts } = await client.query(
-    `SELECT material_id, pre_dispatch, post_dispatch, post_job
+    `SELECT material_id, pre_dispatch, post_dispatch, post_job, truck_on_hand_before
        FROM job_counts WHERE job_id=$1`,
     [jobId]
   );
   for (const c of counts) {
-    const pre = c.pre_dispatch ?? 0;
-    const postD = c.post_dispatch ?? 0;
-    const postJ = c.post_job ?? 0;
-    const loadDelta = postD - pre;
-    const truckDelta = postJ - pre;
-    if (loadDelta !== 0) {
+    if (c.pre_dispatch == null) continue; // was skipped on apply, nothing to undo
+    const pre = c.pre_dispatch;
+    const postD = c.post_dispatch ?? pre;
+    const loaded = postD - pre;
+    if (loaded !== 0) {
       await client.query(
         `UPDATE warehouse_stock SET on_hand = on_hand + $3, updated_at=NOW()
           WHERE warehouse_id=$1 AND material_id=$2`,
-        [warehouseId, c.material_id, loadDelta]
+        [warehouseId, c.material_id, loaded]
       );
     }
-    if (truckDelta !== 0) {
+    if (c.truck_on_hand_before != null) {
       await client.query(
-        `UPDATE truck_stock SET on_hand = on_hand - $3, updated_at=NOW()
+        `UPDATE truck_stock SET on_hand = GREATEST($3, 0), updated_at=NOW()
           WHERE truck_id=$1 AND material_id=$2`,
-        [truckId, c.material_id, truckDelta]
+        [truckId, c.material_id, c.truck_on_hand_before]
       );
+    } else {
+      // Job completed before this change and has no snapshot — fall back to the
+      // old delta reversal, clamped so it can't reintroduce a negative.
+      const truckDelta = (c.post_job ?? 0) - pre;
+      if (truckDelta !== 0) {
+        await client.query(
+          `UPDATE truck_stock SET on_hand = GREATEST(on_hand - $3, 0), updated_at=NOW()
+            WHERE truck_id=$1 AND material_id=$2`,
+          [truckId, c.material_id, truckDelta]
+        );
+      }
     }
   }
   const pads = jr[0].is_storage_in ? jr[0].storage_pads_used ?? 0 : 0;
   if (pads > 0) {
     await client.query(
       `UPDATE equipment SET total_on_hand = total_on_hand + $1, updated_at=NOW()
-        WHERE is_storage_pad = TRUE`,
+        WHERE id = (SELECT id FROM equipment WHERE is_storage_pad = TRUE ORDER BY id LIMIT 1)`,
       [pads]
     );
   }
 
   await client.query(
-    `DELETE FROM inventory_transactions WHERE job_id=$1 AND type IN ('load','use')`,
+    `DELETE FROM inventory_transactions WHERE job_id=$1 AND type IN ('load','use','variance')`,
     [jobId]
   );
 }
@@ -448,9 +523,10 @@ export async function completeJob(
   header: JobHeaderInput,
   counts: CountInput[],
   equip: EquipInput[] = []
-) {
+): Promise<CompleteJobResult> {
   await assertEmployee();
   const createdBy = await currentUserId();
+  let warnings: string[] = [];
 
   await withTransaction(async (client) => {
     const { rows } = await client.query(
@@ -497,7 +573,7 @@ export async function completeJob(
     );
     await upsertCounts(client, jobId, counts);
     await upsertEquipment(client, jobId, equip, 'after_count');
-    await applyJobEffect(
+    warnings = await applyJobEffect(
       client,
       {
         id: job.id,
@@ -521,9 +597,13 @@ export async function completeJob(
   revalidatePath('/materials');
   revalidatePath(`/materials/jobs/${jobId}`);
   revalidatePath('/admin/materials');
+  return { ok: true, warnings };
 }
 
 export type ActionResult = { ok: boolean; message?: string };
+
+/** completeJob saves even when the warehouse goes short — `warnings` says so. */
+export type CompleteJobResult = ActionResult & { warnings: string[] };
 
 // ── Move a job to a different truck (fixes a wrong-truck selection) ──
 // Counts stay with the job; only the truck changes. For a completed job the

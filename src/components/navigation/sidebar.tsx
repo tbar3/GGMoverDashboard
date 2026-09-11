@@ -93,9 +93,14 @@ const hubHome = {
 interface SidebarProps {
   isAdmin: boolean;
   userName: string;
+  /**
+   * Counts keyed by a nav item's `badgeKey`. Generic on purpose — the next module
+   * that needs to shout gets a badge by adding a key, not by editing this file.
+   */
+  badges?: Record<string, number>;
 }
 
-function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: () => void }) {
+function NavContent({ isAdmin, userName, badges, onLogout }: SidebarProps & { onLogout: () => void }) {
   const pathname = usePathname();
   const { t, locale, setLocale } = useI18n();
 
@@ -194,6 +199,7 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
                 </p>
                 {area.items.map((item) => {
                   const Icon = item.icon;
+                  const count = item.badgeKey ? badges?.[item.badgeKey] ?? 0 : 0;
                   return (
                     <Link
                       key={item.href}
@@ -205,7 +211,15 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
                       )}
                     >
                       <Icon className="h-5 w-5" />
-                      {item.title}
+                      <span className="flex-1">{item.title}</span>
+                      {count > 0 && (
+                        <span
+                          aria-label={`${count} need attention`}
+                          className="rounded-full bg-destructive px-1.5 py-0.5 text-xs font-semibold text-white"
+                        >
+                          {count}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
@@ -265,7 +279,7 @@ function NavContent({ isAdmin, userName, onLogout }: SidebarProps & { onLogout: 
   );
 }
 
-export function Sidebar({ isAdmin, userName }: SidebarProps) {
+export function Sidebar({ isAdmin, userName, badges }: SidebarProps) {
   const [open, setOpen] = useState(false);
   const { signOut } = useClerk();
 
@@ -299,14 +313,14 @@ export function Sidebar({ isAdmin, userName }: SidebarProps) {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-64 p-0 bg-sidebar border-sidebar-border">
-            <NavContent isAdmin={isAdmin} userName={userName} onLogout={handleLogout} />
+            <NavContent isAdmin={isAdmin} userName={userName} badges={badges} onLogout={handleLogout} />
           </SheetContent>
         </Sheet>
       </div>
 
       {/* Desktop Sidebar */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block lg:w-64 lg:border-r lg:border-sidebar-border">
-        <NavContent isAdmin={isAdmin} userName={userName} onLogout={handleLogout} />
+        <NavContent isAdmin={isAdmin} userName={userName} badges={badges} onLogout={handleLogout} />
       </aside>
     </>
   );

@@ -1,5 +1,10 @@
 import Link from 'next/link';
-import { getInventory, getEquipmentList, getStaleOpenJobs } from '@/lib/materials/live-inventory';
+import {
+  getInventory,
+  getEquipmentList,
+  getStaleOpenJobs,
+  getNegativeWarehouseStock,
+} from '@/lib/materials/live-inventory';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,10 +14,11 @@ function today(): string {
 }
 
 export default async function MaterialsInventoryPage() {
-  const [rows, equipment, staleJobs] = await Promise.all([
+  const [rows, equipment, staleJobs, shortfalls] = await Promise.all([
     getInventory(),
     getEquipmentList(),
     getStaleOpenJobs(today()),
+    getNegativeWarehouseStock(),
   ]);
   const warehouses = rows[0]?.warehouses ?? [];
   const trucks = rows[0]?.trucks ?? [];
@@ -45,6 +51,39 @@ export default async function MaterialsInventoryPage() {
           </Link>
         </div>
       </div>
+
+      {/* Flag: warehouse rows below zero. A crew is never blocked from loading in
+          the field, so the shortfall lands here — material went out that was
+          never recorded as received. */}
+      {shortfalls.length > 0 && (
+        <div className="mb-5 rounded-xl border-2 border-red-500 bg-red-100/40 p-4">
+          <p className="font-display font-bold text-navy-700">
+            ⚠ {shortfalls.length} warehouse item{shortfalls.length === 1 ? '' : 's'} below zero
+          </p>
+          <p className="mt-0.5 font-ui text-sm text-navy-600">
+            More of these went out than was ever received. Add the missing{' '}
+            <Link href="/admin/materials/receive" className="underline">
+              Receive
+            </Link>{' '}
+            entries, or do a{' '}
+            <Link href="/admin/materials/adjustments" className="underline">
+              physical count
+            </Link>{' '}
+            to re-anchor the warehouse to reality.
+          </p>
+          <ul className="mt-2 space-y-1">
+            {shortfalls.map((s) => (
+              <li
+                key={`${s.warehouse_id}-${s.material_id}`}
+                className="font-ui text-sm font-semibold text-navy-700"
+              >
+                {s.material_name} · {s.warehouse_name} ·{' '}
+                <span className="text-red-500">{s.on_hand}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Flag: count sheets from a previous day that were never closed out. */}
       {staleJobs.length > 0 && (

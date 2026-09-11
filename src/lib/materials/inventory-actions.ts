@@ -60,8 +60,10 @@ export async function receiveStockBatch(
   if (!Number.isInteger(warehouseId) || warehouseId <= 0) {
     return { ok: false, error: 'Pick a warehouse' };
   }
-  const clean = (entries ?? []).filter((e) => e.material_id && Number.isFinite(e.qty) && e.qty !== 0);
-  if (clean.length === 0) return { ok: false, error: 'Enter a quantity for at least one item' };
+  // A negative qty here would decrement the warehouse while logging it as a
+  // receipt — one of the ways stock drifted negative. Receiving only adds.
+  const clean = (entries ?? []).filter((e) => e.material_id && Number.isFinite(e.qty) && e.qty > 0);
+  if (clean.length === 0) return { ok: false, error: 'Enter a positive quantity for at least one item' };
 
   await withTransaction(async (client) => {
     for (const e of clean) {
@@ -105,7 +107,19 @@ export async function adjustStock(input: {
   const locCol = isWarehouse ? 'warehouse_id' : 'truck_id';
   const stockTable = isWarehouse ? 'warehouse_stock' : 'truck_stock';
 
+  let error: string | null = null;
   await withTransaction(async (client) => {
+    if (!isWarehouse) {
+      const { rows } = await client.query(
+        `SELECT on_hand FROM truck_stock WHERE truck_id=$1 AND material_id=$2 FOR UPDATE`,
+        [locationId, materialId]
+      );
+      const current = Number(rows[0]?.on_hand ?? 0);
+      if (current + delta < 0) {
+        error = `That would leave the truck at ${current + delta}. It only has ${current}.`;
+        return;
+      }
+    }
     await client.query(
       `INSERT INTO inventory_transactions (material_id, ${locCol}, type, qty_delta, note, created_by)
        VALUES ($1, $2, 'adjustment', $3, $4, $5)`,
@@ -118,6 +132,7 @@ export async function adjustStock(input: {
       [locationId, materialId, delta]
     );
   });
+  if (error) return { ok: false, error };
   revalidateInventory();
   return { ok: true };
 }
@@ -130,13 +145,19 @@ export interface AbsAdjust {
 }
 
 /**
- * Correct warehouse/truck totals to absolute new values after a physical recount
- * (the live-app Adjust grid). Each change sets the new on-hand and logs the delta
- * as an 'adjust' transaction. Ported from the live materials app.
+ * Correct warehouse/truck totals to absolute new values (the Adjust grid).
+ *
+ * `mode: 'count'` marks the entry as a PHYSICAL COUNT: the warehouse's only
+ * mechanism for re-anchoring to reality. Truck stock self-corrects on every
+ * count sheet, but warehouse stock only ever moves by load/receive/adjust and
+ * would otherwise drift forever — which is where negatives now concentrate.
+ * A count logs the difference as a 'count' variance so it lands in reporting
+ * alongside truck variance instead of hiding among manual adjustments.
  */
 export async function applyAdjustments(
   changes: AbsAdjust[],
-  note: string | null
+  note: string | null,
+  mode: 'adjust' | 'count' = 'adjust'
 ): Promise<Result & { count?: number }> {
   const guard = await requireBackOffice();
   if (!guard.ok) return { ok: false, error: 'Back office access required' };
@@ -144,6 +165,11 @@ export async function applyAdjustments(
     (c) => c.materialId && Number.isFinite(c.newValue) && c.location
   );
   if (clean.length === 0) return { ok: false, error: 'No changes to save' };
+  // Setting an absolute negative on-hand was a direct route to the negative
+  // values this module kept producing. You cannot physically hold less than none.
+  if (clean.some((c) => c.newValue < 0)) {
+    return { ok: false, error: 'On-hand cannot be negative — enter 0 or more.' };
+  }
 
   await withTransaction(async (client) => {
     for (const c of clean) {
@@ -167,8 +193,8 @@ export async function applyAdjustments(
       );
       await client.query(
         `INSERT INTO inventory_transactions (material_id, ${locCol}, type, qty_delta, note, created_by)
-         VALUES ($1, $2, 'adjust', $3, $4, $5)`,
-        [c.materialId, locId, c.newValue - current, note, guard.employee.name]
+         VALUES ($1, $2, $6, $3, $4, $5)`,
+        [c.materialId, locId, c.newValue - current, note, guard.employee.name, mode]
       );
     }
   });
@@ -201,11 +227,25 @@ export async function adjustStockBatch(
   );
   if (changes.length === 0) return { ok: false, error: 'No changes to save' };
 
+  let error: string | null = null;
   await withTransaction(async (client) => {
     for (const c of changes) {
       const isWarehouse = c.location === 'warehouse';
       const locCol = isWarehouse ? 'warehouse_id' : 'truck_id';
       const stockTable = isWarehouse ? 'warehouse_stock' : 'truck_stock';
+      // A truck can't hold less than nothing (enforced by truck_stock's CHECK) —
+      // catch it here so the office gets a sentence, not a constraint violation.
+      if (!isWarehouse) {
+        const { rows } = await client.query(
+          `SELECT on_hand FROM truck_stock WHERE truck_id=$1 AND material_id=$2 FOR UPDATE`,
+          [c.locationId, c.materialId]
+        );
+        const current = Number(rows[0]?.on_hand ?? 0);
+        if (current + c.delta < 0) {
+          error = `That would leave a truck at ${current + c.delta}. It only has ${current}.`;
+          return;
+        }
+      }
       await client.query(
         `INSERT INTO inventory_transactions (material_id, ${locCol}, type, qty_delta, note, created_by)
          VALUES ($1, $2, 'adjustment', $3, $4, $5)`,
@@ -219,6 +259,7 @@ export async function adjustStockBatch(
       );
     }
   });
+  if (error) return { ok: false, error };
   revalidateInventory();
   return { ok: true, count: changes.length };
 }

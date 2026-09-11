@@ -84,6 +84,7 @@ export default function CountSheet({
   const homeLabel = area === "crew" ? "Back to Jobs" : "Back to Inventory";
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
   // Validation: list of what's missing + whether a submit was attempted
   // (drives the red field outlines + the error checklist by the buttons).
   const [errors, setErrors] = useState<string[]>([]);
@@ -177,18 +178,18 @@ export default function CountSheet({
     return need;
   };
 
-  const run = (
-    fn: () => Promise<void>,
+  const run = <T,>(
+    fn: () => Promise<T>,
     okMsg?: string | null,
-    onOk?: () => void
+    onOk?: (result: T) => void
   ) =>
     startTransition(async () => {
       try {
-        await fn();
+        const result = await fn();
         if (okMsg !== undefined) setMessage(okMsg);
         setErrors([]);
         setTriedSubmit(false);
-        onOk?.();
+        onOk?.(result);
         router.refresh();
       } catch {
         setMessage("Something went wrong saving — please try again.");
@@ -313,10 +314,14 @@ export default function CountSheet({
     }
     if (!window.confirm(confirmMsg)) return;
     setMessage(null);
+    setWarnings([]);
     run(
       () => completeJob(jobId, header, toInputs(), toEquip("after")),
       adminEditing ? "Changes saved." : null,
-      () => setEditing(false) // re-lock after completing / saving changes
+      (res) => {
+        setWarnings(res.warnings ?? []);
+        setEditing(false); // re-lock after completing / saving changes
+      }
     );
   };
 
@@ -825,6 +830,19 @@ export default function CountSheet({
           {message}
         </p>
       ) : null}
+
+      {warnings.length > 0 && (
+        <div className="mt-3 rounded-lg border-2 border-warning bg-warning/10 p-3">
+          <p className="font-ui text-sm font-bold text-navy-700">
+            Saved — but the office needs to look at this:
+          </p>
+          <ul className="mt-1 list-disc pl-5 font-ui text-sm font-semibold text-navy-700">
+            {warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Actions */}
       <div className="sticky bottom-0 mt-5 flex flex-wrap gap-3 border-t-2 border-cream-300 bg-cream-100 py-3">

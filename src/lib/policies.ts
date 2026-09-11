@@ -47,11 +47,17 @@ const DOCUMENT_COLUMNS = `
  * Documents for a viewer. Back office see everything; crew see only the rows
  * marked for them. The audience filter lives HERE rather than in each caller so
  * a new page cannot forget it and leak a back-office document.
+ *
+ * `source = 'library'` keeps this the handbook-and-SOPs shelf it was built to be.
+ * Compliance certificates are also rows in `documents`, but they belong to the
+ * item they prove and are listed there — filed here they would bury the handbook
+ * under a hundred registrations.
  */
 export async function getDocuments(isBackOffice: boolean): Promise<DocumentRow[]> {
   return query<DocumentRow>(
     `SELECT ${DOCUMENT_COLUMNS} FROM documents
       WHERE ($1::boolean OR audience = 'crew')
+        AND source = 'library'
       ORDER BY is_handbook DESC, category, title`,
     [isBackOffice]
   );

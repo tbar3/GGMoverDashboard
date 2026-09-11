@@ -45,10 +45,20 @@ export default async function MaterialsCrewHome() {
       <h1 className="mb-1 font-display text-2xl font-bold tracking-tight text-navy-700">
         Start a Truck Count
       </h1>
-      <p className="mb-5 font-ui text-sm text-navy-500">
-        Pick your truck to open its count sheet. If a sheet is already open for that truck,
-        you&apos;ll jump back into it.
+      <p className="mb-4 font-ui text-sm text-navy-500">
+        Starting or ending a job? Pick your truck below to open its count sheet — if a sheet is
+        already open for that truck, you&apos;ll jump back into it.
       </p>
+
+      <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border-2 border-navy-100 bg-cream-50 px-4 py-3">
+        <p className="font-ui text-sm text-navy-600">
+          Taking materials <span className="font-bold">off</span> a truck and putting them back
+          in the warehouse?
+        </p>
+        <Link href="/materials/offload" className="gg-btn-primary">
+          Offload Materials
+        </Link>
+      </div>
 
       {trucks.length === 0 ? (
         <p className="rounded-lg border-2 border-warning bg-warning/10 p-4 font-ui text-sm text-navy-700">

@@ -42,6 +42,45 @@ function scoreClass(score: number): string {
   return 'text-foreground font-semibold';
 }
 
+/**
+ * A sortable column header.
+ *
+ * Declared at module scope rather than inside ScoreboardContent: a component
+ * defined in a render body is a new component type on every render, so React
+ * throws away the whole header subtree and rebuilds it each time the sort or any
+ * other state changes. It takes sortKey and onSort as props now instead of
+ * closing over them.
+ */
+function SortHead({
+  label,
+  k,
+  className,
+  sortKey,
+  onSort,
+}: {
+  label: string;
+  k: SortKey;
+  className?: string;
+  sortKey: SortKey;
+  onSort: (k: SortKey) => void;
+}) {
+  return (
+    <TableHead className={className}>
+      <button
+        type="button"
+        onClick={() => onSort(k)}
+        className="inline-flex items-center gap-1 hover:text-foreground"
+        aria-label={`Sort by ${label}`}
+      >
+        {label}
+        <ArrowUpDown
+          className={cn('h-3.5 w-3.5', sortKey === k ? 'text-foreground' : 'text-muted-foreground/50')}
+        />
+      </button>
+    </TableHead>
+  );
+}
+
 export function ScoreboardTable({
   rows,
   weekLabel,
@@ -100,30 +139,6 @@ export function ScoreboardTable({
       setAsc(key === 'name' || key === 'role');
     }
   }
-
-  const SortHead = ({
-    label,
-    k,
-    className,
-  }: {
-    label: string;
-    k: SortKey;
-    className?: string;
-  }) => (
-    <TableHead className={className}>
-      <button
-        type="button"
-        onClick={() => toggleSort(k)}
-        className="inline-flex items-center gap-1 hover:text-foreground"
-        aria-label={`Sort by ${label}`}
-      >
-        {label}
-        <ArrowUpDown
-          className={cn('h-3.5 w-3.5', sortKey === k ? 'text-foreground' : 'text-muted-foreground/50')}
-        />
-      </button>
-    </TableHead>
-  );
 
   return (
     <div className="p-6 space-y-6">
@@ -213,11 +228,11 @@ export function ScoreboardTable({
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-14">#</TableHead>
-                  <SortHead label="Name" k="name" />
-                  <SortHead label="Role" k="role" />
-                  <SortHead label="Positives" k="positives" className="text-right" />
-                  <SortHead label="Strikes" k="strikes" className="text-right" />
-                  <SortHead label="Score" k="score" className="text-right" />
+                  <SortHead label="Name" k="name" sortKey={sortKey} onSort={toggleSort} />
+                  <SortHead label="Role" k="role" sortKey={sortKey} onSort={toggleSort} />
+                  <SortHead label="Positives" k="positives" className="text-right" sortKey={sortKey} onSort={toggleSort} />
+                  <SortHead label="Strikes" k="strikes" className="text-right" sortKey={sortKey} onSort={toggleSort} />
+                  <SortHead label="Score" k="score" className="text-right" sortKey={sortKey} onSort={toggleSort} />
                 </TableRow>
               </TableHeader>
               <TableBody>

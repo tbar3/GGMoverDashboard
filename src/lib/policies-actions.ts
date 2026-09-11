@@ -5,6 +5,7 @@ import { put, del } from '@vercel/blob';
 import { query, queryOne } from '@/lib/db';
 import { requireBackOffice } from '@/lib/auth';
 import { POLICY_CATEGORIES, POLICY_STATUSES } from '@/lib/policies-shared';
+import { validateUpload } from '@/lib/upload-limits';
 
 // Policy + document writes — back office only. Every action self-guards; the
 // /admin layout protects the pages, but a server action is its own entry point.
@@ -124,17 +125,6 @@ export async function deletePolicy(id: string): Promise<Result> {
 
 // ── Documents ────────────────────────────────────────────────────────────────
 
-const MAX_BYTES = 25 * 1024 * 1024;
-const ALLOWED_TYPES = new Set([
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'image/png',
-  'image/jpeg',
-  'text/plain',
-]);
 
 /**
  * Upload a document to Vercel Blob and record it.
@@ -157,10 +147,8 @@ export async function uploadDocument(formData: FormData): Promise<Result> {
 
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: 'Pick a file' };
-  if (file.size > MAX_BYTES) return { ok: false, error: 'That file is larger than 25 MB' };
-  if (file.type && !ALLOWED_TYPES.has(file.type)) {
-    return { ok: false, error: `${file.type} isn't an allowed file type` };
-  }
+  const invalid = validateUpload(file);
+  if (invalid) return { ok: false, error: invalid };
 
   const title = String(formData.get('title') ?? '').trim() || file.name;
   const description = String(formData.get('description') ?? '').trim() || null;

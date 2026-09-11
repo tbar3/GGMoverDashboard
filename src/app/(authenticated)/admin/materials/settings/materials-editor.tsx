@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateMaterial, createMaterial, deleteMaterial } from '@/lib/materials/admin-editor-actions';
 
@@ -19,13 +19,23 @@ export function MaterialsEditor({ rows }: { rows: Row[] }) {
   );
   const [savedId, setSavedId] = useState<number | null>(null);
 
-  useEffect(() => {
+  /*
+   * Sync local edit state when the server sends new rows.
+   *
+   * This is React's documented "adjusting state when a prop changes" pattern: a
+   * conditional update during render, comparing against the previous props. It
+   * replaces a useEffect that called setState on every rows change — which
+   * committed a render, then immediately queued a second one.
+   */
+  const [syncedFrom, setSyncedFrom] = useState(rows);
+  if (rows !== syncedFrom) {
+    setSyncedFrom(rows);
     setVals((prev) => {
       const next = { ...prev };
       for (const r of rows) if (!(r.id in next)) next[r.id] = toDraft(r);
       return next;
     });
-  }, [rows]);
+  }
 
   const [newM, setNewM] = useState({ name: '', par: '', cost: '', charge: '' });
 

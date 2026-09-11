@@ -10,6 +10,26 @@ import { Label } from '@/components/ui/label';
 import { Check, Minus } from 'lucide-react';
 import { setEmployeeBaseMultiplier } from '@/lib/skills-actions';
 
+/**
+ * One role add-on line. Module scope, not defined inside the card's render —
+ * a component created during render is a fresh type each time and remounts.
+ * It only ever used its props, so hoisting needs no other change.
+ */
+function RoleRow({ on, label, amount }: { on: boolean; label: string; amount: number }) {
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      {on ? (
+        <Check className="h-4 w-4 text-green-600" />
+      ) : (
+        <Minus className="h-4 w-4 text-muted-foreground" />
+      )}
+      <span className={on ? '' : 'text-muted-foreground'}>{label}</span>
+      <span className={on ? 'font-medium' : 'text-muted-foreground'}>+{amount}×</span>
+      {!on && <span className="text-xs text-muted-foreground/70">(skill not earned)</span>}
+    </div>
+  );
+}
+
 export function BonusMultiplierCard({
   employeeId,
   companyBase,
@@ -56,19 +76,6 @@ export function BonusMultiplierCard({
       } else toast.error(res.error ?? 'Could not reset');
     });
   }
-
-  const RoleRow = ({ on, label, amount }: { on: boolean; label: string; amount: number }) => (
-    <div className="flex items-center gap-2 text-sm">
-      {on ? (
-        <Check className="h-4 w-4 text-green-600" />
-      ) : (
-        <Minus className="h-4 w-4 text-muted-foreground" />
-      )}
-      <span className={on ? '' : 'text-muted-foreground'}>{label}</span>
-      <span className={on ? 'font-medium' : 'text-muted-foreground'}>+{amount}×</span>
-      {!on && <span className="text-xs text-muted-foreground/70">(skill not earned)</span>}
-    </div>
-  );
 
   return (
     <Card>

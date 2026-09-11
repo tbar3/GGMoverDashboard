@@ -19,7 +19,14 @@ export function CrewStartForm({
   const [date, setDate] = useState(today());
   const [calJobs, setCalJobs] = useState<JobCrewOption[]>([]);
   const [selJobId, setSelJobId] = useState('');
-  const [loading, setLoading] = useState(false);
+  /*
+   * Derived, not stored. `setLoading(true)` used to run synchronously in the
+   * effect body, which commits a render and immediately queues another. Comparing
+   * the date we have jobs for against the date being shown cannot fall out of
+   * sync, and it needs no setState before the fetch starts.
+   */
+  const [loadedDate, setLoadedDate] = useState<string | null>(null);
+  const loading = loadedDate !== date;
 
   // Manual fields (also filled when a calendar job is picked).
   const [customer, setCustomer] = useState('');
@@ -29,17 +36,21 @@ export function CrewStartForm({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     fetch(`/api/jobs/by-date?date=${date}`)
       .then((r) => (r.ok ? r.json() : []))
       .then((d: JobCrewOption[]) => {
-        if (!cancelled) {
-          setCalJobs(Array.isArray(d) ? d : []);
-          setSelJobId('');
-        }
+        if (cancelled) return;
+        setCalJobs(Array.isArray(d) ? d : []);
+        setSelJobId('');
+        setLoadedDate(date);
       })
-      .catch(() => !cancelled && setCalJobs([]))
-      .finally(() => !cancelled && setLoading(false));
+      .catch(() => {
+        if (cancelled) return;
+        setCalJobs([]);
+        // Marked loaded on failure too, so a broken fetch shows an empty list
+        // rather than a spinner that never stops.
+        setLoadedDate(date);
+      });
     return () => {
       cancelled = true;
     };

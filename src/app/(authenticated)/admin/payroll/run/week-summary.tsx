@@ -72,33 +72,28 @@ function Bars({ label, cur, prior }: { label: string; cur: number; prior: number
   );
 }
 
-export function WeekSummaryPanel({ weekStart, summary }: { weekStart: string; summary: WeekSummary }) {
-  const [jobs, setJobs] = useState(summary.jobs);
-  const [revenue, setRevenue] = useState(summary.revenue);
-  const [gross, setGross] = useState<number>(summary.payrollGross);
-
-  async function save(field: 'jobs' | 'revenue' | 'gross', value: number | null) {
-    const res = await saveWeekSummary(weekStart, field, value);
-    if (!res.ok) toast.error(res.error || 'Save failed');
-    else toast.success('Saved');
-  }
-
-  const laborRatio = revenue && revenue > 0 ? (gross / revenue) * 100 : null;
-  const priorRatio = summary.prior.laborRatio != null ? summary.prior.laborRatio * 100 : null;
-
-  const Field = ({
-    value,
-    onChange,
-    onCommit,
-    prefix,
-    placeholder,
-  }: {
-    value: number | null;
-    onChange: (v: number | null) => void;
-    onCommit: () => void;
-    prefix?: string;
-    placeholder?: string;
-  }) => (
+/**
+ * An inline editable number.
+ *
+ * Declared at module scope, NOT inside WeekSummaryPanel. Defining a component in
+ * a render body creates a brand-new component type on every render, so React
+ * unmounts and remounts the input each time — which meant this field lost focus
+ * after every single keystroke. Typing "1250" moved the caret away three times.
+ */
+function Field({
+  value,
+  onChange,
+  onCommit,
+  prefix,
+  placeholder,
+}: {
+  value: number | null;
+  onChange: (v: number | null) => void;
+  onCommit: () => void;
+  prefix?: string;
+  placeholder?: string;
+}) {
+  return (
     <div className="flex items-center gap-1">
       {prefix && <span className="text-lg font-bold text-muted-foreground">{prefix}</span>}
       <Input
@@ -112,6 +107,21 @@ export function WeekSummaryPanel({ weekStart, summary }: { weekStart: string; su
       />
     </div>
   );
+}
+
+export function WeekSummaryPanel({ weekStart, summary }: { weekStart: string; summary: WeekSummary }) {
+  const [jobs, setJobs] = useState(summary.jobs);
+  const [revenue, setRevenue] = useState(summary.revenue);
+  const [gross, setGross] = useState<number>(summary.payrollGross);
+
+  async function save(field: 'jobs' | 'revenue' | 'gross', value: number | null) {
+    const res = await saveWeekSummary(weekStart, field, value);
+    if (!res.ok) toast.error(res.error || 'Save failed');
+    else toast.success('Saved');
+  }
+
+  const laborRatio = revenue && revenue > 0 ? (gross / revenue) * 100 : null;
+  const priorRatio = summary.prior.laborRatio != null ? summary.prior.laborRatio * 100 : null;
 
   return (
     <div className="space-y-4">

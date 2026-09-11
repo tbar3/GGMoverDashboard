@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useSyncExternalStore, ReactNode } from 'react';
 
 export type Locale = 'en' | 'es';
 
@@ -566,19 +566,69 @@ const I18nContext = createContext<I18nContextType>({
   t: (key) => key,
 });
 
-export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>('en');
+const LOCALE_KEY = 'locale';
 
-  useEffect(() => {
-    const saved = localStorage.getItem('locale') as Locale | null;
-    if (saved && (saved === 'en' || saved === 'es')) {
-      setLocaleState(saved);
+/**
+ * The saved locale, as an external store.
+ *
+ * localStorage is exactly what useSyncExternalStore is for, and using it here
+ * fixes a real problem rather than just a lint rule. The previous version held
+ * the locale in useState and copied localStorage into it from an effect, which
+ * meant a synchronous setState during the effect — a guaranteed second render of
+ * every page for anyone whose saved language was Spanish.
+ *
+ * getServerSnapshot returns 'en' so the server and the first client render agree;
+ * React then re-renders with the stored value, which is the hydration-safe order.
+ * Subscribing to the `storage` event is a free bonus: changing the language in one
+ * tab now updates the others.
+ */
+let cachedLocale: Locale | null = null;
+const localeListeners = new Set<() => void>();
+
+function readLocale(): Locale {
+  // Cached because getSnapshot is called on every render and must return a
+  // stable value — re-reading localStorage each time would also be needless I/O.
+  if (cachedLocale != null) return cachedLocale;
+  try {
+    const saved = localStorage.getItem(LOCALE_KEY);
+    cachedLocale = saved === 'es' || saved === 'en' ? saved : 'en';
+  } catch {
+    // Private mode, or storage disabled. English is a fine answer.
+    cachedLocale = 'en';
+  }
+  return cachedLocale;
+}
+
+function subscribeLocale(onChange: () => void): () => void {
+  localeListeners.add(onChange);
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === LOCALE_KEY) {
+      cachedLocale = null;
+      onChange();
     }
-  }, []);
+  };
+  window.addEventListener('storage', onStorage);
+  return () => {
+    localeListeners.delete(onChange);
+    window.removeEventListener('storage', onStorage);
+  };
+}
+
+function getServerLocale(): Locale {
+  return 'en';
+}
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const locale = useSyncExternalStore(subscribeLocale, readLocale, getServerLocale);
 
   function setLocale(newLocale: Locale) {
-    setLocaleState(newLocale);
-    localStorage.setItem('locale', newLocale);
+    cachedLocale = newLocale;
+    try {
+      localStorage.setItem(LOCALE_KEY, newLocale);
+    } catch {
+      // Preference just will not persist; the switch still works for this session.
+    }
+    for (const listener of localeListeners) listener();
   }
 
   function t(key: string, vars?: Record<string, string | number>): string {

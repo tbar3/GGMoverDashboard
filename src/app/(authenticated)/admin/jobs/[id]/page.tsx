@@ -27,31 +27,46 @@ import { formatDate } from '@/lib/utils';
 
 export default function JobDetailPage() {
   const params = useParams();
+  // useParams types a segment as string | string[] | undefined; this route has a
+  // single [id], so normalise once rather than coercing at each use.
+  const jobId = String(params.id ?? '');
   const router = useRouter();
   const [job, setJob] = useState<Job | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedCrewIds, setSelectedCrewIds] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadedId, setLoadedId] = useState<string | null>(null);
+  const loading = loadedId !== jobId;
   const [saving, setSaving] = useState(false);
 
+
+  /*
+   * The load lives inside the effect, and `loading` is derived from whether it has
+   * landed. Calling a loader that setStates straight from an effect body queues a
+   * second render before the first has painted; inlining it puts every setState
+   * after an await, and the cancelled flag stops a stale response from
+   * overwriting a newer one.
+   */
   useEffect(() => {
-    fetchData();
-  }, [params.id]);
-
-  async function fetchData() {
-    const [jobRes, empRes] = await Promise.all([
-      fetch(`/api/jobs/${params.id}`),
-      fetch('/api/employees?active=true'),
-    ]);
-
-    if (jobRes.ok) {
-      const jobData = await jobRes.json();
-      setJob(jobData);
-      setSelectedCrewIds(jobData.crew_ids || []);
-    }
-    if (empRes.ok) setEmployees(await empRes.json());
-    setLoading(false);
-  }
+    let cancelled = false;
+    (async () => {
+      const [jobRes, empRes] = await Promise.all([
+        fetch(`/api/jobs/${jobId}`),
+        fetch('/api/employees?active=true'),
+      ]);
+      if (cancelled) return;
+      if (jobRes.ok) {
+        const jobData = await jobRes.json();
+        if (cancelled) return;
+        setJob(jobData);
+        setSelectedCrewIds(jobData.crew_ids || []);
+      }
+      if (empRes.ok) setEmployees(await empRes.json());
+      if (!cancelled) setLoadedId(jobId);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId]);
 
   function toggleCrewMember(employeeId: string) {
     setSelectedCrewIds(prev =>

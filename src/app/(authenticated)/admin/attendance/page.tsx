@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -43,31 +43,45 @@ export default function AttendancePage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendance, setAttendance] = useState<Record<string, Attendance>>({});
   const [selectedDate, setSelectedDate] = useState(ymd(new Date()));
-  const [loading, setLoading] = useState(true);
+  const [loadedDate, setLoadedDate] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const loading = loadedDate !== selectedDate;
   const [saving, setSaving] = useState(false);
 
+
+  /*
+   * The load lives inside the effect, and `loading` is derived from whether it has
+   * landed. Calling a loader that setStates straight from an effect body queues a
+   * second render before the first has painted; inlining it puts every setState
+   * after an await, and the cancelled flag stops a stale response from
+   * overwriting a newer one.
+   */
   useEffect(() => {
-    fetchData();
-  }, [selectedDate]);
+    let cancelled = false;
+    (async () => {
+      const [employeesRes, attendanceRes] = await Promise.all([
+        fetch('/api/employees?active=true'),
+        fetch(`/api/attendance?date=${selectedDate}`),
+      ]);
+      if (cancelled) return;
+      if (employeesRes.ok) setEmployees(await employeesRes.json());
+      if (attendanceRes.ok) {
+        const data: Attendance[] = await attendanceRes.json();
+        if (cancelled) return;
+        const record: Record<string, Attendance> = {};
+        data.forEach((a) => {
+          record[a.employee_id] = a;
+        });
+        setAttendance(record);
+      }
+      if (!cancelled) setLoadedDate(selectedDate);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDate, refreshKey]);
 
-  async function fetchData() {
-    setLoading(true);
-    const [employeesRes, attendanceRes] = await Promise.all([
-      fetch('/api/employees?active=true'),
-      fetch(`/api/attendance?date=${selectedDate}`),
-    ]);
-
-    if (employeesRes.ok) setEmployees(await employeesRes.json());
-
-    if (attendanceRes.ok) {
-      const data: Attendance[] = await attendanceRes.json();
-      const record: Record<string, Attendance> = {};
-      data.forEach(a => { record[a.employee_id] = a; });
-      setAttendance(record);
-    }
-
-    setLoading(false);
-  }
+  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   function updateAttendance(employeeId: string, field: keyof Attendance, value: string | boolean) {
     setAttendance(prev => {
@@ -124,7 +138,7 @@ export default function AttendancePage() {
 
     toast.success('Attendance saved successfully');
     setSaving(false);
-    fetchData();
+    refresh();
   }
 
   if (loading) {

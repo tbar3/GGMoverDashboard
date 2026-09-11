@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,29 +47,46 @@ export default function MileagePage() {
   const [entries, setEntries] = useState<MileageEntry[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const loading = !loaded;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<MileageEntry | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MileageEntry | null>(null);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState(emptyForm());
 
+
+  /*
+   * The load lives inside the effect, and `loading` is derived from whether it has
+   * landed.
+   *
+   * Calling a loader that setStates straight from an effect body queues a second
+   * render before the first has painted. Inlining it means every setState happens
+   * after an await, and the cancelled flag stops a slow response from overwriting
+   * a newer one. `refresh()` bumps a counter to re-run it — an event-handler
+   * setState, which is fine.
+   */
   useEffect(() => {
-    fetchData();
-  }, []);
+    let cancelled = false;
+    (async () => {
+      const [entriesRes, employeesRes, jobsRes] = await Promise.all([
+        fetch('/api/mileage'),
+        fetch('/api/employees?active=true'),
+        fetch('/api/jobs?limit=50'),
+      ]);
+      if (cancelled) return;
+      if (entriesRes.ok) setEntries(await entriesRes.json());
+      if (employeesRes.ok) setEmployees(await employeesRes.json());
+      if (jobsRes.ok) setJobs(await jobsRes.json());
+      if (!cancelled) setLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshKey]);
 
-  async function fetchData() {
-    const [entriesRes, employeesRes, jobsRes] = await Promise.all([
-      fetch('/api/mileage'),
-      fetch('/api/employees?active=true'),
-      fetch('/api/jobs?limit=50'),
-    ]);
-
-    if (entriesRes.ok) setEntries(await entriesRes.json());
-    if (employeesRes.ok) setEmployees(await employeesRes.json());
-    if (jobsRes.ok) setJobs(await jobsRes.json());
-    setLoading(false);
-  }
+  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   function openAdd() {
     setEditing(null);
@@ -119,7 +136,7 @@ export default function MileagePage() {
     setDialogOpen(false);
     setEditing(null);
     setFormData(emptyForm());
-    fetchData();
+    refresh();
   }
 
   async function handleDelete() {
@@ -137,7 +154,7 @@ export default function MileagePage() {
 
     toast.success('Mileage entry deleted');
     setDeleteTarget(null);
-    fetchData();
+    refresh();
   }
 
   function getEmployeeName(employeeId: string) {

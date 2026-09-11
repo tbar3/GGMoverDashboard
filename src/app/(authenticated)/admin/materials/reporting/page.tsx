@@ -4,6 +4,8 @@ import {
   getLeakageJobs,
   getDiscrepancies,
   getUsageRates,
+  getVariance,
+  getOffloads,
 } from '@/lib/materials/live-inventory';
 import {
   emailUsageReport,
@@ -18,12 +20,14 @@ export const dynamic = 'force-dynamic';
 const money = (n: number) => `$${n.toFixed(2)}`;
 const isoDate = (d: Date) => d.toLocaleDateString('en-CA');
 
-type View = 'usage' | 'leakage' | 'reconcile' | 'burn';
+type View = 'usage' | 'leakage' | 'reconcile' | 'burn' | 'variance' | 'offloads';
 const VIEWS: { key: View; label: string }[] = [
   { key: 'usage', label: 'Usage' },
   { key: 'leakage', label: 'Leakage' },
   { key: 'reconcile', label: 'Reconcile' },
   { key: 'burn', label: 'Burn Rate' },
+  { key: 'variance', label: 'Variance' },
+  { key: 'offloads', label: 'Offloads' },
 ];
 
 export default async function ReportingPage({
@@ -32,8 +36,7 @@ export default async function ReportingPage({
   searchParams: Promise<{ view?: string; from?: string; to?: string; window?: string }>;
 }) {
   const sp = await searchParams;
-  const view: View =
-    sp.view === 'leakage' || sp.view === 'reconcile' || sp.view === 'burn' ? sp.view : 'usage';
+  const view: View = VIEWS.some((v) => v.key === sp.view) ? (sp.view as View) : 'usage';
 
   return (
     <div>
@@ -61,6 +64,8 @@ export default async function ReportingPage({
       {view === 'leakage' && <LeakageSection />}
       {view === 'reconcile' && <ReconcileSection />}
       {view === 'burn' && <BurnRateSection window={sp.window} />}
+      {view === 'variance' && <VarianceSection from={sp.from} to={sp.to} />}
+      {view === 'offloads' && <OffloadsSection />}
     </div>
   );
 }
@@ -342,6 +347,155 @@ async function ReconcileSection() {
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-navy-600">{r.crew_lead ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Variance = what the system expected a truck to be carrying vs. what the crew
+ * physically counted at Pre-Dispatch. Before the count-wins change this gap was
+ * silently absorbed into the on-hand balance, where it compounded until stock
+ * went negative. Now it lands here, attributable to a truck.
+ */
+async function VarianceSection({ from: f, to: t }: { from?: string; to?: string }) {
+  const today = new Date();
+  const monthAgo = new Date();
+  monthAgo.setDate(today.getDate() - 30);
+  const from = f || isoDate(monthAgo);
+  const to = t || isoDate(today);
+
+  const rows = await getVariance(from, to);
+  const totalCost = rows.reduce((a, r) => a + Number(r.cost), 0);
+
+  return (
+    <div>
+      <h2 className="mb-1 font-display text-xl font-bold text-navy-700">Variance (Shrinkage)</h2>
+      <p className="mb-4 font-ui text-sm text-navy-500">
+        The gap between what we thought was on a truck and what the crew actually counted.{' '}
+        <strong>Short</strong> means material we can&apos;t account for. Consistent shortages on one
+        truck are worth a conversation; a one-off is usually a miscount.
+      </p>
+
+      <form method="get" className="gg-surface mb-5 flex flex-wrap items-end gap-3 p-4">
+        <input type="hidden" name="view" value="variance" />
+        <label className="block">
+          <span className="gg-eyebrow mb-1 block">From</span>
+          <input type="date" name="from" defaultValue={from} className="gg-input" />
+        </label>
+        <label className="block">
+          <span className="gg-eyebrow mb-1 block">To</span>
+          <input type="date" name="to" defaultValue={to} className="gg-input" />
+        </label>
+        <button type="submit" className="gg-btn-primary">
+          Update
+        </button>
+      </form>
+
+      {rows.length === 0 ? (
+        <div className="gg-card p-6 text-center">
+          <p className="font-display text-lg font-bold text-success">Everything counted clean 🎉</p>
+          <p className="font-ui text-sm text-navy-500">
+            Every truck count matched what the system expected over this range.
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border-2 border-navy-700 bg-cream-50 shadow-sign">
+          <table className="w-full text-sm">
+            <thead className="gg-thead text-left">
+              <tr>
+                <th className="px-3 py-2.5">Truck</th>
+                <th className="px-3 py-2.5">Material</th>
+                <th className="px-3 py-2.5 text-right">Short</th>
+                <th className="px-3 py-2.5 text-right">Over</th>
+                <th className="px-3 py-2.5 text-right">Net</th>
+                <th className="px-3 py-2.5 text-right">Cost of Shortage</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-cream-300 font-ui">
+              {rows.map((r) => (
+                <tr key={`${r.truck_id}-${r.material_id}`}>
+                  <td className="px-3 py-2.5 font-semibold text-navy-700">{r.truck_name}</td>
+                  <td className="px-3 py-2.5 text-navy-700">{r.material_name}</td>
+                  <td className="px-3 py-2.5 text-right font-semibold text-red-500">
+                    {Number(r.short) || '—'}
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-navy-500">{Number(r.over) || '—'}</td>
+                  <td
+                    className={`px-3 py-2.5 text-right font-bold ${
+                      Number(r.net) < 0 ? 'text-red-500' : 'text-navy-600'
+                    }`}
+                  >
+                    {Number(r.net) > 0 ? '+' : ''}
+                    {r.net}
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-navy-600">{money(Number(r.cost))}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-navy-200 bg-cream-200 font-bold text-navy-700">
+                <td className="px-3 py-2.5" colSpan={5}>
+                  Total cost of unaccounted material
+                </td>
+                <td className="px-3 py-2.5 text-right">{money(totalCost)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** What crews sent back from their trucks, newest first — one row per offload. */
+async function OffloadsSection() {
+  const batches = await getOffloads();
+  return (
+    <div>
+      <h2 className="mb-1 font-display text-xl font-bold text-navy-700">Offloads</h2>
+      <p className="mb-4 font-ui text-sm text-navy-500">
+        Materials taken off a truck and put back in the warehouse — usually first thing in the
+        morning or at the end of the day.
+      </p>
+
+      {batches.length === 0 ? (
+        <div className="gg-card p-6 text-center">
+          <p className="font-ui text-sm text-navy-500">No offloads recorded yet.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border-2 border-navy-700 bg-cream-50 shadow-sign">
+          <table className="w-full text-sm">
+            <thead className="gg-thead text-left">
+              <tr>
+                <th className="px-3 py-2.5">When</th>
+                <th className="px-3 py-2.5">Truck</th>
+                <th className="px-3 py-2.5">Into</th>
+                <th className="px-3 py-2.5">Items</th>
+                <th className="px-3 py-2.5 text-right">Total</th>
+                <th className="px-3 py-2.5">By</th>
+                <th className="px-3 py-2.5">Note</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-cream-300 font-ui">
+              {batches.map((b) => (
+                <tr key={b.batch_id ?? b.created_at}>
+                  <td className="px-3 py-2.5 text-navy-600">
+                    {new Date(b.created_at).toLocaleString('en-US')}
+                  </td>
+                  <td className="px-3 py-2.5 font-semibold text-navy-700">{b.truck_name}</td>
+                  <td className="px-3 py-2.5 text-navy-600">{b.warehouse_name}</td>
+                  <td className="px-3 py-2.5 text-navy-700">{b.items}</td>
+                  <td className="px-3 py-2.5 text-right font-semibold text-navy-700">
+                    {b.total_qty}
+                  </td>
+                  <td className="px-3 py-2.5 text-navy-600">{b.created_by ?? '—'}</td>
+                  <td className="px-3 py-2.5 text-navy-400">{b.note ?? '—'}</td>
                 </tr>
               ))}
             </tbody>

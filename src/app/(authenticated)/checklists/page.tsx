@@ -33,37 +33,58 @@ export default function ChecklistsPage() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [completions, setCompletions] = useState<Record<string, ChecklistCompletion>>({});
-  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const loading = !loaded;
   const [saving, setSaving] = useState<string | null>(null);
 
+
+  /*
+   * The load lives inside the effect, and `loading` is derived from whether it has
+   * landed. Every setState sits after an await, so none run synchronously during
+   * the effect, and the cancelled flag stops a response arriving after unmount.
+   *
+   * The early exit when /api/me fails still marks the page loaded — otherwise a
+   * signed-out or errored request leaves a spinner up forever.
+   */
   useEffect(() => {
-    fetchData();
-  }, []);
-
-  async function fetchData() {
-    const meRes = await fetch('/api/me');
-    if (!meRes.ok) { setLoading(false); return; }
-    const emp: Employee = await meRes.json();
-    setEmployee(emp);
-
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const jobsRes = await fetch(`/api/jobs?date=${today}&employee_id=${emp.id}`);
-    const jobsData: Job[] = jobsRes.ok ? await jobsRes.json() : [];
-    setJobs(jobsData);
-
-    if (jobsData.length > 0) {
-      const jobIds = jobsData.map(j => j.id).join(',');
-      const checklistRes = await fetch(`/api/checklists?employee_id=${emp.id}&job_ids=${jobIds}`);
-      if (checklistRes.ok) {
-        const completionsData: ChecklistCompletion[] = await checklistRes.json();
-        const completionsMap: Record<string, ChecklistCompletion> = {};
-        completionsData.forEach(c => { completionsMap[c.job_id] = c; });
-        setCompletions(completionsMap);
+    let cancelled = false;
+    (async () => {
+      const meRes = await fetch('/api/me');
+      if (cancelled) return;
+      if (!meRes.ok) {
+        setLoaded(true);
+        return;
       }
-    }
+      const emp: Employee = await meRes.json();
+      if (cancelled) return;
+      setEmployee(emp);
 
-    setLoading(false);
-  }
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const jobsRes = await fetch(`/api/jobs?date=${today}&employee_id=${emp.id}`);
+      const jobsData: Job[] = jobsRes.ok ? await jobsRes.json() : [];
+      if (cancelled) return;
+      setJobs(jobsData);
+
+      if (jobsData.length > 0) {
+        const jobIds = jobsData.map((j) => j.id).join(',');
+        const checklistRes = await fetch(`/api/checklists?employee_id=${emp.id}&job_ids=${jobIds}`);
+        if (checklistRes.ok) {
+          const completionsData: ChecklistCompletion[] = await checklistRes.json();
+          if (cancelled) return;
+          const completionsMap: Record<string, ChecklistCompletion> = {};
+          completionsData.forEach((c) => {
+            completionsMap[c.job_id] = c;
+          });
+          setCompletions(completionsMap);
+        }
+      }
+
+      if (!cancelled) setLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function toggleItem(jobId: string, itemId: string) {
     if (!employee) return;

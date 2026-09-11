@@ -338,3 +338,122 @@ export async function getUsageRates(windowDays: number): Promise<BurnRow[]> {
     [windowDays]
   );
 }
+
+// ── Offload + variance ───────────────────────────────────────────────────────
+
+export interface TruckOnHandRow {
+  material_id: number;
+  name: string;
+  on_hand: number;
+}
+
+/** What a truck is currently carrying — every active material, zeros included. */
+export async function getTruckOnHand(truckId: number): Promise<TruckOnHandRow[]> {
+  return query<TruckOnHandRow>(
+    `SELECT m.id AS material_id, m.name, COALESCE(ts.on_hand, 0) AS on_hand
+       FROM materials m
+       LEFT JOIN truck_stock ts ON ts.material_id = m.id AND ts.truck_id = $1
+      WHERE m.active = TRUE
+      ORDER BY m.sort_order, m.name`,
+    [truckId]
+  );
+}
+
+export interface NegativeWarehouseRow {
+  warehouse_id: number;
+  warehouse_name: string;
+  material_id: number;
+  material_name: string;
+  on_hand: number;
+}
+
+/**
+ * Warehouse rows sitting below zero. A crew is never blocked from loading, so a
+ * negative here is a real signal — material left the warehouse that was never
+ * recorded as received — and needs a Receive entry or a physical count.
+ */
+export async function getNegativeWarehouseStock(): Promise<NegativeWarehouseRow[]> {
+  return query<NegativeWarehouseRow>(
+    `SELECT w.id AS warehouse_id, w.name AS warehouse_name,
+            m.id AS material_id, m.name AS material_name, ws.on_hand
+       FROM warehouse_stock ws
+       JOIN warehouses w ON w.id = ws.warehouse_id
+       JOIN materials m ON m.id = ws.material_id
+      WHERE ws.on_hand < 0
+      ORDER BY ws.on_hand, m.name`
+  );
+}
+
+export interface VarianceRow {
+  truck_id: number | null;
+  truck_name: string;
+  material_id: number;
+  material_name: string;
+  short: number; // counted less than expected (positive = units missing)
+  over: number; // counted more than expected
+  net: number;
+  cost: number; // dollar value of the shortfall
+}
+
+/**
+ * Per truck × material, the gap between what the system expected to be on the
+ * truck and what the crew actually counted. This is the shrinkage report the
+ * count-wins change exists to produce — before it, the same difference was
+ * silently folded into the on-hand balance and eventually showed up as a
+ * negative number nobody could explain.
+ */
+export async function getVariance(from: string, to: string): Promise<VarianceRow[]> {
+  return query<VarianceRow>(
+    `SELECT it.truck_id,
+            COALESCE(t.name, '—') AS truck_name,
+            m.id AS material_id, m.name AS material_name,
+            COALESCE(SUM(-it.qty_delta) FILTER (WHERE it.qty_delta < 0), 0) AS short,
+            COALESCE(SUM(it.qty_delta) FILTER (WHERE it.qty_delta > 0), 0) AS over,
+            COALESCE(SUM(it.qty_delta), 0) AS net,
+            COALESCE(SUM(-it.qty_delta) FILTER (WHERE it.qty_delta < 0), 0) * m.cost_per_unit AS cost
+       FROM inventory_transactions it
+       JOIN materials m ON m.id = it.material_id
+       LEFT JOIN trucks t ON t.id = it.truck_id
+      WHERE it.type IN ('variance', 'count')
+        AND it.created_at >= $1::date
+        AND it.created_at < ($2::date + INTERVAL '1 day')
+      GROUP BY it.truck_id, t.name, m.id, m.name, m.cost_per_unit
+     HAVING COALESCE(SUM(it.qty_delta), 0) <> 0
+      ORDER BY cost DESC, truck_name, m.name`,
+    [from, to]
+  );
+}
+
+export interface OffloadBatch {
+  batch_id: string;
+  truck_name: string;
+  warehouse_name: string;
+  created_at: string;
+  created_by: string | null;
+  note: string | null;
+  items: string; // "12 Tape, 4 Dish Pack"
+  total_qty: number;
+}
+
+/** Offload events, newest first — one row per batch, not per material. */
+export async function getOffloads(limit = 100): Promise<OffloadBatch[]> {
+  return query<OffloadBatch>(
+    `SELECT it.batch_id::text AS batch_id,
+            COALESCE(t.name, '—') AS truck_name,
+            COALESCE(w.name, '—') AS warehouse_name,
+            MAX(it.created_at) AS created_at,
+            MAX(it.created_by) AS created_by,
+            MAX(it.note) AS note,
+            string_agg(it.qty_delta || ' ' || m.name, ', ' ORDER BY m.name) AS items,
+            SUM(it.qty_delta) AS total_qty
+       FROM inventory_transactions it
+       JOIN materials m ON m.id = it.material_id
+       LEFT JOIN trucks t ON t.id = it.truck_id
+       LEFT JOIN warehouses w ON w.id = it.warehouse_id
+      WHERE it.type = 'offload'
+      GROUP BY it.batch_id, t.name, w.name
+      ORDER BY MAX(it.created_at) DESC
+      LIMIT $1`,
+    [limit]
+  );
+}

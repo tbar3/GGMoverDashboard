@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { createRoutineItem, updateRoutineItem, deleteRoutineItem } from '@/lib/materials/admin-editor-actions';
 
@@ -14,13 +14,23 @@ export function RoutinesEditor({ items }: { items: Item[] }) {
   );
   const [adds, setAdds] = useState<Record<string, string>>({ morning: '', close: '' });
 
-  useEffect(() => {
+  /*
+   * Sync local edit state when the server sends new rows.
+   *
+   * This is React's documented "adjusting state when a prop changes" pattern: a
+   * conditional update during render, comparing against the previous props. It
+   * replaces a useEffect that called setState on every rows change — which
+   * committed a render, then immediately queued a second one.
+   */
+  const [syncedFrom, setSyncedFrom] = useState(items);
+  if (items !== syncedFrom) {
+    setSyncedFrom(items);
     setLabels((prev) => {
       const next = { ...prev };
       for (const i of items) if (!(i.id in next)) next[i.id] = i.label;
       return next;
     });
-  }, [items]);
+  }
 
   const rename = (id: number) =>
     startTransition(async () => {

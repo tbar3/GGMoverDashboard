@@ -29,6 +29,11 @@ export function AdjustForm({
   const [pending, startTransition] = useTransition();
   const [note, setNote] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  // A physical count is the warehouse's only way to re-anchor to reality — truck
+  // stock self-corrects on every count sheet, but warehouse stock otherwise just
+  // drifts. Flagging it as a count puts the difference in the Variance report
+  // instead of burying it among manual corrections.
+  const [isCount, setIsCount] = useState(false);
 
   const build = () => {
     const v: Record<number, Record<string, string>> = {};
@@ -82,10 +87,18 @@ export function AdjustForm({
     }
     setMessage(null);
     startTransition(async () => {
-      const res = await applyAdjustments(changes, note.trim() || null);
+      const res = await applyAdjustments(
+        changes,
+        note.trim() || null,
+        isCount ? 'count' : 'adjust'
+      );
       if (res.ok) {
         setNote('');
-        setMessage(`Saved ${res.count} adjustment(s) — view them in History → Adjustments.`);
+        setMessage(
+          isCount
+            ? `Counted ${res.count} item(s) — the differences are in Reporting → Variance.`
+            : `Saved ${res.count} adjustment(s) — view them in History → Adjustments.`
+        );
         router.refresh();
       } else {
         setMessage(res.error ?? 'Something went wrong saving — please try again.');
@@ -95,6 +108,18 @@ export function AdjustForm({
 
   return (
     <div>
+      <label className="mb-3 flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={isCount}
+          onChange={(e) => setIsCount(e.target.checked)}
+          className="h-4 w-4"
+        />
+        <span className="font-ui text-sm font-semibold text-navy-700">
+          These numbers came from a physical count
+        </span>
+      </label>
+
       <label className="mb-3 block">
         <span className="gg-eyebrow mb-1 block">Reason / note (optional)</span>
         <input
@@ -157,7 +182,7 @@ export function AdjustForm({
       )}
 
       <button onClick={submit} disabled={pending} className="gg-btn-primary mt-4">
-        {pending ? 'Saving…' : 'Save Adjustments'}
+        {pending ? 'Saving…' : isCount ? 'Save Physical Count' : 'Save Adjustments'}
       </button>
     </div>
   );

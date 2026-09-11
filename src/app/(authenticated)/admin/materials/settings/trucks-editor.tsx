@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   createTruck,
@@ -24,10 +24,20 @@ export function TrucksEditor({ rows, warehouses }: { rows: Row[]; warehouses: Wa
   const [msg, setMsg] = useState<string | null>(null);
   const [dragId, setDragId] = useState<number | null>(null);
 
-  useEffect(() => {
+  /*
+   * Sync local edit state when the server sends new rows.
+   *
+   * This is React's documented "adjusting state when a prop changes" pattern: a
+   * conditional update during render, comparing against the previous props. It
+   * replaces a useEffect that called setState on every rows change — which
+   * committed a render, then immediately queued a second one.
+   */
+  const [syncedFrom, setSyncedFrom] = useState(rows);
+  if (rows !== syncedFrom) {
+    setSyncedFrom(rows);
     setList(rows);
     setNames(Object.fromEntries(rows.map((r) => [r.id, r.name])));
-  }, [rows]);
+  }
 
   const rename = (id: number) =>
     startTransition(async () => {

@@ -18,9 +18,10 @@ import {
   MessageSquare,
   Award,
   Trophy,
-  Megaphone,
   Sunrise,
   FileText,
+  FileCheck,
+  Truck,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -41,6 +42,12 @@ export interface NavItem {
   href: string;
   description: string;
   icon: LucideIcon;
+  /**
+   * Names a count the sidebar renders as a badge on this link. The layout looks
+   * the key up in the `badges` map it passes down; an absent or zero count
+   * renders nothing, so a nav item never shows a meaningless "0".
+   */
+  badgeKey?: string;
 }
 
 export interface NavArea {
@@ -124,28 +131,13 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         icon: Users,
       },
       {
+        // One entry, five tabs. These used to be four separate nav items — Payroll,
+        // Payroll Run, Payroll Audit and Marketing Hours — which split one weekly
+        // job across four links and gave no clue about the order to do them in.
         title: 'Payroll',
         href: '/admin/payroll',
-        description: 'Hours and pay by week',
+        description: 'Import, review, close, and export the week — plus audit and history',
         icon: DollarSign,
-      },
-      {
-        title: 'Payroll Run',
-        href: '/admin/payroll/run',
-        description: 'SmartMoving report → ADP-ready W-2 & 1099 tables',
-        icon: FileSpreadsheet,
-      },
-      {
-        title: 'Payroll Audit',
-        href: '/admin/payroll/audit',
-        description: 'Where every payroll figure came from, reconciliation, and the change log',
-        icon: ShieldCheck,
-      },
-      {
-        title: 'Marketing Hours',
-        href: '/admin/payroll/marketing',
-        description: 'Weekly marketing hours that feed payroll',
-        icon: Megaphone,
       },
       {
         title: 'Performance',
@@ -242,6 +234,34 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         href: '/admin/documents',
         description: 'The handbook file, SOPs, and forms — stored privately, shared with crew',
         icon: FileText,
+      },
+    ],
+  },
+  {
+    key: 'compliance',
+    label: 'Compliance',
+    description: 'Registrations, filings, insurance, and the fleet that has to stay legal.',
+    icon: ShieldCheck,
+    status: 'live',
+    items: [
+      {
+        title: 'Compliance',
+        href: '/admin/compliance',
+        description: "What's expired, what's due, and who owns the renewal",
+        icon: ShieldCheck,
+        badgeKey: 'compliance',
+      },
+      {
+        title: 'Compliance Items',
+        href: '/admin/compliance/items',
+        description: 'Every registration, filing, permit, policy, and card',
+        icon: FileCheck,
+      },
+      {
+        title: 'Fleet & Maintenance',
+        href: '/admin/compliance/fleet',
+        description: 'Vehicles, preventative maintenance, and service history',
+        icon: Truck,
       },
     ],
   },

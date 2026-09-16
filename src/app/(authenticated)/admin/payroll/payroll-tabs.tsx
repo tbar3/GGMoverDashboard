@@ -1,15 +1,21 @@
-'use client';
-
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 /**
  * The payroll tab bar.
  *
- * Tabs are URL state, not component state: the week you are looking at and the
- * tab you are on both survive a refresh, a bookmark, and the back button — which
- * matters because payroll is a thing people leave half-done and come back to.
+ * Deliberately NOT a client component.
+ *
+ * It was one, using usePathname() and useSearchParams() to rebuild each link.
+ * That broke production: page.tsx is a Server Component and imports PAYROLL_TABS
+ * from here, but Next replaces the exports of a 'use client' module with client
+ * reference proxies across that boundary. Components survive the trip; plain data
+ * does not — so `PAYROLL_TABS.some(...)` threw "some is not a function" on every
+ * request, and nothing in tsc, lint or the build could see it.
+ *
+ * Neither hook was needed anyway: the route is fixed, and the server already
+ * knows the active tab and the selected week. With no hooks this renders on the
+ * server, and the constant below is a plain module export again.
  */
 export const PAYROLL_TABS = [
   { key: 'run', label: 'Run' },
@@ -21,17 +27,15 @@ export const PAYROLL_TABS = [
 
 export type PayrollTabKey = (typeof PAYROLL_TABS)[number]['key'];
 
-export function PayrollTabs({ active, week }: { active: PayrollTabKey; week: string | null }) {
-  const pathname = usePathname();
-  const params = useSearchParams();
+const BASE_PATH = '/admin/payroll';
 
+export function PayrollTabs({ active, week }: { active: PayrollTabKey; week: string | null }) {
   function href(key: string) {
-    const next = new URLSearchParams(params.toString());
-    next.set('tab', key);
-    // Carry the selected week across tabs, so switching to Audit shows the same
-    // week you were reviewing rather than silently jumping to the newest.
-    if (week) next.set('week', week);
-    return `${pathname}?${next.toString()}`;
+    const params = new URLSearchParams({ tab: key });
+    // Carry the selected week across tabs, so switching to Audit shows the week
+    // you were reviewing rather than silently jumping to the newest.
+    if (week) params.set('week', week);
+    return `${BASE_PATH}?${params.toString()}`;
   }
 
   return (

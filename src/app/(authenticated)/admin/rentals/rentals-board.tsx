@@ -248,6 +248,35 @@ type Run = (
   onSuccess?: () => void
 ) => void;
 
+/** "08:00" → "8:00 AM". The value is already wall-clock, so no date is involved. */
+function formatTime(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return `${hour}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+/** What the truck is — shown wherever a crew might need to know before it arrives. */
+function SpecBadges({ rental }: { rental: TruckRental }) {
+  const specs = [
+    rental.has_ramp && 'Ramp',
+    rental.has_liftgate && 'Liftgate',
+    rental.is_isuzu && 'Isuzu',
+  ].filter(Boolean) as string[];
+
+  if (specs.length === 0) return null;
+
+  return (
+    <>
+      {specs.map((s) => (
+        <Badge key={s} variant="secondary" className="text-[10px]">
+          {s}
+        </Badge>
+      ))}
+    </>
+  );
+}
+
 const STATE_LABEL: Record<RentalWindow['state'], { label: string; className: string }> = {
   late: { label: 'Late', className: 'bg-destructive text-destructive-foreground' },
   book_now: { label: 'Book now', className: 'bg-amber-500 text-white' },
@@ -331,7 +360,11 @@ function QuickBookForm({
   const [size, setSize] = useState('');
   const [from, setFrom] = useState(neededFrom);
   const [to, setTo] = useState(estReturnDate);
+  const [pickupTime, setPickupTime] = useState('');
   const [rate, setRate] = useState('');
+  const [hasRamp, setHasRamp] = useState(false);
+  const [hasLiftgate, setHasLiftgate] = useState(false);
+  const [isIsuzu, setIsIsuzu] = useState(false);
 
   return (
     <div className="grid gap-2 sm:grid-cols-2">
@@ -368,6 +401,33 @@ function QuickBookForm({
         <Label>Back on</Label>
         <input type="date" className={inputClass} value={to} onChange={(e) => setTo(e.target.value)} />
       </div>
+      <div className="space-y-1">
+        <Label>Pick-up time</Label>
+        <input
+          type="time"
+          className={inputClass}
+          value={pickupTime}
+          onChange={(e) => setPickupTime(e.target.value)}
+        />
+        <p className="text-xs text-muted-foreground">When we collect it. Optional.</p>
+      </div>
+      <div className="space-y-1">
+        <Label>Truck has</Label>
+        <div className="flex flex-wrap items-center gap-4 pt-2">
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={hasRamp} onCheckedChange={(v) => setHasRamp(v === true)} />
+            Ramp
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={hasLiftgate} onCheckedChange={(v) => setHasLiftgate(v === true)} />
+            Liftgate
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={isIsuzu} onCheckedChange={(v) => setIsIsuzu(v === true)} />
+            Isuzu
+          </label>
+        </div>
+      </div>
       <div className="sm:col-span-2">
         <Button
           disabled={pending || !vendor.trim()}
@@ -380,6 +440,10 @@ function QuickBookForm({
                   size,
                   neededFrom: from,
                   estReturnDate: to,
+                  pickupTime,
+                  hasRamp,
+                  hasLiftgate,
+                  isIsuzu,
                   dailyRate: rate ? Number(rate) : null,
                   booked: true,
                 }),
@@ -468,6 +532,7 @@ function OutRental({
             {rental.truck_name}
           </Badge>
         )}
+        <SpecBadges rental={rental} />
         <span className="text-sm text-muted-foreground">
           due back {formatDate(rental.est_return_date, 'EEE, MMM d')}
         </span>
@@ -582,9 +647,12 @@ function UpcomingRental({
         </Badge>
         <span className="font-medium">{rental.vendor}</span>
         <span className="text-muted-foreground">
-          {formatDate(rental.needed_from, 'MMM d')} – {formatDate(rental.est_return_date, 'MMM d')}
+          {formatDate(rental.needed_from, 'MMM d')}
+          {rental.pickup_time ? ` at ${formatTime(rental.pickup_time)}` : ''} –{' '}
+          {formatDate(rental.est_return_date, 'MMM d')}
           {rental.vendor_ref ? ` · #${rental.vendor_ref}` : ''}
         </span>
+        <SpecBadges rental={rental} />
         <span className="flex-1" />
         {rental.status === 'planned' && (
           <Button

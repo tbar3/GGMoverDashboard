@@ -11,6 +11,15 @@ export interface TruckRental {
   /** What this rental covers, inclusive. Compared against fresh demand windows. */
   needed_from: string;
   est_return_date: string;
+  /**
+   * Planned time to COLLECT it, as "HH:MM" wall-clock (America/New_York), or null.
+   * The plan — `picked_up_at` is the fact.
+   */
+  pickup_time: string | null;
+  /** What the truck is. A crew loading heavy items needs to know which of these. */
+  has_ramp: boolean;
+  has_liftgate: boolean;
+  is_isuzu: boolean;
   status: RentalStatus;
   picked_up_at: string | null;
   returned_at: string | null;

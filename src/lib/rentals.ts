@@ -102,6 +102,9 @@ const RENTAL_SELECT = `
   SELECT r.id, r.vendor, r.vendor_ref, r.size,
          r.needed_from::text    AS needed_from,
          r.est_return_date::text AS est_return_date,
+         -- HH:MM, so the client never has to parse a Postgres time literal.
+         to_char(r.pickup_time, 'HH24:MI') AS pickup_time,
+         r.has_ramp, r.has_liftgate, r.is_isuzu,
          r.status, r.picked_up_at, r.returned_at,
          r.truck_id, t.name AS truck_name, r.vehicle_id,
          r.daily_rate::float8 AS daily_rate,

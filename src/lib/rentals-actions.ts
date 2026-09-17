@@ -39,6 +39,11 @@ export async function createRental(input: {
   size?: string;
   neededFrom: string;
   estReturnDate: string;
+  /** Planned collection time as "HH:MM", or empty for none. */
+  pickupTime?: string;
+  hasRamp?: boolean;
+  hasLiftgate?: boolean;
+  isIsuzu?: boolean;
   dailyRate?: number | null;
   notes?: string;
   booked?: boolean;
@@ -52,17 +57,27 @@ export async function createRental(input: {
   const dateError = badDates(input.neededFrom, input.estReturnDate);
   if (dateError) return { ok: false, error: dateError };
 
+  // An empty time input posts "", which Postgres would reject as a TIME. Anything
+  // that is not HH:MM becomes NULL rather than an error: a missing pickup time is
+  // not worth failing a booking over.
+  const pickupTime = /^\d{2}:\d{2}$/.test(input.pickupTime ?? '') ? input.pickupTime : null;
+
   await query(
     `INSERT INTO truck_rentals
-       (vendor, vendor_ref, size, needed_from, est_return_date, status,
+       (vendor, vendor_ref, size, needed_from, est_return_date, pickup_time,
+        has_ramp, has_liftgate, is_isuzu, status,
         daily_rate, notes, created_by, created_by_name)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
     [
       vendor,
       input.vendorRef?.trim() || null,
       input.size?.trim() || null,
       input.neededFrom,
       input.estReturnDate,
+      pickupTime,
+      input.hasRamp ?? false,
+      input.hasLiftgate ?? false,
+      input.isIsuzu ?? false,
       input.booked ? 'booked' : 'planned',
       input.dailyRate ?? null,
       input.notes?.trim() || null,

@@ -129,6 +129,41 @@ export async function updateRentalDates(input: {
 }
 
 /**
+ * Set the pick-up time and what the truck is, on a rental that already exists.
+ *
+ * These are on the booking form too, but they cannot only live there: the
+ * collection time is frequently not known when the reservation is made, and a
+ * rental booked without one would otherwise never be able to record one. Editable
+ * until the rental is closed out.
+ */
+export async function updateRentalDetails(input: {
+  id: string;
+  pickupTime?: string;
+  hasRamp: boolean;
+  hasLiftgate: boolean;
+  isIsuzu: boolean;
+}): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  // Same rule as createRental: an empty time input posts "", which is not a TIME.
+  const pickupTime = /^\d{2}:\d{2}$/.test(input.pickupTime ?? '') ? input.pickupTime : null;
+
+  const row = await queryOne<{ id: string }>(
+    `UPDATE truck_rentals
+        SET pickup_time = $2, has_ramp = $3, has_liftgate = $4, is_isuzu = $5,
+            updated_at = NOW()
+      WHERE id = $1 AND status <> 'returned'
+      RETURNING id`,
+    [input.id, pickupTime, input.hasRamp, input.hasLiftgate, input.isIsuzu]
+  );
+  if (!row) return { ok: false, error: 'That rental is already closed out' };
+
+  revalidate();
+  return { ok: true };
+}
+
+/**
  * Pick the truck up: from here it is a working truck.
  *
  * Three writes that must all land or none: the materials truck crews will load,

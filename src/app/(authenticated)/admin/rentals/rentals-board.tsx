@@ -32,6 +32,7 @@ import {
   returnRental,
   cancelRental,
   updateRentalDates,
+  updateRentalDetails,
   setRentalLeadTime,
 } from '@/lib/rentals-actions';
 
@@ -503,6 +504,84 @@ function NewRentalForm({
   );
 }
 
+/**
+ * Pick-up time and what the truck is, on a rental already logged.
+ *
+ * The collection time usually is not known when the booking is made, so these
+ * have to be editable afterwards rather than only on the form that created it.
+ * Save stays disabled until something actually changes, so the button never
+ * invites a pointless write.
+ */
+function RentalDetailsEditor({
+  rental,
+  pending,
+  run,
+}: {
+  rental: TruckRental;
+  pending: boolean;
+  run: Run;
+}) {
+  const [time, setTime] = useState(rental.pickup_time ?? '');
+  const [ramp, setRamp] = useState(rental.has_ramp);
+  const [liftgate, setLiftgate] = useState(rental.has_liftgate);
+  const [isuzu, setIsuzu] = useState(rental.is_isuzu);
+
+  const dirty =
+    time !== (rental.pickup_time ?? '') ||
+    ramp !== rental.has_ramp ||
+    liftgate !== rental.has_liftgate ||
+    isuzu !== rental.is_isuzu;
+
+  return (
+    <div className="mt-2 flex flex-wrap items-end gap-4 rounded-md bg-muted/50 p-2">
+      <div className="space-y-1">
+        <Label className="text-xs">Pick-up time</Label>
+        <input
+          type="time"
+          className={`${inputClass} w-32`}
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+        />
+      </div>
+      <div className="flex flex-wrap items-center gap-3 pb-2">
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox checked={ramp} onCheckedChange={(v) => setRamp(v === true)} />
+          Ramp
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox checked={liftgate} onCheckedChange={(v) => setLiftgate(v === true)} />
+          Liftgate
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox checked={isuzu} onCheckedChange={(v) => setIsuzu(v === true)} />
+          Isuzu
+        </label>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="mb-2"
+        disabled={pending || !dirty}
+        onClick={() =>
+          run(
+            () =>
+              updateRentalDetails({
+                id: rental.id,
+                pickupTime: time,
+                hasRamp: ramp,
+                hasLiftgate: liftgate,
+                isIsuzu: isuzu,
+              }),
+            'Saved'
+          )
+        }
+      >
+        Save
+      </Button>
+    </div>
+  );
+}
+
 /** A rental that is out: drift, the checklist, and the gate on returning it. */
 function OutRental({
   rental,
@@ -673,6 +752,8 @@ function UpcomingRental({
           Cancel
         </Button>
       </div>
+
+      <RentalDetailsEditor rental={rental} pending={pending} run={run} />
 
       <div className="mt-2 grid gap-2 sm:grid-cols-3">
         <div className="space-y-1">

@@ -28,6 +28,7 @@ import type {
   OffloadItem,
   OffloadCheck,
   RentalOffloadState,
+  WarehouseOption,
 } from '@/lib/rentals-shared';
 
 export * from '@/lib/rentals-shared';
@@ -52,43 +53,49 @@ export async function getLeadTimeDays(): Promise<number> {
  */
 export async function getDemandDays(today: string, horizonDays: number): Promise<DemandDay[]> {
   return query<DemandDay>(
-    `SELECT to_char(job_date, 'YYYY-MM-DD') AS date,
-            CEIL(COALESCE(SUM(est_trucks), 0))::int AS demand
-       FROM smartmoving_jobs
-      WHERE opportunity_status = 'Booked'
-        AND job_date >= $1::date
-        AND job_date < $1::date + $2::int
-      GROUP BY job_date
-      ORDER BY job_date`,
+    `SELECT to_char(date, 'YYYY-MM-DD') AS date,
+            CEIL(COALESCE(SUM(quoted_trucks), 0))::int AS demand
+       FROM jobs
+      WHERE date >= $1::date
+        AND date < $1::date + $2::int
+      GROUP BY date
+      ORDER BY date`,
     [today, horizonDays]
   );
 }
 
 /**
- * Booked jobs in the horizon with no truck estimate.
+ * Upcoming jobs with no truck quoted.
  *
- * Surfaced rather than swallowed: a NULL est_trucks counts as zero demand, so a
- * day can look covered purely because nobody filled the estimate in.
+ * Surfaced rather than swallowed: a NULL quoted_trucks counts as zero demand, so
+ * a day can look covered purely because nobody filled the number in.
  */
 export async function getJobsMissingEstimate(today: string, horizonDays: number): Promise<number> {
   const row = await queryOne<{ c: number }>(
     `SELECT COUNT(*)::int AS c
-       FROM smartmoving_jobs
-      WHERE opportunity_status = 'Booked'
-        AND job_date >= $1::date
-        AND job_date < $1::date + $2::int
-        AND est_trucks IS NULL`,
+       FROM jobs
+      WHERE date >= $1::date
+        AND date < $1::date + $2::int
+        AND COALESCE(quoted_trucks, 0) = 0`,
     [today, horizonDays]
   );
   return row?.c ?? 0;
 }
 
-/** When the SmartMoving report was last imported — the forecast is only as good. */
-export async function getImportedAt(): Promise<string | null> {
-  const row = await queryOne<{ imported_at: string | null }>(
-    "SELECT to_char(MAX(imported_at), 'Mon DD, YYYY') AS imported_at FROM smartmoving_jobs"
+/**
+ * When the schedule this forecast reads was last synced.
+ *
+ * Demand comes from the calendar-synced `jobs` table, NOT from smartmoving_jobs.
+ * That import is a trailing weekly report: as of this writing it had stopped
+ * months earlier and held nothing dated in the future, so a forecast built on it
+ * would have been permanently, silently empty. `jobs` is the live schedule and
+ * carries quoted_trucks per move.
+ */
+export async function getDataAsOf(): Promise<string | null> {
+  const row = await queryOne<{ synced_at: string | null }>(
+    "SELECT to_char(MAX(synced_at), 'Mon DD, YYYY') AS synced_at FROM jobs"
   );
-  return row?.imported_at ?? null;
+  return row?.synced_at ?? null;
 }
 
 const RENTAL_SELECT = `
@@ -128,6 +135,19 @@ export async function getOffloadItems(): Promise<OffloadItem[]> {
        FROM rental_offload_items
       WHERE active = TRUE
       ORDER BY sort_order, id`
+  );
+}
+
+/**
+ * Warehouses a rental truck can call home.
+ *
+ * Required at pickup: offloadFromTruck refuses to move stock off a truck with no
+ * home warehouse, so a rental set up without one cannot be offloaded — which is
+ * discovered days later, with the truck full and due back.
+ */
+export async function getWarehouses(): Promise<WarehouseOption[]> {
+  return query<WarehouseOption>(
+    'SELECT id, name FROM warehouses WHERE active = TRUE ORDER BY sort_order, name'
   );
 }
 
@@ -194,7 +214,7 @@ export interface RentalBoardData {
   leadTimeDays: number;
   horizonDays: number;
   jobsMissingEstimate: number;
-  importedAt: string | null;
+  dataAsOf: string | null;
 }
 
 /** Everything the board renders, in one call. */
@@ -202,7 +222,7 @@ export async function getRentalBoard(): Promise<RentalBoardData> {
   const today = await rentalToday();
   const horizonDays = CONFIG.RENTAL_HORIZON_DAYS;
 
-  const [capacity, leadTimeDays, days, active, history, items, jobsMissingEstimate, importedAt] =
+  const [capacity, leadTimeDays, days, active, history, items, jobsMissingEstimate, dataAsOf] =
     await Promise.all([
       getOwnedTruckCapacity(),
       getLeadTimeDays(),
@@ -211,7 +231,7 @@ export async function getRentalBoard(): Promise<RentalBoardData> {
       getRentalHistory(),
       getOffloadItems(),
       getJobsMissingEstimate(today, horizonDays),
-      getImportedAt(),
+      getDataAsOf(),
     ]);
 
   // Only rentals we actually hold or have reserved cover a shortfall. A 'planned'
@@ -257,6 +277,6 @@ export async function getRentalBoard(): Promise<RentalBoardData> {
     leadTimeDays,
     horizonDays,
     jobsMissingEstimate,
-    importedAt,
+    dataAsOf,
   };
 }

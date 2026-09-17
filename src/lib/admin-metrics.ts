@@ -219,11 +219,15 @@ export async function getAdminDashboard(
       [today]
     ),
     query<TruckDay>(
-      `SELECT to_char(job_date, 'YYYY-MM-DD') AS job_date,
-              COALESCE(SUM(est_trucks), 0)::float8 AS trucks, COUNT(*)::int AS jobs
-         FROM smartmoving_jobs
-        WHERE opportunity_status = 'Booked' AND job_date >= $1 AND job_date <= $2
-        GROUP BY job_date ORDER BY job_date`,
+      // Truck demand reads the calendar-synced `jobs` table, not smartmoving_jobs.
+      // That import is a trailing weekly report — it had gone months stale and held
+      // nothing dated forward, so this alert was silently showing no rental days at
+      // all. `jobs` is the live schedule and quotes trucks per move.
+      `SELECT to_char(date, 'YYYY-MM-DD') AS job_date,
+              CEIL(COALESCE(SUM(quoted_trucks), 0))::float8 AS trucks, COUNT(*)::int AS jobs
+         FROM jobs
+        WHERE date >= $1::date AND date <= $2::date
+        GROUP BY date ORDER BY date`,
       [today, weekEnd]
     ),
     // Owned trucks only. Counting every active truck also counted the Trailer and

@@ -77,9 +77,17 @@ a gap appearing and booking becoming urgent, so the horizon and the lead time
 have to be read together — raising the lead time past 7 would mean every window
 is born already late. Both are single constants and easy to retune.
 
-- `D(d)` = `CEIL(SUM(est_trucks))` over `smartmoving_jobs` where
-  `opportunity_status = 'Booked'` and `job_date = d`. Trucks are discrete: 2.5
-  estimated trucks means three trucks.
+- `D(d)` = `CEIL(SUM(quoted_trucks))` over `jobs` where `date = d`. Trucks are
+  discrete: 2.5 quoted trucks means three trucks.
+
+  **Demand source changed during implementation.** This was specced against
+  booked `smartmoving_jobs`, mirroring the existing admin-home alert. Checking the
+  live data before building the UI showed that import had stopped on 2026-07-24
+  with nothing dated after 2026-08-01 and zero booked jobs from today forward — a
+  forecast built on it would have been permanently, silently empty, and the admin
+  home's rental alert is dead today for exactly that reason. The calendar-synced
+  `jobs` table holds 35 upcoming moves out to December with `quoted_trucks`
+  populated on every one. Both the board and the admin-home alert now read it.
 - `C` = `getOwnedTruckCapacity()` (constant across the horizon).
 - `shortfall(d)` = `max(0, D(d) - C)`.
 - `covered(d)` = number of rentals with `status IN ('booked','picked_up')` whose

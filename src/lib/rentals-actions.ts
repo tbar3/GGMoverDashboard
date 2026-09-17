@@ -1,0 +1,307 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { query, queryOne, withTransaction } from '@/lib/db';
+import { requireBackOffice } from '@/lib/auth';
+import { setStringSetting } from '@/lib/settings';
+import { getOffloadItems, getMaterialsRemaining } from '@/lib/rentals';
+
+// Rental board writes — back office only. Every action self-guards; the /admin
+// layout protects the page, but a server action is its own entry point.
+
+type Result = { ok: boolean; error?: string };
+
+const PATH = '/admin/rentals';
+
+function revalidate() {
+  revalidatePath(PATH);
+  // The admin home reads owned capacity too, and a pickup changes what is on the
+  // truck list.
+  revalidatePath('/admin');
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function badDates(from: string, to: string): string | null {
+  if (!DATE_RE.test(from) || !DATE_RE.test(to)) return 'Bad date';
+  if (to < from) return 'The return date cannot be before the day it is needed';
+  return null;
+}
+
+/**
+ * Log a rental. `status` is 'planned' for an intention and 'booked' once it is
+ * actually reserved — only a booked rental counts as covering a shortfall, because
+ * an intention does not put a truck in the yard.
+ */
+export async function createRental(input: {
+  vendor: string;
+  vendorRef?: string;
+  size?: string;
+  neededFrom: string;
+  estReturnDate: string;
+  dailyRate?: number | null;
+  notes?: string;
+  booked?: boolean;
+}): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  const vendor = input.vendor.trim();
+  if (!vendor) return { ok: false, error: 'Which vendor?' };
+
+  const dateError = badDates(input.neededFrom, input.estReturnDate);
+  if (dateError) return { ok: false, error: dateError };
+
+  await query(
+    `INSERT INTO truck_rentals
+       (vendor, vendor_ref, size, needed_from, est_return_date, status,
+        daily_rate, notes, created_by, created_by_name)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [
+      vendor,
+      input.vendorRef?.trim() || null,
+      input.size?.trim() || null,
+      input.neededFrom,
+      input.estReturnDate,
+      input.booked ? 'booked' : 'planned',
+      input.dailyRate ?? null,
+      input.notes?.trim() || null,
+      guard.employee.id,
+      guard.employee.name,
+    ]
+  );
+  revalidate();
+  return { ok: true };
+}
+
+/** Mark a planned rental as actually reserved. */
+export async function bookRental(input: { id: string; vendorRef?: string }): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  await query(
+    `UPDATE truck_rentals
+        SET status = 'booked',
+            vendor_ref = COALESCE($2, vendor_ref),
+            updated_at = NOW()
+      WHERE id = $1 AND status = 'planned'`,
+    [input.id, input.vendorRef?.trim() || null]
+  );
+  revalidate();
+  return { ok: true };
+}
+
+/** Move the dates — used to accept a drift suggestion in one click. */
+export async function updateRentalDates(input: {
+  id: string;
+  neededFrom: string;
+  estReturnDate: string;
+}): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  const dateError = badDates(input.neededFrom, input.estReturnDate);
+  if (dateError) return { ok: false, error: dateError };
+
+  await query(
+    `UPDATE truck_rentals
+        SET needed_from = $2, est_return_date = $3, updated_at = NOW()
+      WHERE id = $1 AND status <> 'returned'`,
+    [input.id, input.neededFrom, input.estReturnDate]
+  );
+  revalidate();
+  return { ok: true };
+}
+
+/**
+ * Pick the truck up: from here it is a working truck.
+ *
+ * Three writes that must all land or none: the materials truck crews will load,
+ * its stock rows, and the fleet vehicle marked as rented. A home warehouse is
+ * REQUIRED because offloadFromTruck refuses to run without one — skipping it here
+ * breaks the return step days later, when the truck is full and due back.
+ *
+ * Both upserts key on name, so a Penske we have rented before comes back to life
+ * rather than colliding. That also flips an existing vehicle row to 'rented',
+ * which is what keeps owned-truck capacity honest.
+ */
+export async function pickUpRental(input: {
+  id: string;
+  truckName: string;
+  warehouseId: number;
+}): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  const truckName = input.truckName.trim();
+  if (!truckName) return { ok: false, error: 'Name the truck (e.g. "Penske 26 (rental)")' };
+  if (!input.warehouseId) {
+    return { ok: false, error: 'Pick a home warehouse — offloading needs one' };
+  }
+
+  try {
+    await withTransaction(async (client) => {
+      const truck = await client.query<{ id: number }>(
+        `INSERT INTO trucks (name, sort_order, warehouse_id)
+         VALUES ($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM trucks), $2)
+         ON CONFLICT (name) DO UPDATE
+            SET active = TRUE, warehouse_id = EXCLUDED.warehouse_id, updated_at = NOW()
+         RETURNING id`,
+        [truckName, input.warehouseId]
+      );
+      const truckId = truck.rows[0].id;
+
+      // Give it a stock row per material, the same way the materials admin does,
+      // so crews can load it and the offload check has something to read.
+      await client.query(
+        `INSERT INTO truck_stock (truck_id, material_id)
+         SELECT $1, id FROM materials
+         ON CONFLICT DO NOTHING`,
+        [truckId]
+      );
+
+      const vehicle = await client.query<{ id: string }>(
+        `INSERT INTO vehicles (name, truck_id, vehicle_type, ownership)
+         VALUES ($1, $2, 'box_truck', 'rented')
+         ON CONFLICT (name) DO UPDATE
+            SET truck_id = EXCLUDED.truck_id, ownership = 'rented',
+                active = TRUE, updated_at = NOW()
+         RETURNING id`,
+        [truckName, truckId]
+      );
+
+      await client.query(
+        `UPDATE truck_rentals
+            SET status = 'picked_up', picked_up_at = NOW(),
+                truck_id = $2, vehicle_id = $3, updated_at = NOW()
+          WHERE id = $1`,
+        [input.id, truckId, vehicle.rows[0].id]
+      );
+    });
+  } catch {
+    return { ok: false, error: 'Could not set that truck up. Is the name already taken?' };
+  }
+
+  revalidate();
+  revalidatePath('/materials');
+  return { ok: true };
+}
+
+/** Tick or untick one offload item. */
+export async function toggleOffloadCheck(input: {
+  rentalId: string;
+  itemId: number;
+  checked: boolean;
+}): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  if (input.checked) {
+    await query(
+      `INSERT INTO rental_offload_checks (rental_id, item_id, checked_by, checked_by_name)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (rental_id, item_id) DO NOTHING`,
+      [input.rentalId, input.itemId, guard.employee.id, guard.employee.name]
+    );
+  } else {
+    await query('DELETE FROM rental_offload_checks WHERE rental_id = $1 AND item_id = $2', [
+      input.rentalId,
+      input.itemId,
+    ]);
+  }
+  revalidate();
+  return { ok: true };
+}
+
+/**
+ * Send it back.
+ *
+ * The gate is re-checked HERE, not trusted from the page: the button may have
+ * been rendered before someone loaded materials back onto the truck. Returning
+ * deactivates the truck and the vehicle so the rental drops out of the count
+ * sheets instead of sitting in every crew's picker forever.
+ */
+export async function returnRental(id: string): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  const rental = await queryOne<{ truck_id: number | null; vehicle_id: string | null }>(
+    "SELECT truck_id, vehicle_id FROM truck_rentals WHERE id = $1 AND status = 'picked_up'",
+    [id]
+  );
+  if (!rental) return { ok: false, error: 'That rental is not out on the road' };
+
+  if (rental.truck_id) {
+    const remaining = await getMaterialsRemaining(rental.truck_id);
+    if (remaining > 0) {
+      return {
+        ok: false,
+        error: `${remaining} material${remaining === 1 ? '' : 's'} still on the truck — offload it first`,
+      };
+    }
+  }
+
+  const items = await getOffloadItems();
+  const checked = await query<{ item_id: number }>(
+    'SELECT item_id FROM rental_offload_checks WHERE rental_id = $1',
+    [id]
+  );
+  const checkedIds = new Set(checked.map((c) => c.item_id));
+  const missing = items.filter((i) => !checkedIds.has(i.id));
+  if (missing.length > 0) {
+    return { ok: false, error: `Still to do: ${missing.map((m) => m.label).join(', ')}` };
+  }
+
+  await withTransaction(async (client) => {
+    await client.query(
+      `UPDATE truck_rentals
+          SET status = 'returned', returned_at = NOW(), updated_at = NOW()
+        WHERE id = $1`,
+      [id]
+    );
+    if (rental.truck_id) {
+      await client.query('UPDATE trucks SET active = FALSE, updated_at = NOW() WHERE id = $1', [
+        rental.truck_id,
+      ]);
+    }
+    if (rental.vehicle_id) {
+      await client.query('UPDATE vehicles SET active = FALSE, updated_at = NOW() WHERE id = $1', [
+        rental.vehicle_id,
+      ]);
+    }
+  });
+
+  revalidate();
+  revalidatePath('/materials');
+  return { ok: true };
+}
+
+/** Cancel a rental we never picked up. */
+export async function cancelRental(id: string): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  const row = await queryOne<{ id: string }>(
+    `UPDATE truck_rentals
+        SET status = 'cancelled', updated_at = NOW()
+      WHERE id = $1 AND status IN ('planned', 'booked')
+      RETURNING id`,
+    [id]
+  );
+  if (!row) return { ok: false, error: 'A rental that has been picked up has to be returned' };
+
+  revalidate();
+  return { ok: true };
+}
+
+/** Book this many days ahead. Editable on the board, where it is understood. */
+export async function setRentalLeadTime(days: number): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  if (!Number.isInteger(days) || days < 0 || days > 60) {
+    return { ok: false, error: 'Give a whole number of days, 0–60' };
+  }
+  await setStringSetting('rental_lead_time_days', String(days));
+  revalidate();
+  return { ok: true };
+}

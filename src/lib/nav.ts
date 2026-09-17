@@ -74,6 +74,12 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         icon: Sunrise,
       },
       {
+        title: 'Rental Trucks',
+        href: '/admin/rentals',
+        description: 'When to book, when it goes back, and what to do before it does',
+        icon: Truck,
+      },
+      {
         title: 'Jobs',
         href: '/admin/jobs',
         description: 'Every move, its crew, and its outcome',

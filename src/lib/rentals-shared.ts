@@ -24,6 +24,12 @@ export interface TruckRental {
   created_at: string;
 }
 
+/** A home warehouse a rental truck can be assigned to at pickup. */
+export interface WarehouseOption {
+  id: number;
+  name: string;
+}
+
 export interface OffloadItem {
   id: number;
   label: string;

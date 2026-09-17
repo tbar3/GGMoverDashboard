@@ -20,6 +20,9 @@ import type {
   RecognitionGroup,
   MeetingNote,
   PolicyOfDay,
+  DiscussionPoint,
+  DiscussionJob,
+  CrewOption,
 } from '@/lib/morning-meeting-shared';
 import type { Policy } from '@/lib/policies-shared';
 
@@ -245,5 +248,54 @@ export async function getPolicyHistory(limit = 10): Promise<
       ORDER BY d.meeting_date DESC
       LIMIT $1`,
     [limit]
+  );
+}
+
+// ── Discussion points ────────────────────────────────────────────────────────
+
+/**
+ * Open questions, plus the ones answered recently.
+ *
+ * Open points carry forward with no expiry — the same reason recognition does. A
+ * question raised on a Friday and not answered must still be sitting there on
+ * Monday, or the meeting quietly loses it.
+ */
+export async function getDiscussions(answeredDays = 14): Promise<DiscussionPoint[]> {
+  return query<DiscussionPoint>(
+    `SELECT id, question, job_id, job_label, employee_id, employee_name, status,
+            answer, answered_at, answered_by_name, author_name, created_at
+       FROM morning_meeting_discussions
+      WHERE status = 'open'
+         OR answered_at >= NOW() - ($1::int * INTERVAL '1 day')
+      ORDER BY status DESC, created_at DESC`,
+    [answeredDays]
+  );
+}
+
+/**
+ * Jobs for the picker: recent first, and bounded.
+ *
+ * Bounded deliberately. The damages page fetches /api/jobs, which is SELECT *
+ * over every job ever run; this page is opened every single morning, so it reads
+ * only the columns the picker shows and stops at a few hundred rows.
+ */
+export async function getDiscussionJobs(limit = 300): Promise<DiscussionJob[]> {
+  return query<DiscussionJob>(
+    `SELECT id, date::text AS date, customer_name, job_number,
+            COALESCE(crew_ids, '{}') AS crew_ids
+       FROM jobs
+      ORDER BY date DESC
+      LIMIT $1`,
+    [limit]
+  );
+}
+
+/** The roster the picker falls back to when a question has no job attached. */
+export async function getCrewOptions(): Promise<CrewOption[]> {
+  return query<CrewOption>(
+    `SELECT id, name, COALESCE(role, '') AS role
+       FROM employees
+      WHERE is_active = TRUE AND exclude_from_roster = FALSE
+      ORDER BY name`
   );
 }

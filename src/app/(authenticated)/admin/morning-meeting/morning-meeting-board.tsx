@@ -45,6 +45,9 @@ import {
   type RecognitionItem,
   type MeetingNote,
   type PolicyOfDay,
+  type DiscussionPoint,
+  type DiscussionJob,
+  type CrewOption,
 } from '@/lib/morning-meeting-shared';
 import { policyCategoryLabel, type Policy } from '@/lib/policies-shared';
 import {
@@ -56,6 +59,7 @@ import {
   pinPolicyOfDay,
   unpinPolicyOfDay,
 } from '@/lib/morning-meeting-actions';
+import { DiscussionPoints } from './morning-meeting-discussions';
 
 const textareaClass =
   'w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm ' +
@@ -76,6 +80,9 @@ export default function MorningMeetingBoard({
   notes,
   policyOfDay,
   history,
+  discussions,
+  jobs,
+  crew,
 }: {
   today: string;
   board: RecognitionGroup[];
@@ -83,6 +90,9 @@ export default function MorningMeetingBoard({
   notes: MeetingNote[];
   policyOfDay: PolicyOfDay;
   history: { meeting_date: string; title: string | null; pinned: boolean }[];
+  discussions: DiscussionPoint[];
+  jobs: DiscussionJob[];
+  crew: CrewOption[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -95,14 +105,19 @@ export default function MorningMeetingBoard({
 
   /**
    * Every write goes through here: run it, toast the outcome, refresh the server
-   * data. A dismissal comes back with the ids it touched, which becomes a real
-   * Undo on the toast — the one action in this module that is easy to fire by
-   * reflex and annoying to reverse by hand.
+   * data. Anything easy to fire by reflex and annoying to reverse by hand gets a
+   * real Undo on the toast.
+   *
+   * Undo arrives two ways. A recognition dismissal returns the ids it touched, so
+   * the undo is built here. Everything else passes its own — which it must: the
+   * ids branch used to be the ONLY branch, so any other action that happened to
+   * return `ids` would have had its Undo silently restore recognition instead.
    */
   function run(
     fn: () => Promise<{ ok: boolean; error?: string }>,
     okMessage: string,
-    onSuccess?: () => void
+    onSuccess?: () => void,
+    undo?: { label: string; fn: () => Promise<{ ok: boolean; error?: string }> }
   ) {
     startTransition(async () => {
       const result = await fn();
@@ -112,13 +127,15 @@ export default function MorningMeetingBoard({
       }
       onSuccess?.();
       const ids = (result as { ids?: string[] }).ids;
-      if (ids?.length) {
+      const undoAction =
+        undo ?? (ids?.length ? { label: 'Undo', fn: () => restoreRecognition(ids) } : null);
+      if (undoAction) {
         toast.success(okMessage, {
           action: {
-            label: 'Undo',
+            label: undoAction.label,
             onClick: () =>
               startTransition(async () => {
-                await restoreRecognition(ids);
+                await undoAction.fn();
                 router.refresh();
               }),
           },
@@ -143,6 +160,7 @@ export default function MorningMeetingBoard({
           <Badge variant="outline">1 &middot; Recognition</Badge>
           <Badge variant="outline">2 &middot; Reminders</Badge>
           <Badge variant="outline">3 &middot; Policy of the Day</Badge>
+          <Badge variant="outline">4 &middot; Discussion</Badge>
         </div>
       </div>
 
@@ -287,6 +305,15 @@ export default function MorningMeetingBoard({
         pending={pending}
         run={run}
       />
+
+      {/* ── 4. Discussion points and questions ───────────────────────────── */}
+      <DiscussionPoints
+        discussions={discussions}
+        jobs={jobs}
+        crew={crew}
+        pending={pending}
+        run={run}
+      />
     </div>
   );
 }
@@ -294,7 +321,8 @@ export default function MorningMeetingBoard({
 type Run = (
   fn: () => Promise<{ ok: boolean; error?: string }>,
   okMessage: string,
-  onSuccess?: () => void
+  onSuccess?: () => void,
+  undo?: { label: string; fn: () => Promise<{ ok: boolean; error?: string }> }
 ) => void;
 
 function RemindersLog({

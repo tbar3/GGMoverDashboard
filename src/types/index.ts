@@ -248,5 +248,15 @@ export const CONFIG = {
   UNREPORTED_DAMAGE_MULTIPLIER: 2,
   // Pay scale: base rate + each earned skill's raise (see the skills catalog).
   BASE_HOURLY_RATE: 18.0,
+  // Rental board. The horizon and the lead time have to be read together: seven
+  // days out is as far as booked SmartMoving work is worth trusting, and a
+  // three-day lead time leaves about four days between a gap appearing and
+  // booking it becoming urgent. A lead time longer than the horizon would mean
+  // every window is born already late. Editable in app_settings.
+  RENTAL_LEAD_TIME_DAYS: 3,
+  RENTAL_HORIZON_DAYS: 7,
+  // Two short runs separated by this many good days are one rental — returning a
+  // truck and re-renting it the next morning costs more than keeping it.
+  RENTAL_BRIDGE_DAYS: 1,
 } as const;
 

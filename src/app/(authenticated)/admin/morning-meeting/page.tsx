@@ -4,6 +4,9 @@ import {
   getNotes,
   getPolicyOfDay,
   getPolicyHistory,
+  getDiscussions,
+  getDiscussionJobs,
+  getCrewOptions,
   meetingToday,
 } from '@/lib/morning-meeting';
 import MorningMeetingBoard from './morning-meeting-board';
@@ -18,11 +21,14 @@ export default async function MorningMeetingPage() {
   // Policy of the day runs first and alone: on the first view of the day it claims
   // today's row, which getPolicyHistory below must then be able to see.
   const policyOfDay = await getPolicyOfDay(today);
-  const [board, policies, notes, history] = await Promise.all([
+  const [board, policies, notes, history, discussions, jobs, crew] = await Promise.all([
     getRecognitionBoard(),
     getRotationPolicies(),
     getNotes(),
     getPolicyHistory(),
+    getDiscussions(),
+    getDiscussionJobs(),
+    getCrewOptions(),
   ]);
 
   return (
@@ -33,6 +39,9 @@ export default async function MorningMeetingPage() {
       notes={notes}
       policyOfDay={policyOfDay}
       history={history}
+      discussions={discussions}
+      jobs={jobs}
+      crew={crew}
     />
   );
 }

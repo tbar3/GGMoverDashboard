@@ -1,4 +1,5 @@
 import { query, queryOne } from '@/lib/db';
+import { getOwnedTruckCapacity } from '@/lib/truck-capacity';
 
 // Back-office dashboard metrics. Most read from smartmoving_jobs (the imported
 // weekly report — real data); materials/attendance/damages read from tables that
@@ -177,7 +178,7 @@ export async function getAdminDashboard(
     pipelineRow,
     todaysJobs,
     truckDemand,
-    ownedRow,
+    ownedCapacity,
     tardyRow,
     unclosedRow,
     lowInvRow,
@@ -225,7 +226,10 @@ export async function getAdminDashboard(
         GROUP BY job_date ORDER BY job_date`,
       [today, weekEnd]
     ),
-    queryOne<{ c: number }>('SELECT COUNT(*)::int AS c FROM trucks WHERE active = TRUE'),
+    // Owned trucks only. Counting every active truck also counted the Trailer and
+    // any rental sitting in the materials list — which would quietly cancel out
+    // the very shortfall that says to rent one. See truck-capacity.ts.
+    getOwnedTruckCapacity(),
     queryOne<{ c: number }>(
       'SELECT COUNT(*)::int AS c FROM attendance WHERE date = $1 AND is_tardy = TRUE',
       [today]
@@ -281,7 +285,7 @@ export async function getAdminDashboard(
     ),
   ]);
 
-  const ownedTrucks = ownedRow?.c ?? 0;
+  const ownedTrucks = ownedCapacity;
   const rentalDays =
     ownedTrucks > 0 ? truckDemand.filter((d) => d.trucks > ownedTrucks) : [];
 

@@ -168,3 +168,94 @@ export async function unpinPolicyOfDay(today: string): Promise<Result> {
   revalidate();
   return { ok: true };
 }
+
+// ── Discussion points ────────────────────────────────────────────────────────
+
+/**
+ * Log a question to raise at the meeting.
+ *
+ * The job label and the crew member's name are written here rather than joined
+ * later: jobs are re-imported from SmartMoving and people leave, and a question
+ * from three months ago still has to read as a sentence.
+ */
+export async function addDiscussion(input: {
+  question: string;
+  jobId?: string;
+  jobLabel?: string;
+  employeeId?: string;
+  employeeName?: string;
+}): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  const question = input.question.trim();
+  if (!question) return { ok: false, error: 'Write the question first' };
+
+  await query(
+    `INSERT INTO morning_meeting_discussions
+       (question, job_id, job_label, employee_id, employee_name, author_id, author_name)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [
+      question,
+      input.jobId || null,
+      input.jobLabel || null,
+      input.employeeId || null,
+      input.employeeName || null,
+      guard.employee.id,
+      guard.employee.name,
+    ]
+  );
+  revalidate();
+  return { ok: true };
+}
+
+/**
+ * Record what was actually said and close the point out.
+ *
+ * The answer is required — the database refuses an answered row without one, and
+ * an empty answer would defeat the only reason this section exists.
+ */
+export async function answerDiscussion(input: { id: string; answer: string }): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  const answer = input.answer.trim();
+  if (!answer) return { ok: false, error: 'Type what they said first' };
+
+  const row = await queryOne<{ id: string }>(
+    `UPDATE morning_meeting_discussions
+        SET status = 'answered', answer = $2, answered_at = NOW(),
+            answered_by = $3, answered_by_name = $4, updated_at = NOW()
+      WHERE id = $1
+      RETURNING id`,
+    [input.id, answer, guard.employee.id, guard.employee.name]
+  );
+  if (!row) return { ok: false, error: 'That question is gone' };
+
+  revalidate();
+  return { ok: true };
+}
+
+/** Undo an answer — puts the question back on the board and clears the record. */
+export async function reopenDiscussion(id: string): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  await query(
+    `UPDATE morning_meeting_discussions
+        SET status = 'open', answer = NULL, answered_at = NULL,
+            answered_by = NULL, answered_by_name = NULL, updated_at = NOW()
+      WHERE id = $1`,
+    [id]
+  );
+  revalidate();
+  return { ok: true };
+}
+
+export async function deleteDiscussion(id: string): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  await query('DELETE FROM morning_meeting_discussions WHERE id = $1', [id]);
+  revalidate();
+  return { ok: true };
+}

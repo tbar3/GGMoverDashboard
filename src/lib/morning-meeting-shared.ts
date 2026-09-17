@@ -52,3 +52,44 @@ export interface PolicyOfDay {
   prior_times: number;
   prior_last_on: string | null;
 }
+
+/**
+ * A question to raise at the meeting — usually about a job that looked wrong when
+ * the office went to close it out.
+ *
+ * It stays open until someone records what was actually said. The answer is the
+ * point: without it, a problem that keeps happening looks new every time.
+ */
+export interface DiscussionPoint {
+  id: string;
+  question: string;
+  /** Null once the job row is gone; job_label survives it. */
+  job_id: string | null;
+  job_label: string | null;
+  /** Who the question is for — picked from the job's crew. */
+  employee_id: string | null;
+  employee_name: string | null;
+  status: 'open' | 'answered';
+  answer: string | null;
+  answered_at: string | null;
+  answered_by_name: string | null;
+  author_name: string;
+  created_at: string;
+}
+
+/** A job as the discussion picker needs it — enough to identify it and to know
+ *  who was on it. */
+export interface DiscussionJob {
+  id: string;
+  date: string;
+  customer_name: string;
+  job_number: string | null;
+  crew_ids: string[];
+}
+
+/** A crew member the picker can address a question to. */
+export interface CrewOption {
+  id: string;
+  name: string;
+  role: string;
+}

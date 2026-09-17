@@ -25,7 +25,9 @@ record dates we already knew.
 
 - `admin-metrics.ts` computes `rentalDays`: days in the next 7 where booked
   SmartMoving jobs need more trucks than we own. The admin home shows it as an
-  alert. This is the seed of the forecast, but it is 7 days and has a bug (below).
+  alert. This is the seed of the forecast — we keep the same 7-day horizon — but it
+  stops at "you are short", with no book-by date, no return date, no record of what
+  was done about it, and a capacity bug (below).
 - Rentals already exist as **materials trucks** — `Penske 16'`, the Idealease
   trucks — holding real stock in `truck_stock`.
 - `vehicles.ownership` already has `'rented'` as a value, and `vehicles.truck_id`
@@ -67,7 +69,13 @@ with `ownership='rented'`, so a missing row means a pre-existing company truck.
 Pure, dependency-free functions in `src/lib/rentals-windows.ts` so the math can be
 read and tested on its own.
 
-For each day `d` in the next `RENTAL_HORIZON_DAYS` (45):
+For each day `d` in the next `RENTAL_HORIZON_DAYS` (7):
+
+Seven days is deliberate: it matches how far out booked SmartMoving work is
+actually trustworthy. With a 3-day lead time it leaves roughly four days between
+a gap appearing and booking becoming urgent, so the horizon and the lead time
+have to be read together — raising the lead time past 7 would mean every window
+is born already late. Both are single constants and easy to retune.
 
 - `D(d)` = `CEIL(SUM(est_trucks))` over `smartmoving_jobs` where
   `opportunity_status = 'Booked'` and `job_date = d`. Trucks are discrete: 2.5
@@ -230,7 +238,7 @@ guards). Sections, in order:
 2. **Out now** — picked-up rentals with the offload checklist inline, drift
    banners, and the return gate.
 3. **Upcoming** — booked but not yet picked up.
-4. **Forecast** — the full 45-day horizon, including covered windows.
+4. **Forecast** — the full 7-day horizon, including covered windows.
 5. **History** — returned and cancelled.
 
 Overdue rentals (`est_return_date < today`, not returned) are highlighted **on

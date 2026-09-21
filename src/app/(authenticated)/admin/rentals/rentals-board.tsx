@@ -871,7 +871,7 @@ function LeadTimeEditor({
   return (
     <div className="flex items-end gap-2">
       <div className="space-y-1">
-        <Label className="text-xs">Book this many days ahead</Label>
+        <Label className="text-xs">Book this many business days ahead</Label>
         <Input
           className="w-24"
           value={days}

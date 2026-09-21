@@ -56,6 +56,32 @@ export function addDays(date: string, n: number): string {
   return new Date(t).toISOString().slice(0, 10);
 }
 
+/** Saturday or Sunday. Holidays are not modelled — that needs a real calendar. */
+function isWeekend(date: string): boolean {
+  const [y, m, d] = date.split('-').map(Number);
+  const day = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return day === 0 || day === 6;
+}
+
+/**
+ * Step back `n` BUSINESS days from `date`.
+ *
+ * Booking lead time is counted in business days, not calendar days: a gap on a
+ * Tuesday with five days' lead is not "book by last Thursday", it is "book by
+ * the Tuesday before", because nobody at the vendor is answering the phone at
+ * the weekend. Counting calendar days quietly moves every deadline into a
+ * Saturday roughly two times in seven.
+ */
+export function subtractBusinessDays(date: string, n: number): string {
+  let cursor = date;
+  let left = n;
+  while (left > 0) {
+    cursor = addDays(cursor, -1);
+    if (!isWeekend(cursor)) left -= 1;
+  }
+  return cursor;
+}
+
 /** Whole days from `a` to `b`, negative if `b` is earlier. */
 export function daysBetween(a: string, b: string): number {
   const [ay, am, ad] = a.split('-').map(Number);
@@ -78,7 +104,7 @@ export interface BuildWindowsInput {
   today: string;
   /** How far ahead the horizon runs, in days. */
   horizonDays: number;
-  /** Book at least this many days before the truck is needed. */
+  /** Book at least this many BUSINESS days before the truck is needed. */
   leadTimeDays: number;
   /**
    * Two short runs separated by this many good days (or fewer) are one rental.
@@ -150,7 +176,7 @@ export function buildWindows(input: BuildWindowsInput): RentalWindow[] {
 
     const trucks_needed = Math.max(...shortDays.map((d) => d.shortfall));
     const trucks_uncovered = Math.max(...shortDays.map((d) => d.shortfall - d.covered), 0);
-    const book_by = addDays(needed_from, -leadTimeDays);
+    const book_by = subtractBusinessDays(needed_from, leadTimeDays);
 
     let state: WindowState;
     if (trucks_uncovered <= 0) state = 'covered';

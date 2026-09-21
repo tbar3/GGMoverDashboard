@@ -272,6 +272,34 @@ that is where it is understood.
 - **Vendor row gone / job re-imported**: rentals hold their own vendor text, so
   nothing depends on a joined row surviving.
 
+## Addendum — 2026-09-21: lifecycle sections, detail page, reminders
+
+Requested after first use.
+
+- **Status is chosen when logging**, not implied: needs booking / booked /
+  picked up. The stored value stays `planned` while the label reads "Needs
+  booking" — renaming a CHECK-constrained value means a migration and a data
+  rewrite for a word nobody sees.
+- **"Out now" and "picked up" are the same state** and there is one status for
+  it. The board's sections are Coverage gaps → Need to book → Booked → Out now →
+  Forecast → Past rentals. "Coverage gaps" is about DAYS short of a truck;
+  "Need to book" is about RENTALS not yet reserved. They sound alike, so they are
+  named apart.
+- **Logging something as already picked up is not a label change.** It does the
+  same real work as the pickup step — creates or reactivates the materials truck,
+  seeds its stock rows, creates the fleet vehicle as `rented` — so it requires a
+  truck name and a home warehouse, and runs in one transaction. That setup now
+  lives in a single shared helper rather than being duplicated across the two
+  entry points to the same physical event.
+- **Past rentals are clickable**: `/admin/rentals/[id]` shows everything about a
+  rental, including who ticked which offload item and when, with edit and delete.
+  Delete refuses while a truck is still out — returning it is what deactivates
+  the materials truck, and deleting the rental would strand it active.
+- **Reminder emails are deferred** to their own piece of work. The rails exist:
+  `src/lib/email.ts` (Resend) and the `CRON_SECRET`-guarded cron routes
+  registered in `vercel.json`. Still to decide: recipients, how many days ahead,
+  and how not to send the same nag every morning.
+
 ## Out of scope (v1)
 
 Crew-facing offload checklist (back office ticks it), vendor catalog and rate

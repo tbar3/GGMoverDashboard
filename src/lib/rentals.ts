@@ -132,6 +132,16 @@ export async function getRentalHistory(limit = 25): Promise<TruckRental[]> {
   );
 }
 
+/**
+ * One rental, for its detail page.
+ *
+ * Returns null rather than throwing so the page can render a proper not-found
+ * instead of a 500 when someone follows a link to a rental that was deleted.
+ */
+export async function getRentalById(id: string): Promise<TruckRental | null> {
+  return queryOne<TruckRental>(`${RENTAL_SELECT} WHERE r.id = $1`, [id]);
+}
+
 export async function getOffloadItems(): Promise<OffloadItem[]> {
   return query<OffloadItem>(
     `SELECT id, label, system_key, sort_order

@@ -18,11 +18,17 @@ import {
   X,
   ArrowUpRight,
   Clock,
+  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/utils';
 import type { RentalBoardData } from '@/lib/rentals';
-import type { TruckRental, WarehouseOption } from '@/lib/rentals-shared';
+import {
+  LOGGABLE_STATUSES,
+  RENTAL_STATUS_LABEL,
+  type TruckRental,
+  type WarehouseOption,
+} from '@/lib/rentals-shared';
 import type { RentalWindow } from '@/lib/rentals-windows';
 import {
   createRental,
@@ -32,19 +38,29 @@ import {
   returnRental,
   cancelRental,
   updateRentalDates,
-  updateRentalDetails,
   setRentalLeadTime,
 } from '@/lib/rentals-actions';
 
-const inputClass =
-  'w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
+const inputClass = 'w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
+
+/** '08:00' → '8:00 AM'. Already wall-clock, so no date is involved. */
+function formatTime(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return `${hour}:${String(m).padStart(2, '0')} ${period}`;
+}
 
 /**
  * The rental board.
  *
- * Reads top to bottom the way the problem actually runs: what we have to book,
- * what is out right now and what it needs before it can go back, what is coming,
- * and the raw forecast underneath.
+ * Reads top to bottom the way the problem runs: where cover is short, then a
+ * rental's own lifecycle — needs booking, booked, out now — and the record of
+ * everything finished underneath.
+ *
+ * "Coverage gaps" is about DAYS the schedule is short a truck. "Need to book" is
+ * about RENTALS we have decided on but not reserved. They sound alike and are
+ * not the same thing, hence the different names.
  */
 export default function RentalsBoard({
   data,
@@ -56,7 +72,11 @@ export default function RentalsBoard({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  function run(fn: () => Promise<{ ok: boolean; error?: string }>, okMessage: string, onSuccess?: () => void) {
+  function run(
+    fn: () => Promise<{ ok: boolean; error?: string }>,
+    okMessage: string,
+    onSuccess?: () => void
+  ) {
     startTransition(async () => {
       const result = await fn();
       if (!result.ok) {
@@ -69,11 +89,10 @@ export default function RentalsBoard({
     });
   }
 
-  const needsBooking = data.windows.filter(
-    (w) => w.state === 'book_now' || w.state === 'late'
-  );
+  const gaps = data.windows.filter((w) => w.state === 'book_now' || w.state === 'late');
+  const needToBook = data.active.filter((r) => r.status === 'planned');
+  const booked = data.active.filter((r) => r.status === 'booked');
   const out = data.active.filter((r) => r.status === 'picked_up');
-  const upcoming = data.active.filter((r) => r.status === 'planned' || r.status === 'booked');
 
   return (
     <div className="p-6 space-y-6">
@@ -87,7 +106,10 @@ export default function RentalsBoard({
             {data.dataAsOf ? ` · schedule synced ${data.dataAsOf}` : ''}
           </p>
         </div>
-        <LeadTimeEditor current={data.leadTimeDays} pending={pending} run={run} />
+        <div className="flex flex-wrap items-end gap-3">
+          <NewRentalForm today={data.today} warehouses={warehouses} pending={pending} run={run} />
+          <LeadTimeEditor current={data.leadTimeDays} pending={pending} run={run} />
+        </div>
       </div>
 
       {data.jobsMissingEstimate > 0 && (
@@ -101,32 +123,26 @@ export default function RentalsBoard({
         </div>
       )}
 
-      {/* ── 1. Needs booking ─────────────────────────────────────────────── */}
+      {/* ── Coverage gaps: days the schedule is short a truck ────────────── */}
       <Card>
         <CardHeader>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <CalendarClock className="h-5 w-5 text-primary" />
-                Needs booking
-              </CardTitle>
-              <CardDescription>
-                Days the schedule needs more trucks than we own, past the point where booking is
-                safe.
-              </CardDescription>
-            </div>
-            <NewRentalForm today={data.today} pending={pending} run={run} />
-          </div>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarClock className="h-5 w-5 text-primary" />
+            Coverage gaps
+          </CardTitle>
+          <CardDescription>
+            Days needing more trucks than we own, past the point where booking is safe.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {needsBooking.length === 0 ? (
+          {gaps.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nothing to book. Every day in the next {data.horizonDays} is inside{' '}
-              {data.capacity} truck{data.capacity === 1 ? '' : 's'} — or already covered.
+              No gaps. Every day in the next {data.horizonDays} is inside {data.capacity} truck
+              {data.capacity === 1 ? '' : 's'} — or already covered.
             </p>
           ) : (
             <ul className="space-y-2">
-              {needsBooking.map((w) => (
+              {gaps.map((w) => (
                 <WindowRow key={w.needed_from} window={w} pending={pending} run={run} />
               ))}
             </ul>
@@ -134,7 +150,45 @@ export default function RentalsBoard({
         </CardContent>
       </Card>
 
-      {/* ── 2. Out now ───────────────────────────────────────────────────── */}
+      {/* ── 1. Need to book ──────────────────────────────────────────────── */}
+      <RentalSection
+        title="Need to book"
+        icon={<CalendarClock className="h-5 w-5 text-primary" />}
+        description="Decided on, not yet reserved with a vendor."
+        empty="Nothing waiting to be booked."
+        rentals={needToBook}
+      >
+        {(rental) => (
+          <UpcomingRental
+            key={rental.id}
+            rental={rental}
+            warehouses={warehouses}
+            pending={pending}
+            run={run}
+          />
+        )}
+      </RentalSection>
+
+      {/* ── 2. Booked ────────────────────────────────────────────────────── */}
+      <RentalSection
+        title="Booked"
+        icon={<Clock className="h-5 w-5 text-primary" />}
+        description="Reserved and waiting to be collected."
+        empty="Nothing booked."
+        rentals={booked}
+      >
+        {(rental) => (
+          <UpcomingRental
+            key={rental.id}
+            rental={rental}
+            warehouses={warehouses}
+            pending={pending}
+            run={run}
+          />
+        )}
+      </RentalSection>
+
+      {/* ── 3. Out now ───────────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -142,7 +196,7 @@ export default function RentalsBoard({
             Out now
           </CardTitle>
           <CardDescription>
-            Everything that has to happen before a truck goes back. The materials line is read from
+            In our hands, with the date each one has to go back. The materials line is read from
             what the truck is actually holding, not ticked from memory.
           </CardDescription>
         </CardHeader>
@@ -164,37 +218,10 @@ export default function RentalsBoard({
         </CardContent>
       </Card>
 
-      {/* ── 3. Upcoming ──────────────────────────────────────────────────── */}
-      {upcoming.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-primary" />
-              Booked and planned
-            </CardTitle>
-            <CardDescription>Not picked up yet.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {upcoming.map((rental) => (
-              <UpcomingRental
-                key={rental.id}
-                rental={rental}
-                warehouses={warehouses}
-                pending={pending}
-                run={run}
-              />
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── 4. The forecast underneath ───────────────────────────────────── */}
+      {/* ── The forecast underneath ──────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CalendarClock className="h-5 w-5 text-primary" />
-            Forecast
-          </CardTitle>
+          <CardTitle>Forecast</CardTitle>
           <CardDescription>
             Every day in the next {data.horizonDays}, against {data.capacity} owned truck
             {data.capacity === 1 ? '' : 's'}.
@@ -215,24 +242,33 @@ export default function RentalsBoard({
         </CardContent>
       </Card>
 
-      {/* ── 5. History ───────────────────────────────────────────────────── */}
+      {/* ── 4. Past rentals ──────────────────────────────────────────────── */}
       {data.history.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Past rentals</CardTitle>
+            <CardDescription>Click any one to see it in full, edit it, or delete it.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ul className="space-y-1.5 text-sm">
+            <ul className="space-y-1">
               {data.history.map((r) => (
-                <li key={r.id} className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className="text-[10px]">
-                    {r.status === 'cancelled' ? 'Cancelled' : 'Returned'}
-                  </Badge>
-                  <span className="font-medium">{r.vendor}</span>
-                  <span className="text-muted-foreground">
-                    {formatDate(r.needed_from, 'MMM d')} – {formatDate(r.est_return_date, 'MMM d')}
-                    {r.truck_name ? ` · ${r.truck_name}` : ''}
-                  </span>
+                <li key={r.id}>
+                  <Link
+                    href={`/admin/rentals/${r.id}`}
+                    className="flex flex-wrap items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
+                  >
+                    <Badge variant="outline" className="text-[10px]">
+                      {RENTAL_STATUS_LABEL[r.status]}
+                    </Badge>
+                    <span className="font-medium">{r.vendor}</span>
+                    {r.size && <span className="text-muted-foreground">{r.size}</span>}
+                    <span className="text-muted-foreground">
+                      {formatDate(r.needed_from, 'MMM d')} – {formatDate(r.est_return_date, 'MMM d')}
+                      {r.truck_name ? ` · ${r.truck_name}` : ''}
+                    </span>
+                    <span className="flex-1" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -249,13 +285,49 @@ type Run = (
   onSuccess?: () => void
 ) => void;
 
-/** "08:00" → "8:00 AM". The value is already wall-clock, so no date is involved. */
-function formatTime(hhmm: string): string {
-  const [h, m] = hhmm.split(':').map(Number);
-  const period = h >= 12 ? 'PM' : 'AM';
-  const hour = h % 12 === 0 ? 12 : h % 12;
-  return `${hour}:${String(m).padStart(2, '0')} ${period}`;
+/** A lifecycle section. Rendered even when empty, so the stages stay visible. */
+function RentalSection({
+  title,
+  icon,
+  description,
+  empty,
+  rentals,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  description: string;
+  empty: string;
+  rentals: TruckRental[];
+  children: (rental: TruckRental) => React.ReactNode;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          {icon}
+          {title}
+          {rentals.length > 0 && <Badge variant="secondary">{rentals.length}</Badge>}
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {rentals.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{empty}</p>
+        ) : (
+          rentals.map((rental) => children(rental))
+        )}
+      </CardContent>
+    </Card>
+  );
 }
+
+const STATE_LABEL: Record<RentalWindow['state'], { label: string; className: string }> = {
+  late: { label: 'Late', className: 'bg-destructive text-destructive-foreground' },
+  book_now: { label: 'Book now', className: 'bg-amber-500 text-white' },
+  planned: { label: 'Planned', className: '' },
+  covered: { label: 'Covered', className: 'bg-emerald-600 text-white' },
+};
 
 /** What the truck is — shown wherever a crew might need to know before it arrives. */
 function SpecBadges({ rental }: { rental: TruckRental }) {
@@ -277,13 +349,6 @@ function SpecBadges({ rental }: { rental: TruckRental }) {
     </>
   );
 }
-
-const STATE_LABEL: Record<RentalWindow['state'], { label: string; className: string }> = {
-  late: { label: 'Late', className: 'bg-destructive text-destructive-foreground' },
-  book_now: { label: 'Book now', className: 'bg-amber-500 text-white' },
-  planned: { label: 'Planned', className: '' },
-  covered: { label: 'Covered', className: 'bg-emerald-600 text-white' },
-};
 
 /** One demand window: what it needs, by when, and until when. */
 function WindowRow({
@@ -329,9 +394,10 @@ function WindowRow({
 
       {open && (
         <div className="mt-3 border-t border-border pt-3">
-          <QuickBookForm
+          <RentalForm
             neededFrom={window.needed_from}
             estReturnDate={window.suggested_return}
+            lockedStatus="booked"
             pending={pending}
             run={run}
             onDone={() => setOpen(false)}
@@ -342,16 +408,27 @@ function WindowRow({
   );
 }
 
-/** Book against a window, with its dates already filled in. */
-function QuickBookForm({
+/**
+ * The rental form.
+ *
+ * `lockedStatus` is for booking straight against a coverage gap — you are
+ * reserving a truck, so the status is not a question. Everywhere else the status
+ * is chosen, including "picked up", which is not a label: it creates the
+ * materials truck and the fleet vehicle, so it needs a name and a warehouse.
+ */
+function RentalForm({
   neededFrom,
   estReturnDate,
+  lockedStatus,
+  warehouses,
   pending,
   run,
   onDone,
 }: {
   neededFrom: string;
   estReturnDate: string;
+  lockedStatus?: 'planned' | 'booked' | 'picked_up';
+  warehouses?: WarehouseOption[];
   pending: boolean;
   run: Run;
   onDone: () => void;
@@ -366,9 +443,35 @@ function QuickBookForm({
   const [hasRamp, setHasRamp] = useState(false);
   const [hasLiftgate, setHasLiftgate] = useState(false);
   const [isIsuzu, setIsIsuzu] = useState(false);
+  const [status, setStatus] = useState<'planned' | 'booked' | 'picked_up'>(
+    lockedStatus ?? 'planned'
+  );
+  const [truckName, setTruckName] = useState('');
+  const [warehouseId, setWarehouseId] = useState(warehouses?.[0]?.id ?? 0);
+
+  const alreadyHaveIt = status === 'picked_up';
+  const canSubmit =
+    !!vendor.trim() && !!from && !!to && (!alreadyHaveIt || (!!truckName.trim() && !!warehouseId));
 
   return (
     <div className="grid gap-2 sm:grid-cols-2">
+      {!lockedStatus && (
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Where is it?</Label>
+          <select
+            className={inputClass}
+            value={status}
+            onChange={(e) => setStatus(e.target.value as typeof status)}
+          >
+            {LOGGABLE_STATUSES.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="space-y-1">
         <Label>Vendor</Label>
         <Input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="Penske" />
@@ -429,9 +532,40 @@ function QuickBookForm({
           </label>
         </div>
       </div>
+
+      {alreadyHaveIt && (
+        <>
+          <div className="space-y-1">
+            <Label>Truck name (crews will see this)</Label>
+            <Input
+              value={truckName}
+              onChange={(e) => setTruckName(e.target.value)}
+              placeholder="Penske 26 (rental)"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Home warehouse</Label>
+            <select
+              className={inputClass}
+              value={warehouseId}
+              onChange={(e) => setWarehouseId(Number(e.target.value))}
+            >
+              {(warehouses ?? []).map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Required — offloading it later will not work without one.
+            </p>
+          </div>
+        </>
+      )}
+
       <div className="sm:col-span-2">
         <Button
-          disabled={pending || !vendor.trim()}
+          disabled={pending || !canSubmit}
           onClick={() =>
             run(
               () =>
@@ -446,32 +580,31 @@ function QuickBookForm({
                   hasLiftgate,
                   isIsuzu,
                   dailyRate: rate ? Number(rate) : null,
-                  booked: true,
+                  status,
+                  truckName: alreadyHaveIt ? truckName : undefined,
+                  warehouseId: alreadyHaveIt ? warehouseId : undefined,
                 }),
-              'Rental booked',
+              'Rental logged',
               onDone
             )
           }
         >
-          Book it
+          {lockedStatus === 'booked' ? 'Book it' : 'Log it'}
         </Button>
       </div>
     </div>
   );
 }
 
-/**
- * Log a rental with no window behind it — a truck in the shop, a last-minute add.
- *
- * `today` comes from the server, in America/New_York. Seeding these from the
- * browser's own clock would put tomorrow's date in the box every evening.
- */
+/** Log a rental from the header — any stage, including one already in the yard. */
 function NewRentalForm({
   today,
+  warehouses,
   pending,
   run,
 }: {
   today: string;
+  warehouses: WarehouseOption[];
   pending: boolean;
   run: Run;
 }) {
@@ -493,91 +626,14 @@ function NewRentalForm({
           <X className="h-4 w-4" />
         </button>
       </div>
-      <QuickBookForm
+      <RentalForm
         neededFrom={today}
         estReturnDate={today}
+        warehouses={warehouses}
         pending={pending}
         run={run}
         onDone={() => setOpen(false)}
       />
-    </div>
-  );
-}
-
-/**
- * Pick-up time and what the truck is, on a rental already logged.
- *
- * The collection time usually is not known when the booking is made, so these
- * have to be editable afterwards rather than only on the form that created it.
- * Save stays disabled until something actually changes, so the button never
- * invites a pointless write.
- */
-function RentalDetailsEditor({
-  rental,
-  pending,
-  run,
-}: {
-  rental: TruckRental;
-  pending: boolean;
-  run: Run;
-}) {
-  const [time, setTime] = useState(rental.pickup_time ?? '');
-  const [ramp, setRamp] = useState(rental.has_ramp);
-  const [liftgate, setLiftgate] = useState(rental.has_liftgate);
-  const [isuzu, setIsuzu] = useState(rental.is_isuzu);
-
-  const dirty =
-    time !== (rental.pickup_time ?? '') ||
-    ramp !== rental.has_ramp ||
-    liftgate !== rental.has_liftgate ||
-    isuzu !== rental.is_isuzu;
-
-  return (
-    <div className="mt-2 flex flex-wrap items-end gap-4 rounded-md bg-muted/50 p-2">
-      <div className="space-y-1">
-        <Label className="text-xs">Pick-up time</Label>
-        <input
-          type="time"
-          className={`${inputClass} w-32`}
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-        />
-      </div>
-      <div className="flex flex-wrap items-center gap-3 pb-2">
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox checked={ramp} onCheckedChange={(v) => setRamp(v === true)} />
-          Ramp
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox checked={liftgate} onCheckedChange={(v) => setLiftgate(v === true)} />
-          Liftgate
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox checked={isuzu} onCheckedChange={(v) => setIsuzu(v === true)} />
-          Isuzu
-        </label>
-      </div>
-      <Button
-        size="sm"
-        variant="outline"
-        className="mb-2"
-        disabled={pending || !dirty}
-        onClick={() =>
-          run(
-            () =>
-              updateRentalDetails({
-                id: rental.id,
-                pickupTime: time,
-                hasRamp: ramp,
-                hasLiftgate: liftgate,
-                isIsuzu: isuzu,
-              }),
-            'Saved'
-          )
-        }
-      >
-        Save
-      </Button>
     </div>
   );
 }
@@ -604,7 +660,9 @@ function OutRental({
   return (
     <div className="rounded-lg border border-border p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-semibold">{rental.vendor}</span>
+        <Link href={`/admin/rentals/${rental.id}`} className="font-semibold hover:underline">
+          {rental.vendor}
+        </Link>
         {rental.size && <Badge variant="secondary">{rental.size}</Badge>}
         {rental.truck_name && (
           <Badge variant="outline" className="text-[10px]">
@@ -613,7 +671,7 @@ function OutRental({
         )}
         <SpecBadges rental={rental} />
         <span className="text-sm text-muted-foreground">
-          due back {formatDate(rental.est_return_date, 'EEE, MMM d')}
+          back by {formatDate(rental.est_return_date, 'EEE, MMM d')}
         </span>
         {overdue && <Badge className="bg-destructive text-destructive-foreground">Overdue</Badge>}
       </div>
@@ -696,6 +754,13 @@ function OutRental({
         {state?.blocking_reason && (
           <span className="text-xs text-muted-foreground">{state.blocking_reason}</span>
         )}
+        <span className="flex-1" />
+        <Link
+          href={`/admin/rentals/${rental.id}`}
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
+          Details
+        </Link>
       </div>
     </div>
   );
@@ -721,17 +786,16 @@ function UpcomingRental({
   return (
     <div className="rounded-lg border border-border p-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={rental.status === 'booked' ? 'default' : 'outline'}>
-          {rental.status === 'booked' ? 'Booked' : 'Planned'}
-        </Badge>
-        <span className="font-medium">{rental.vendor}</span>
+        <Link href={`/admin/rentals/${rental.id}`} className="font-medium hover:underline">
+          {rental.vendor}
+        </Link>
+        <SpecBadges rental={rental} />
         <span className="text-muted-foreground">
           {formatDate(rental.needed_from, 'MMM d')}
           {rental.pickup_time ? ` at ${formatTime(rental.pickup_time)}` : ''} –{' '}
           {formatDate(rental.est_return_date, 'MMM d')}
           {rental.vendor_ref ? ` · #${rental.vendor_ref}` : ''}
         </span>
-        <SpecBadges rental={rental} />
         <span className="flex-1" />
         {rental.status === 'planned' && (
           <Button
@@ -752,8 +816,6 @@ function UpcomingRental({
           Cancel
         </Button>
       </div>
-
-      <RentalDetailsEditor rental={rental} pending={pending} run={run} />
 
       <div className="mt-2 grid gap-2 sm:grid-cols-3">
         <div className="space-y-1">

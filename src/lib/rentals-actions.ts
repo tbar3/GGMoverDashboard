@@ -46,7 +46,15 @@ export async function createRental(input: {
   isIsuzu?: boolean;
   dailyRate?: number | null;
   notes?: string;
-  booked?: boolean;
+  /**
+   * Where in the lifecycle this rental already is. 'picked_up' means we are
+   * logging a truck we ALREADY have, which is not a label change — it has to do
+   * the same real work pickUpRental does, so truckName and warehouseId are
+   * required with it.
+   */
+  status?: 'planned' | 'booked' | 'picked_up';
+  truckName?: string;
+  warehouseId?: number;
 }): Promise<Result> {
   const guard = await requireBackOffice();
   if (!guard.ok) return { ok: false, error: 'Back office access required' };
@@ -61,30 +69,198 @@ export async function createRental(input: {
   // that is not HH:MM becomes NULL rather than an error: a missing pickup time is
   // not worth failing a booking over.
   const pickupTime = /^\d{2}:\d{2}$/.test(input.pickupTime ?? '') ? input.pickupTime : null;
+  const status = input.status ?? 'planned';
 
-  await query(
-    `INSERT INTO truck_rentals
+  const truckName = input.truckName?.trim();
+  if (status === 'picked_up' && (!truckName || !input.warehouseId)) {
+    return {
+      ok: false,
+      error: 'A truck we already have needs a name and a home warehouse',
+    };
+  }
+
+  const values = [
+    vendor,
+    input.vendorRef?.trim() || null,
+    input.size?.trim() || null,
+    input.neededFrom,
+    input.estReturnDate,
+    pickupTime,
+    input.hasRamp ?? false,
+    input.hasLiftgate ?? false,
+    input.isIsuzu ?? false,
+    status,
+    input.dailyRate ?? null,
+    input.notes?.trim() || null,
+    guard.employee.id,
+    guard.employee.name,
+  ];
+
+  const insert = `INSERT INTO truck_rentals
        (vendor, vendor_ref, size, needed_from, est_return_date, pickup_time,
         has_ramp, has_liftgate, is_isuzu, status,
         daily_rate, notes, created_by, created_by_name)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+     RETURNING id`;
+
+  if (status !== 'picked_up') {
+    await query(insert, values);
+    revalidate();
+    return { ok: true };
+  }
+
+  // Logging a truck already in the yard: the rental row, the materials truck and
+  // the fleet vehicle all land together or not at all.
+  try {
+    await withTransaction(async (client) => {
+      const rental = await client.query<{ id: string }>(insert, values);
+      const { truckId, vehicleId } = await setUpRentalTruck(
+        client,
+        truckName!,
+        input.warehouseId!
+      );
+      await client.query(
+        `UPDATE truck_rentals
+            SET picked_up_at = NOW(), truck_id = $2, vehicle_id = $3, updated_at = NOW()
+          WHERE id = $1`,
+        [rental.rows[0].id, truckId, vehicleId]
+      );
+    });
+  } catch {
+    return { ok: false, error: 'Could not set that truck up. Is the name already taken?' };
+  }
+
+  revalidate();
+  revalidatePath('/materials');
+  return { ok: true };
+}
+
+/**
+ * Create or revive the materials truck and its fleet vehicle for a rental.
+ *
+ * Shared by pickUpRental and by logging a rental that is already picked up —
+ * two entry points to the same physical event, and they must not drift apart.
+ * Both upserts key on name, so a Penske we have rented before comes back to life
+ * rather than colliding, and an existing vehicle row flips to 'rented', which is
+ * what keeps owned-truck capacity honest.
+ */
+async function setUpRentalTruck(
+  client: import('pg').PoolClient,
+  truckName: string,
+  warehouseId: number
+): Promise<{ truckId: number; vehicleId: string }> {
+  const truck = await client.query<{ id: number }>(
+    `INSERT INTO trucks (name, sort_order, warehouse_id)
+     VALUES ($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM trucks), $2)
+     ON CONFLICT (name) DO UPDATE
+        SET active = TRUE, warehouse_id = EXCLUDED.warehouse_id, updated_at = NOW()
+     RETURNING id`,
+    [truckName, warehouseId]
+  );
+  const truckId = truck.rows[0].id;
+
+  await client.query(
+    `INSERT INTO truck_stock (truck_id, material_id)
+     SELECT $1, id FROM materials
+     ON CONFLICT DO NOTHING`,
+    [truckId]
+  );
+
+  const vehicle = await client.query<{ id: string }>(
+    `INSERT INTO vehicles (name, truck_id, vehicle_type, ownership)
+     VALUES ($1, $2, 'box_truck', 'rented')
+     ON CONFLICT (name) DO UPDATE
+        SET truck_id = EXCLUDED.truck_id, ownership = 'rented',
+            active = TRUE, updated_at = NOW()
+     RETURNING id`,
+    [truckName, truckId]
+  );
+
+  return { truckId, vehicleId: vehicle.rows[0].id };
+}
+
+/**
+ * Edit a rental's details from its page. Everything except the lifecycle itself —
+ * status changes go through their own actions, which do the truck work.
+ */
+export async function updateRental(input: {
+  id: string;
+  vendor: string;
+  vendorRef?: string;
+  size?: string;
+  neededFrom: string;
+  estReturnDate: string;
+  pickupTime?: string;
+  hasRamp: boolean;
+  hasLiftgate: boolean;
+  isIsuzu: boolean;
+  dailyRate?: number | null;
+  notes?: string;
+}): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  const vendor = input.vendor.trim();
+  if (!vendor) return { ok: false, error: 'Which vendor?' };
+
+  const dateError = badDates(input.neededFrom, input.estReturnDate);
+  if (dateError) return { ok: false, error: dateError };
+
+  const pickupTime = /^\d{2}:\d{2}$/.test(input.pickupTime ?? '') ? input.pickupTime : null;
+
+  const row = await queryOne<{ id: string }>(
+    `UPDATE truck_rentals
+        SET vendor = $2, vendor_ref = $3, size = $4, needed_from = $5,
+            est_return_date = $6, pickup_time = $7, has_ramp = $8,
+            has_liftgate = $9, is_isuzu = $10, daily_rate = $11, notes = $12,
+            updated_at = NOW()
+      WHERE id = $1
+      RETURNING id`,
     [
+      input.id,
       vendor,
       input.vendorRef?.trim() || null,
       input.size?.trim() || null,
       input.neededFrom,
       input.estReturnDate,
       pickupTime,
-      input.hasRamp ?? false,
-      input.hasLiftgate ?? false,
-      input.isIsuzu ?? false,
-      input.booked ? 'booked' : 'planned',
+      input.hasRamp,
+      input.hasLiftgate,
+      input.isIsuzu,
       input.dailyRate ?? null,
       input.notes?.trim() || null,
-      guard.employee.id,
-      guard.employee.name,
     ]
   );
+  if (!row) return { ok: false, error: 'That rental is gone' };
+
+  revalidate();
+  revalidatePath(`/admin/rentals/${input.id}`);
+  return { ok: true };
+}
+
+/**
+ * Delete a rental outright.
+ *
+ * Its offload checks go with it (ON DELETE CASCADE). This is for records logged
+ * in error — a rental that really happened is history worth keeping, so the UI
+ * asks before calling this. A truck still out is deactivated first via the
+ * return flow; deleting one would leave the materials truck active with nothing
+ * pointing at it.
+ */
+export async function deleteRental(id: string): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  const rental = await queryOne<{ status: string }>(
+    'SELECT status FROM truck_rentals WHERE id = $1',
+    [id]
+  );
+  if (!rental) return { ok: false, error: 'That rental is already gone' };
+  if (rental.status === 'picked_up') {
+    return { ok: false, error: 'Return it first — the truck is still out' };
+  }
+
+  await query('DELETE FROM truck_rentals WHERE id = $1', [id]);
   revalidate();
   return { ok: true };
 }
@@ -191,41 +367,14 @@ export async function pickUpRental(input: {
 
   try {
     await withTransaction(async (client) => {
-      const truck = await client.query<{ id: number }>(
-        `INSERT INTO trucks (name, sort_order, warehouse_id)
-         VALUES ($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM trucks), $2)
-         ON CONFLICT (name) DO UPDATE
-            SET active = TRUE, warehouse_id = EXCLUDED.warehouse_id, updated_at = NOW()
-         RETURNING id`,
-        [truckName, input.warehouseId]
-      );
-      const truckId = truck.rows[0].id;
-
-      // Give it a stock row per material, the same way the materials admin does,
-      // so crews can load it and the offload check has something to read.
-      await client.query(
-        `INSERT INTO truck_stock (truck_id, material_id)
-         SELECT $1, id FROM materials
-         ON CONFLICT DO NOTHING`,
-        [truckId]
-      );
-
-      const vehicle = await client.query<{ id: string }>(
-        `INSERT INTO vehicles (name, truck_id, vehicle_type, ownership)
-         VALUES ($1, $2, 'box_truck', 'rented')
-         ON CONFLICT (name) DO UPDATE
-            SET truck_id = EXCLUDED.truck_id, ownership = 'rented',
-                active = TRUE, updated_at = NOW()
-         RETURNING id`,
-        [truckName, truckId]
-      );
+      const { truckId, vehicleId } = await setUpRentalTruck(client, truckName, input.warehouseId);
 
       await client.query(
         `UPDATE truck_rentals
             SET status = 'picked_up', picked_up_at = NOW(),
                 truck_id = $2, vehicle_id = $3, updated_at = NOW()
           WHERE id = $1`,
-        [input.id, truckId, vehicle.rows[0].id]
+        [input.id, truckId, vehicleId]
       );
     });
   } catch {

@@ -3,6 +3,29 @@
 
 export type RentalStatus = 'planned' | 'booked' | 'picked_up' | 'returned' | 'cancelled';
 
+/**
+ * What each status is called on screen.
+ *
+ * The stored value stays `planned` while the label reads "Needs booking":
+ * renaming a CHECK-constrained value means a migration and a data rewrite for a
+ * word nobody sees. "Out now" and "picked up" are the same state — a truck in
+ * our hands — so there is one status, not two.
+ */
+export const RENTAL_STATUS_LABEL: Record<RentalStatus, string> = {
+  planned: 'Needs booking',
+  booked: 'Booked',
+  picked_up: 'Out now',
+  returned: 'Returned',
+  cancelled: 'Cancelled',
+};
+
+/** The statuses a rental can be logged AS, in lifecycle order. */
+export const LOGGABLE_STATUSES: { value: 'planned' | 'booked' | 'picked_up'; label: string }[] = [
+  { value: 'planned', label: 'Needs booking' },
+  { value: 'booked', label: 'Booked' },
+  { value: 'picked_up', label: 'Picked up — already have it' },
+];
+
 export interface TruckRental {
   id: string;
   vendor: string;

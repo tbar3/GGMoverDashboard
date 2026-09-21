@@ -2,6 +2,7 @@ import {
   Users,
   UserPlus,
   CalendarSync,
+  CalendarClock,
   Car,
   AlertTriangle,
   Star,
@@ -172,6 +173,13 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         href: '/admin/hiring',
         description: 'Interview scorecards and candidates',
         icon: UserPlus,
+        group: 'Team',
+      },
+      {
+        title: 'Crew Meetings',
+        href: '/admin/meetings',
+        description: 'Quarterly reviews, feedback, and catch-ups — booked and recorded',
+        icon: CalendarClock,
         group: 'Team',
       },
       {

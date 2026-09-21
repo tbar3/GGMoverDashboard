@@ -50,7 +50,7 @@ export async function logPositive(input: {
      VALUES ($1, $2, $3, $4, $5, $6, 'manual', $7)`,
     [input.employeeId, weekStartOf(effective), input.type, date, effective, input.note?.trim() || null, guard.employee.id]
   );
-  revalidatePath('/admin/performance');
+  revalidatePath('/admin/weekly-bonus');
   return { ok: true };
 }
 
@@ -73,7 +73,7 @@ export async function logGGPoint(input: {
      VALUES ($1, $2, 'GG_POINT', $3, $4, $5, 'manual', $6, TRUE)`,
     [input.employeeId, weekStartOf(effective), date, effective, input.note?.trim() || null, guard.employee.id]
   );
-  revalidatePath('/admin/performance');
+  revalidatePath('/admin/weekly-bonus');
   return { ok: true };
 }
 
@@ -109,7 +109,7 @@ export async function logStrike(input: {
   // Policy: 3 active strikes in a week auto-generates a write-up (one per week).
   await maybeAutoWriteUp(input.employeeId, weekStart, date, guard.employee.id);
 
-  revalidatePath('/admin/performance');
+  revalidatePath('/admin/weekly-bonus');
   return { ok: true };
 }
 
@@ -200,7 +200,7 @@ export async function logWriteUp(input: {
      VALUES ($1, $2, $3, $4, $5, $6)`,
     [input.employeeId, weekStartOf(effective), date, effective, summary, guard.employee.id]
   );
-  revalidatePath('/admin/performance');
+  revalidatePath('/admin/weekly-bonus');
   return { ok: true };
 }
 
@@ -272,7 +272,7 @@ export async function logGroupEvent(input: {
     }
   }
 
-  revalidatePath('/admin/performance');
+  revalidatePath('/admin/weekly-bonus');
   return { ok: true, count: crew.length };
 }
 
@@ -283,7 +283,7 @@ export async function saveJobCrew(jobId: string, employeeIds: string[]): Promise
   if (!jobId) return { ok: false, error: 'Pick a job' };
   const crew = Array.from(new Set((employeeIds ?? []).filter(Boolean)));
   await query('UPDATE jobs SET crew_ids = $2 WHERE id = $1', [jobId, crew]);
-  revalidatePath('/admin/performance');
+  revalidatePath('/admin/weekly-bonus');
   return { ok: true };
 }
 
@@ -316,7 +316,7 @@ export async function voidStrike(strikeId: string, reason: string): Promise<Resu
     }
   }
 
-  revalidatePath('/admin/performance');
+  revalidatePath('/admin/weekly-bonus');
   return { ok: true };
 }
 
@@ -324,7 +324,7 @@ export async function deletePositive(id: string): Promise<Result> {
   const guard = await requireBackOffice();
   if (!guard.ok) return { ok: false, error: 'Back office access required' };
   await query('DELETE FROM bonus_positives WHERE id = $1', [id]);
-  revalidatePath('/admin/performance');
+  revalidatePath('/admin/weekly-bonus');
   return { ok: true };
 }
 
@@ -391,7 +391,7 @@ export async function approveWeek(weekStartRaw: string): Promise<Result> {
     [weekStart, guard.employee.id]
   );
 
-  revalidatePath('/admin/performance');
+  revalidatePath('/admin/weekly-bonus');
   return { ok: true };
 }
 
@@ -404,7 +404,7 @@ export async function reopenWeek(weekStartRaw: string): Promise<Result> {
 
   await query('DELETE FROM bonus_week_results WHERE week_start = $1', [weekStart]);
   await query(`UPDATE bonus_weeks SET status = 'open', approved_by = NULL, approved_at = NULL WHERE week_start = $1`, [weekStart]);
-  revalidatePath('/admin/performance');
+  revalidatePath('/admin/weekly-bonus');
   return { ok: true };
 }
 
@@ -433,7 +433,7 @@ export async function addAdjustment(input: {
      VALUES ($1, $2, $3, $4, $5)`,
     [weekStart, input.employeeId, delta, reason, guard.employee.id]
   );
-  revalidatePath('/admin/performance');
+  revalidatePath('/admin/weekly-bonus');
   return { ok: true };
 }
 
@@ -441,6 +441,6 @@ export async function deleteAdjustment(id: string): Promise<Result> {
   const guard = await requireBackOffice();
   if (!guard.ok) return { ok: false, error: 'Back office access required' };
   await query('DELETE FROM bonus_adjustments WHERE id = $1', [id]);
-  revalidatePath('/admin/performance');
+  revalidatePath('/admin/weekly-bonus');
   return { ok: true };
 }

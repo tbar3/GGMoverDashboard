@@ -132,7 +132,7 @@ export function CloseWeekControls({
                 The weekly bonus for this week is{' '}
                 {bonusWeekStatus === 'open' ? 'still open' : 'not set up yet'}, so the bonus figures
                 below are provisional and can still change. Approve the bonus week on{' '}
-                <a href="/admin/performance" className="underline">Performance</a> before closing
+                <a href="/admin/weekly-bonus" className="underline">Weekly Bonus</a> before closing
                 payroll.
               </span>
             </p>

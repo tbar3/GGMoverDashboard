@@ -206,7 +206,7 @@ export default function MorningMeetingBoard({
           {board.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Nothing new since the last meeting. Positives logged on{' '}
-              <span className="font-medium text-foreground">Performance</span> land here the moment
+              <span className="font-medium text-foreground">Weekly Bonus</span> land here the moment
               they&apos;re recorded.
             </p>
           ) : (

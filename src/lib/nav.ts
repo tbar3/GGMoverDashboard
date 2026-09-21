@@ -199,8 +199,8 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         group: 'Pay',
       },
       {
-        title: 'Performance',
-        href: '/admin/performance',
+        title: 'Weekly Bonus',
+        href: '/admin/weekly-bonus',
         description: 'Attendance, strikes, and positives that drive the weekly bonus',
         icon: Star,
         group: 'Pay',

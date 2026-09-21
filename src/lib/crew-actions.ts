@@ -65,7 +65,7 @@ export async function respondToJob(
   revalidatePath('/dashboard');
   revalidatePath('/jobs');
   revalidatePath('/admin');
-  revalidatePath('/admin/performance');
+  revalidatePath('/admin/weekly-bonus');
   return { ok: true };
 }
 

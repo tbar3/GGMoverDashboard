@@ -34,7 +34,7 @@ export async function assignReviewAction(
 
   const res = await creditQueuedReviewToJob(reviewRowId, jobId);
   revalidatePath('/admin/reviews');
-  revalidatePath('/admin/performance');
+  revalidatePath('/admin/weekly-bonus');
   return res;
 }
 

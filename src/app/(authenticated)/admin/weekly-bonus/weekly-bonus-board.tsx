@@ -83,7 +83,7 @@ interface FlatEvent {
   voidReason?: string | null;
 }
 
-export default function PerformanceBoard({
+export default function WeeklyBonusBoard({
   board,
   employees,
   weekStart,
@@ -394,13 +394,13 @@ export default function PerformanceBoard({
     <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Performance</h1>
+          <h1 className="text-2xl font-bold text-foreground">Weekly Bonus</h1>
           <p className="text-muted-foreground mt-1">
             Positives lift the weekly bonus multiplier; any strike forfeits the week.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href={`/admin/performance?week=${prevWeek}`}>
+          <Link href={`/admin/weekly-bonus?week=${prevWeek}`}>
             <Button variant="outline" size="icon" aria-label="Previous week">
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -409,7 +409,7 @@ export default function PerformanceBoard({
             {weekLabel}
             {isCurrentWeek && <span className="text-muted-foreground font-normal"> · this week</span>}
           </span>
-          <Link href={`/admin/performance?week=${nextWeek}`}>
+          <Link href={`/admin/weekly-bonus?week=${nextWeek}`}>
             <Button variant="outline" size="icon" aria-label="Next week">
               <ChevronRight className="h-4 w-4" />
             </Button>

@@ -117,7 +117,8 @@ export async function createRental(input: {
       const { truckId, vehicleId } = await setUpRentalTruck(
         client,
         truckName!,
-        input.warehouseId!
+        input.warehouseId!,
+        rental.rows[0].id
       );
       await client.query(
         `UPDATE truck_rentals
@@ -126,7 +127,13 @@ export async function createRental(input: {
         [rental.rows[0].id, truckId, vehicleId]
       );
     });
-  } catch {
+  } catch (err) {
+    if ((err as Error).message === 'TRUCK_ALREADY_OUT') {
+      return {
+        ok: false,
+        error: `"${truckName}" is already out on another rental — give this one a different name`,
+      };
+    }
     return { ok: false, error: 'Could not set that truck up. Is the name already taken?' };
   }
 
@@ -147,8 +154,27 @@ export async function createRental(input: {
 async function setUpRentalTruck(
   client: import('pg').PoolClient,
   truckName: string,
-  warehouseId: number
+  warehouseId: number,
+  rentalId?: string
 ): Promise<{ truckId: number; vehicleId: string }> {
+  // Reusing a name ACROSS TIME is the point — a Penske we rented last month comes
+  // back rather than piling up dead rows. Reusing it for two rentals out AT ONCE
+  // is a different thing entirely: they would share one truck, so materials
+  // loaded for one would be indistinguishable from the other and returning
+  // either would deactivate the truck the other is still using. This happened in
+  // production before the check existed.
+  const clash = await client.query<{ id: string }>(
+    `SELECT r.id
+       FROM truck_rentals r
+       JOIN trucks t ON t.id = r.truck_id
+      WHERE r.status = 'picked_up'
+        AND t.name = $1
+        AND ($2::uuid IS NULL OR r.id <> $2::uuid)
+      LIMIT 1`,
+    [truckName, rentalId ?? null]
+  );
+  if (clash.rowCount) throw new Error('TRUCK_ALREADY_OUT');
+
   const truck = await client.query<{ id: number }>(
     `INSERT INTO trucks (name, sort_order, warehouse_id)
      VALUES ($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM trucks), $2)
@@ -367,7 +393,12 @@ export async function pickUpRental(input: {
 
   try {
     await withTransaction(async (client) => {
-      const { truckId, vehicleId } = await setUpRentalTruck(client, truckName, input.warehouseId);
+      const { truckId, vehicleId } = await setUpRentalTruck(
+        client,
+        truckName,
+        input.warehouseId,
+        input.id
+      );
 
       await client.query(
         `UPDATE truck_rentals
@@ -377,7 +408,13 @@ export async function pickUpRental(input: {
         [input.id, truckId, vehicleId]
       );
     });
-  } catch {
+  } catch (err) {
+    if ((err as Error).message === 'TRUCK_ALREADY_OUT') {
+      return {
+        ok: false,
+        error: `"${truckName}" is already out on another rental — give this one a different name`,
+      };
+    }
     return { ok: false, error: 'Could not set that truck up. Is the name already taken?' };
   }
 

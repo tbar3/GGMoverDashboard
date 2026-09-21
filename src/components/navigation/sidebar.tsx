@@ -20,7 +20,18 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useState, useRef, useEffect } from 'react';
 import { useClerk } from '@clerk/nextjs';
 import { useI18n } from '@/lib/i18n';
-import { LIVE_AREAS } from '@/lib/nav';
+import { AreaRail } from '@/components/navigation/area-rail';
+import { AreaPanel } from '@/components/navigation/area-panel';
+import { AreaAccordion } from '@/components/navigation/area-accordion';
+
+/**
+ * Two audiences, two shapes.
+ *
+ * Crew get one short column — five links does not need two levels, and this path
+ * is deliberately unchanged. Back office get the area rail plus a panel of the
+ * current area's modules, because twenty-five links in one column was taller than
+ * the viewport.
+ */
 
 interface NavItem {
   titleKey: string;
@@ -83,13 +94,6 @@ const employeeNavItems: NavItem[] = [
   },
 ];
 
-/** The hub home — the back-office landing page that sits above the grouped areas. */
-const hubHome = {
-  title: 'Company Hub',
-  href: '/admin',
-  icon: <LayoutDashboard className="h-5 w-5" />,
-};
-
 interface SidebarProps {
   isAdmin: boolean;
   userName: string;
@@ -100,32 +104,97 @@ interface SidebarProps {
   badges?: Record<string, number>;
 }
 
-function NavContent({ isAdmin, userName, badges, onLogout }: SidebarProps & { onLogout: () => void }) {
-  const pathname = usePathname();
+function Logo({ size = 'lg' }: { size?: 'lg' | 'sm' }) {
+  return (
+    <Link href="/dashboard" className="flex items-center">
+      <Image
+        src="/brand/goodguys-wordmark.png"
+        alt="GoodGuys Concierge Moving & Storage"
+        width={6933}
+        height={1766}
+        priority
+        sizes={size === 'lg' ? '200px' : '160px'}
+        className={size === 'lg' ? 'h-9 w-auto' : 'h-7 w-auto'}
+      />
+    </Link>
+  );
+}
+
+/** Language toggle and the signed-in user. Identical for both audiences. */
+function NavFooter({
+  userName,
+  isAdmin,
+  onLogout,
+}: {
+  userName: string;
+  isAdmin: boolean;
+  onLogout: () => void;
+}) {
   const { t, locale, setLocale } = useI18n();
 
-  function getTitle(item: NavItem) {
-    if (item.titleKey) return t(item.titleKey);
-    return item.fallback;
-  }
+  return (
+    <div className="border-t border-sidebar-border p-4 space-y-3">
+      <div className="flex items-center justify-center gap-1 rounded-lg bg-sidebar-accent p-1">
+        <button
+          onClick={() => setLocale('en')}
+          className={cn(
+            'flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+            locale === 'en'
+              ? 'bg-sidebar text-sidebar-foreground shadow'
+              : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'
+          )}
+        >
+          English
+        </button>
+        <button
+          onClick={() => setLocale('es')}
+          className={cn(
+            'flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+            locale === 'es'
+              ? 'bg-sidebar text-sidebar-foreground shadow'
+              : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'
+          )}
+        >
+          Español
+        </button>
+      </div>
 
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-light-blue text-brand-navy font-semibold">
+            {userName.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <p className="text-sm font-medium text-sidebar-foreground">{userName}</p>
+            <p className="text-xs text-sidebar-foreground/60">{isAdmin ? 'Admin' : t('nav.crew')}</p>
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onLogout}
+          aria-label="Sign out"
+          className="text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+        >
+          <LogOut className="h-5 w-5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The crew column — unchanged.
+ *
+ * Keeps the scroll-into-view effect: this list can still outrun a short phone
+ * viewport. The back-office nav no longer needs it, because the panel shows one
+ * area at a time rather than all twenty-five links at once.
+ */
+function CrewNav({ userName, isAdmin, onLogout }: SidebarProps & { onLogout: () => void }) {
+  const pathname = usePathname();
+  const { t } = useI18n();
   const navRef = useRef<HTMLElement>(null);
 
-  /**
-   * Keep the current page's link visible in the nav.
-   *
-   * The back-office nav is 25 links across four groups — taller than the viewport —
-   * and its scroll position survives client-side navigation. Without this you can
-   * land on a page with the nav parked somewhere unrelated and no hint that there
-   * is more above, which reads as "the link isn't there".
-   *
-   * Only the nav's own scrollTop is touched; scrollIntoView would also move the
-   * page behind it.
-   *
-   * Measured with getBoundingClientRect, NOT offsetTop: the nav is not a
-   * positioned element, so offsetTop resolves against the fixed <aside> and is in
-   * a different coordinate space from scrollTop. Rects are always comparable.
-   */
   useEffect(() => {
     const nav = navRef.current;
     const active = nav?.querySelector<HTMLElement>('[data-active="true"]');
@@ -133,148 +202,70 @@ function NavContent({ isAdmin, userName, badges, onLogout }: SidebarProps & { on
     const navBox = nav.getBoundingClientRect();
     const itemBox = active.getBoundingClientRect();
     if (itemBox.top < navBox.top || itemBox.bottom > navBox.bottom) {
-      // Leave a little context above rather than pinning it to the very edge.
       nav.scrollTop += itemBox.top - navBox.top - nav.clientHeight / 3;
     }
   }, [pathname]);
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-      {/* Logo */}
       <div className="flex h-20 items-center border-b border-sidebar-border px-6">
-        <Link href="/dashboard" className="flex items-center">
-          <Image
-            src="/brand/goodguys-wordmark.png"
-            alt="GoodGuys Concierge Moving & Storage"
-            width={6933}
-            height={1766}
-            priority
-            sizes="200px"
-            className="h-9 w-auto"
-          />
-        </Link>
+        <Logo />
       </div>
-
-      {/* Navigation */}
       <nav ref={navRef} className="flex-1 overflow-y-auto p-4">
-        {/* Crew section — crew only. Back office get the admin nav instead and
-            never see the crew "My Dashboard" surface. */}
-        {!isAdmin && (
-          <div className="space-y-1">
-            <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
-              {t('nav.my_dashboard')}
-            </p>
-            {employeeNavItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                data-active={pathname === item.href}
-                className={cn(linkClass, pathname === item.href ? activeClass : idleClass)}
-              >
-                {item.icon}
-                {getTitle(item)}
-              </Link>
-            ))}
-          </div>
-        )}
-
-        {/* Back-office Sections — one group per live area, from the shared nav config. */}
-        {isAdmin && (
-          <>
-            <div className="mt-6 space-y-1">
-              <Link
-                href={hubHome.href}
-                data-active={pathname === hubHome.href}
-                className={cn(linkClass, pathname === hubHome.href ? activeClass : idleClass)}
-              >
-                {hubHome.icon}
-                {hubHome.title}
-              </Link>
-            </div>
-
-            {LIVE_AREAS.map((area) => (
-              <div key={area.key} className="mt-6 space-y-1">
-                <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
-                  {area.label}
-                </p>
-                {area.items.map((item) => {
-                  const Icon = item.icon;
-                  const count = item.badgeKey ? badges?.[item.badgeKey] ?? 0 : 0;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      data-active={pathname === item.href}
-                      className={cn(
-                        linkClass,
-                        pathname === item.href ? activeClass : idleClass
-                      )}
-                    >
-                      <Icon className="h-5 w-5" />
-                      <span className="flex-1">{item.title}</span>
-                      {count > 0 && (
-                        <span
-                          aria-label={`${count} need attention`}
-                          className="rounded-full bg-destructive px-1.5 py-0.5 text-xs font-semibold text-white"
-                        >
-                          {count}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
-            ))}
-          </>
-        )}
+        <div className="space-y-1">
+          <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
+            {t('nav.my_dashboard')}
+          </p>
+          {employeeNavItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              data-active={pathname === item.href}
+              className={cn(linkClass, pathname === item.href ? activeClass : idleClass)}
+            >
+              {item.icon}
+              {item.titleKey ? t(item.titleKey) : item.fallback}
+            </Link>
+          ))}
+        </div>
       </nav>
+      <NavFooter userName={userName} isAdmin={isAdmin} onLogout={onLogout} />
+    </div>
+  );
+}
 
-      {/* Language Toggle + User Section */}
-      <div className="border-t border-sidebar-border p-4 space-y-3">
-        {/* Language Toggle */}
-        <div className="flex items-center justify-center gap-1 rounded-lg bg-sidebar-accent p-1">
-          <button
-            onClick={() => setLocale('en')}
-            className={cn(
-              'flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-              locale === 'en' ? 'bg-sidebar text-sidebar-foreground shadow' : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'
-            )}
-          >
-            English
-          </button>
-          <button
-            onClick={() => setLocale('es')}
-            className={cn(
-              'flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-              locale === 'es' ? 'bg-sidebar text-sidebar-foreground shadow' : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'
-            )}
-          >
-            Español
-          </button>
+/** Back office, desktop: rail of areas + panel of the current area's modules. */
+function BackOfficeNav({ userName, isAdmin, badges, onLogout }: SidebarProps & { onLogout: () => void }) {
+  return (
+    <div className="flex h-full bg-sidebar text-sidebar-foreground">
+      <AreaRail badges={badges} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex h-20 items-center border-b border-sidebar-border px-4">
+          <Logo />
         </div>
-
-        {/* User */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-light-blue text-brand-navy font-semibold">
-              {userName.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <p className="text-sm font-medium text-sidebar-foreground">{userName}</p>
-              <p className="text-xs text-sidebar-foreground/60">{isAdmin ? 'Admin' : t('nav.crew')}</p>
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onLogout}
-            aria-label="Sign out"
-            className="text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-          >
-            <LogOut className="h-5 w-5" />
-          </Button>
-        </div>
+        <AreaPanel badges={badges} />
+        <NavFooter userName={userName} isAdmin={isAdmin} onLogout={onLogout} />
       </div>
+    </div>
+  );
+}
+
+/** Back office, touch: one column, areas expand in place. */
+function BackOfficeSheetNav({
+  userName,
+  isAdmin,
+  badges,
+  onLogout,
+}: SidebarProps & { onLogout: () => void }) {
+  return (
+    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+      <div className="flex h-20 items-center border-b border-sidebar-border px-6">
+        <Logo />
+      </div>
+      <nav className="flex-1 overflow-y-auto p-4">
+        <AreaAccordion badges={badges} />
+      </nav>
+      <NavFooter userName={userName} isAdmin={isAdmin} onLogout={onLogout} />
     </div>
   );
 }
@@ -287,21 +278,22 @@ export function Sidebar({ isAdmin, userName, badges }: SidebarProps) {
     signOut({ redirectUrl: '/login' });
   }
 
+  const sheetContent = isAdmin ? (
+    <BackOfficeSheetNav
+      isAdmin={isAdmin}
+      userName={userName}
+      badges={badges}
+      onLogout={handleLogout}
+    />
+  ) : (
+    <CrewNav isAdmin={isAdmin} userName={userName} badges={badges} onLogout={handleLogout} />
+  );
+
   return (
     <>
       {/* Mobile Menu */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 flex h-16 items-center justify-between border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground">
-        <Link href="/dashboard" className="flex items-center">
-          <Image
-            src="/brand/goodguys-wordmark.png"
-            alt="GoodGuys Concierge Moving & Storage"
-            width={6933}
-            height={1766}
-            priority
-            sizes="160px"
-            className="h-7 w-auto"
-          />
-        </Link>
+        <Logo size="sm" />
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
             <Button
@@ -312,15 +304,31 @@ export function Sidebar({ isAdmin, userName, badges }: SidebarProps) {
               <Menu className="h-6 w-6" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-64 p-0 bg-sidebar border-sidebar-border">
-            <NavContent isAdmin={isAdmin} userName={userName} badges={badges} onLogout={handleLogout} />
+          <SheetContent side="left" className="w-72 p-0 bg-sidebar border-sidebar-border">
+            {sheetContent}
           </SheetContent>
         </Sheet>
       </div>
 
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block lg:w-64 lg:border-r lg:border-sidebar-border">
-        <NavContent isAdmin={isAdmin} userName={userName} badges={badges} onLogout={handleLogout} />
+      {/* Desktop Sidebar. Width is a constant per audience so the layout can
+          reserve it without knowing the pathname: 296px for the rail + panel,
+          256px for the single crew column. */}
+      <aside
+        className={cn(
+          'hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block lg:border-r lg:border-sidebar-border',
+          isAdmin ? 'lg:w-[296px]' : 'lg:w-64'
+        )}
+      >
+        {isAdmin ? (
+          <BackOfficeNav
+            isAdmin={isAdmin}
+            userName={userName}
+            badges={badges}
+            onLogout={handleLogout}
+          />
+        ) : (
+          <CrewNav isAdmin={isAdmin} userName={userName} badges={badges} onLogout={handleLogout} />
+        )}
       </aside>
     </>
   );

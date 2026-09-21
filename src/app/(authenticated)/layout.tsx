@@ -38,7 +38,10 @@ export default async function AuthenticatedLayout({
     <I18nWrapper>
       <div className="min-h-screen bg-muted">
         <Sidebar isAdmin={isAdmin} userName={userName} badges={{ compliance: complianceCount }} />
-        <main className="lg:pl-64">
+        {/* Matches the sidebar width exactly: the back-office rail + panel is
+            296px, the crew column 256px. Constant per audience, so nothing has to
+            know the current pathname to size the page. */}
+        <main className={isAdmin ? 'lg:pl-[296px]' : 'lg:pl-64'}>
           <div className="pt-16 lg:pt-0">
             {children}
           </div>

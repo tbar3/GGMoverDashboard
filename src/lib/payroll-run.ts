@@ -45,6 +45,12 @@ export interface PayrollDetailRow {
   regularHours: number;
   overtimeHours: number;
   totalCompensation: number; // base (hours×rate) + OT premium + tips + commissions + bonus + miles
+  /**
+   * True when this row exists only because of marketing hours — the person had no
+   * row in the imported payroll report. Their rate is hand-entered rather than
+   * imported, so the Rate cell is editable for them and read-only for everyone else.
+   */
+  marketingOnly: boolean;
   // Which fields are currently overridden (raw override value, or null).
   ov: {
     warehouse: number | null;
@@ -219,6 +225,8 @@ interface BaseRow {
   miles: number | null;
   period_start: string | null;
   period_end: string | null;
+  /** Set only on rows synthesised from marketing_hours; absent on imported rows. */
+  marketing_only?: boolean;
 }
 interface OverrideRow {
   employee_id: string;
@@ -284,7 +292,7 @@ export async function getWeekBonus(weekStart: string): Promise<WeekBonus> {
  */
 export async function computePayrollRun(weekStart: string): Promise<PayrollRun> {
   const weekEnd = format(addDays(new Date(`${weekStart}T12:00:00`), 6), 'yyyy-MM-dd');
-  const [entries, weekBonus, overrides, marketing, mileage] = await Promise.all([
+  const [imported, weekBonus, overrides, marketing, mileage, marketingOnlyRows] = await Promise.all([
     query<BaseRow>(
       `SELECT pe.employee_id, e.name, e.classification, e.is_active, e.annual_salary,
               pe.billable_hours, pe.warehouse_hours, pe.hourly_rate, pe.tip, pe.commissions, pe.miles,
@@ -312,12 +320,47 @@ export async function computePayrollRun(weekStart: string): Promise<PayrollRun> 
         GROUP BY employee_id`,
       [weekStart, weekEnd]
     ),
+    // People who did marketing this week and never went out on a move. They have no
+    // row in the imported report, so without this they are invisible to payroll and
+    // do not get paid. Rate cannot be inherited from an import that does not mention
+    // them, hence marketing_hours.hourly_rate falling back to the employee record.
+    //
+    // hours > 0 matters: saveMarketingHours permits 0, and a zero-hour entry would
+    // otherwise conjure a phantom $0 line into the run.
+    //
+    // Period dates are NULL so these rows can never win the periodStart/periodEnd
+    // race below against a real imported row, which is where those dates belong.
+    query<BaseRow>(
+      `SELECT mh.employee_id, e.name, e.classification, e.is_active, e.annual_salary,
+              0 AS billable_hours, 0 AS warehouse_hours,
+              COALESCE(mh.hourly_rate, e.hourly_rate, 0) AS hourly_rate,
+              0 AS tip, 0 AS commissions, 0 AS miles,
+              NULL::text AS period_start, NULL::text AS period_end,
+              TRUE AS marketing_only
+         FROM marketing_hours mh
+         JOIN employees e ON e.id = mh.employee_id
+        WHERE mh.week_start = $1
+          AND mh.hours > 0
+          AND NOT EXISTS (
+                SELECT 1 FROM payroll_entries pe
+                 WHERE pe.employee_id = mh.employee_id
+                   AND pe.week_start = mh.week_start
+              )
+        ORDER BY e.name`,
+      [weekStart]
+    ),
   ]);
 
   const bonusByEmp = weekBonus.byEmployee;
   const ovByEmp = new Map(overrides.map((o) => [o.employee_id, o]));
   const mktByEmp = new Map(marketing.map((m) => [m.employee_id, num(m.hours)]));
   const milesByEmp = new Map(mileage.map((m) => [m.employee_id, num(m.amount)]));
+
+  // One roster, two sources. Marketing-only people are appended rather than handled
+  // separately so the pay arithmetic below runs once for everyone — payroll-compute.ts
+  // documents that block as the reference implementation of a week's pay, and a second
+  // copy of it is exactly the thing that drifts.
+  const entries: BaseRow[] = [...imported, ...marketingOnlyRows];
 
   const w2: AdpW2Row[] = [];
   const contractors1099: Adp1099Row[] = [];
@@ -387,6 +430,7 @@ export async function computePayrollRun(weekStart: string): Promise<PayrollRun> 
       regularHours: reg,
       overtimeHours: ot,
       totalCompensation,
+      marketingOnly: e.marketing_only === true,
       ov: {
         warehouse: ov?.warehouse_hours != null ? num(ov.warehouse_hours) : null,
         tips: ov?.tips != null ? num(ov.tips) : null,
@@ -534,6 +578,8 @@ async function hydrateClosedRun(meta: ClosedRunMeta): Promise<PayrollRun> {
       regularHours: num(l.regular_hours),
       overtimeHours: num(l.overtime_hours),
       totalCompensation: num(l.total_compensation),
+      // A closed week is frozen, so nothing on it is editable — marketing-only or not.
+      marketingOnly: false,
       // A closed line IS the decision; there is no longer a pending override to show.
       ov: { warehouse: null, tips: null, commissions: null, bonus: null, miles: null },
     });

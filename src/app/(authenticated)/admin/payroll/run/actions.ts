@@ -21,6 +21,146 @@ function validWeek(w: string): boolean {
 }
 
 /**
+ * Put someone on the payroll run who is not in the imported report.
+ *
+ * Someone who did marketing all week and never went out on a move has no row in
+ * the SmartMoving report, so the run cannot see them and they do not get paid.
+ * Writing marketing hours for them is what puts them on the roster —
+ * computePayrollRun unions marketing_hours into its roster for exactly this case.
+ *
+ * The rate is stored alongside, because rate normally arrives per-week on the
+ * imported row and there is no imported row to carry it.
+ */
+export async function addMarketingRow(
+  employeeId: string,
+  weekStart: string,
+  hours: number,
+  rate: number | null
+): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  if (!employeeId || !validWeek(weekStart)) return { ok: false, error: 'Bad input' };
+  if (!Number.isFinite(hours) || hours <= 0) {
+    return { ok: false, error: 'Enter the hours worked — a zero-hour row would not pay anything' };
+  }
+  if (rate != null && (!Number.isFinite(rate) || rate < 0)) {
+    return { ok: false, error: 'Rate must be a positive number' };
+  }
+
+  // Someone already in the run is corrected through the existing cells, not given a
+  // second row — and a duplicate would double-pay them.
+  const [existing] = await query<{ n: number }>(
+    'SELECT COUNT(*)::int AS n FROM payroll_entries WHERE employee_id = $1 AND week_start = $2',
+    [employeeId, weekStart]
+  );
+  if (existing && existing.n > 0) {
+    return {
+      ok: false,
+      error: 'That person is already on this run from the imported report — edit their row instead.',
+    };
+  }
+
+  await query(
+    `INSERT INTO marketing_hours (employee_id, week_start, hours, hourly_rate, entered_by)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (employee_id, week_start)
+       DO UPDATE SET hours = $3, hourly_rate = $4, entered_by = $5, updated_at = NOW()`,
+    [employeeId, weekStart, hours, rate, guard.employee.id]
+  );
+
+  await logChange({
+    weekStart,
+    employeeId,
+    scope: 'marketing',
+    field: 'manual_row',
+    oldValue: null,
+    newValue: `${hours}h @ $${rate ?? 'employee rate'}`,
+    changedBy: guard.employee.id,
+    changedByName: guard.employee.name,
+  });
+
+  revalidatePath('/admin/payroll');
+  revalidatePath('/admin/payroll/run');
+  return { ok: true };
+}
+
+/**
+ * Set the hourly rate on a marketing-only row. Imported rows carry their rate from
+ * the report and are not editable here; these rows have nowhere else to get one.
+ */
+export async function saveMarketingRate(
+  employeeId: string,
+  weekStart: string,
+  rate: number | null
+): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  if (!employeeId || !validWeek(weekStart)) return { ok: false, error: 'Bad input' };
+  if (rate != null && (!Number.isFinite(rate) || rate < 0)) {
+    return { ok: false, error: 'Rate must be a positive number' };
+  }
+
+  const before = await queryOne<{ hourly_rate: number | null }>(
+    'SELECT hourly_rate FROM marketing_hours WHERE employee_id = $1 AND week_start = $2',
+    [employeeId, weekStart]
+  );
+  if (!before) return { ok: false, error: 'No marketing row for that week' };
+
+  await query(
+    'UPDATE marketing_hours SET hourly_rate = $3, updated_at = NOW() WHERE employee_id = $1 AND week_start = $2',
+    [employeeId, weekStart, rate]
+  );
+
+  await logChange({
+    weekStart,
+    employeeId,
+    scope: 'marketing',
+    field: 'hourly_rate',
+    oldValue: before.hourly_rate == null ? null : String(Number(before.hourly_rate)),
+    newValue: rate == null ? null : String(rate),
+    changedBy: guard.employee.id,
+    changedByName: guard.employee.name,
+  });
+
+  revalidatePath('/admin/payroll');
+  revalidatePath('/admin/payroll/run');
+  return { ok: true };
+}
+
+/** Take a marketing-only person back off the run (removes their marketing hours). */
+export async function removeMarketingRow(employeeId: string, weekStart: string): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  if (!employeeId || !validWeek(weekStart)) return { ok: false, error: 'Bad input' };
+
+  const before = await queryOne<{ hours: number }>(
+    'SELECT hours FROM marketing_hours WHERE employee_id = $1 AND week_start = $2',
+    [employeeId, weekStart]
+  );
+  if (!before) return { ok: false, error: 'No marketing row for that week' };
+
+  await query('DELETE FROM marketing_hours WHERE employee_id = $1 AND week_start = $2', [
+    employeeId,
+    weekStart,
+  ]);
+
+  await logChange({
+    weekStart,
+    employeeId,
+    scope: 'marketing',
+    field: 'manual_row',
+    oldValue: `${Number(before.hours)}h`,
+    newValue: null,
+    changedBy: guard.employee.id,
+    changedByName: guard.employee.name,
+  });
+
+  revalidatePath('/admin/payroll');
+  revalidatePath('/admin/payroll/run');
+  return { ok: true };
+}
+
+/**
  * Append one manual change to the payroll audit trail.
  *
  * The override/marketing/summary tables keep only the CURRENT value, so without

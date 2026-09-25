@@ -19,6 +19,7 @@ export default function NewEmployeePage() {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('helper');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [hourlyRate, setHourlyRate] = useState('');
   const [loading, setLoading] = useState(false);
 
   const router = useRouter();
@@ -27,12 +28,21 @@ export default function NewEmployeePage() {
     e.preventDefault();
     setLoading(true);
 
+    const rateText = hourlyRate.trim();
+    const parsedRate = rateText === '' ? null : Number(rateText);
+    if (parsedRate != null && (!Number.isFinite(parsedRate) || parsedRate < 0)) {
+      toast.error('Hourly rate must be a positive number');
+      setLoading(false);
+      return;
+    }
+
     try {
       const result = await createEmployee({
         name,
         email,
         role,
         startDate,
+        hourlyRate: parsedRate,
       });
 
       if (result.error) {
@@ -130,6 +140,21 @@ export default function NewEmployeePage() {
                   required
                 />
                 <p className="text-xs text-muted-foreground">Used to calculate tenure</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="hourlyRate">Hourly Rate</Label>
+                <Input
+                  id="hourlyRate"
+                  value={hourlyRate}
+                  onChange={(e) => setHourlyRate(e.target.value)}
+                  placeholder="20.00"
+                  inputMode="decimal"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Optional. Used when adding someone to a payroll run by hand — the weekly
+                  SmartMoving report carries its own rate for anyone who worked a job.
+                </p>
               </div>
             </div>
 

@@ -2,8 +2,10 @@ import { addDays, format } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertTriangle, Upload } from 'lucide-react';
 import { getPayrollRun, getPayrollRunWeeks, getWeekSummary } from '@/lib/payroll-run';
+import { query } from '@/lib/db';
 import { ReportUpload } from './run/report-upload';
 import { CorrectionsTable } from './run/corrections-table';
+import type { AddableEmployee } from './run/corrections-table';
 import { PeriodSelect } from './run/period-select';
 import { AdpTables } from './run/adp-tables';
 import { WeekSummaryPanel } from './run/week-summary';
@@ -20,6 +22,37 @@ function periodInfo(weekStart: string) {
     end: format(addDays(start, 6), 'yyyy-MM-dd'),
     checkDate: format(addDays(start, 11), 'yyyy-MM-dd'),
   };
+}
+
+/**
+ * Who can be added to a run by hand: active crew who are not already on it.
+ *
+ * exclude_from_roster filters out portal-only login accounts, which are a second
+ * row for someone already on the crew roster — without it the same name appears
+ * twice in the dropdown.
+ */
+async function getAddableEmployees(weekStart: string): Promise<AddableEmployee[]> {
+  const rows = await query<{ id: string; name: string; hourly_rate: number | null }>(
+    `SELECT e.id, e.name, e.hourly_rate
+       FROM employees e
+      WHERE e.is_active = TRUE
+        AND e.exclude_from_roster = FALSE
+        AND NOT EXISTS (
+              SELECT 1 FROM payroll_entries pe
+               WHERE pe.employee_id = e.id AND pe.week_start = $1
+            )
+        AND NOT EXISTS (
+              SELECT 1 FROM marketing_hours mh
+               WHERE mh.employee_id = e.id AND mh.week_start = $1 AND mh.hours > 0
+            )
+      ORDER BY e.name`,
+    [weekStart]
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    hourlyRate: r.hourly_rate == null ? null : Number(r.hourly_rate),
+  }));
 }
 
 export async function RunTab({ weekStart }: { weekStart: string | null }) {
@@ -105,7 +138,11 @@ export async function RunTab({ weekStart }: { weekStart: string | null }) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <CorrectionsTable weekStart={run.weekStart} detail={run.detail} />
+              <CorrectionsTable
+                weekStart={run.weekStart}
+                detail={run.detail}
+                addable={await getAddableEmployees(run.weekStart)}
+              />
             </CardContent>
           </Card>
 

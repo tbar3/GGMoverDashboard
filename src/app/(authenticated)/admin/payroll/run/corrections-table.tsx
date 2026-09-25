@@ -12,10 +12,24 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { RotateCcw, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react';
+import { RotateCcw, ArrowUp, ArrowDown, ChevronsUpDown, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PayrollDetailRow } from '@/lib/payroll-run';
-import { saveOverride, saveMarketingHours, setClassification } from './actions';
+import {
+  saveOverride,
+  saveMarketingHours,
+  setClassification,
+  addMarketingRow,
+  saveMarketingRate,
+  removeMarketingRow,
+} from './actions';
+
+/** Someone who can be added to the run by hand (active crew not already on it). */
+export interface AddableEmployee {
+  id: string;
+  name: string;
+  hourlyRate: number | null;
+}
 
 type SortKey =
   | 'name'
@@ -95,11 +109,17 @@ function EditableNumber({
 export function CorrectionsTable({
   weekStart,
   detail,
+  addable = [],
 }: {
   weekStart: string;
   detail: PayrollDetailRow[];
+  addable?: AddableEmployee[];
 }) {
   const router = useRouter();
+  const [addId, setAddId] = useState('');
+  const [addHours, setAddHours] = useState('');
+  const [addRate, setAddRate] = useState('');
+  const [adding, setAdding] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -176,7 +196,29 @@ export function CorrectionsTable({
         <TableBody>
           {sorted.map((r) => (
             <TableRow key={r.employeeId}>
-              <TableCell className="font-medium whitespace-nowrap">{r.name}</TableCell>
+              <TableCell className="font-medium whitespace-nowrap">
+                <span className="flex items-center gap-1.5">
+                  {r.name}
+                  {r.marketingOnly && (
+                    <>
+                      <span
+                        title="Added manually — not in the imported payroll report"
+                        className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground"
+                      >
+                        manual
+                      </span>
+                      <button
+                        type="button"
+                        title="Remove this row from the run"
+                        onClick={() => run(() => removeMarketingRow(r.employeeId, weekStart))}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </>
+                  )}
+                </span>
+              </TableCell>
               <TableCell>
                 {r.classification ? (
                   <span className="text-xs text-muted-foreground">{r.classification}</span>
@@ -261,6 +303,14 @@ export function CorrectionsTable({
                     ${r.weeklySalary.toFixed(2)}
                     <span className="text-xs"> /wk</span>
                   </span>
+                ) : r.marketingOnly ? (
+                  // No imported row means no rate arrived with the report, so this is
+                  // the only place it can be set or corrected.
+                  <EditableNumber
+                    value={r.rate}
+                    prefix="$"
+                    onSave={(v) => run(() => saveMarketingRate(r.employeeId, weekStart, v))}
+                  />
                 ) : (
                   `$${r.rate.toFixed(2)}`
                 )}
@@ -289,6 +339,91 @@ export function CorrectionsTable({
           )}
         </TableBody>
       </Table>
+      {addable.length > 0 && (
+        <div className="mt-4 rounded-md border border-dashed p-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Add someone not on the report</label>
+              <select
+                value={addId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setAddId(id);
+                  // Prefill the rate from their employee record when it has one, so the
+                  // common case is one field instead of two.
+                  const emp = addable.find((a) => a.id === id);
+                  setAddRate(emp?.hourlyRate != null ? String(emp.hourlyRate) : '');
+                }}
+                className="h-8 w-56 rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="">Select a person…</option>
+                {addable.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Marketing hours</label>
+              <Input
+                value={addHours}
+                onChange={(e) => setAddHours(e.target.value)}
+                placeholder="0.00"
+                className="h-8 w-24 text-right"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Rate $/hr</label>
+              <Input
+                value={addRate}
+                onChange={(e) => setAddRate(e.target.value)}
+                placeholder="0.00"
+                className="h-8 w-24 text-right"
+              />
+            </div>
+            <Button
+              size="sm"
+              disabled={adding || !addId}
+              onClick={async () => {
+                const hours = Number(addHours);
+                if (!Number.isFinite(hours) || hours <= 0) {
+                  toast.error('Enter the marketing hours worked');
+                  return;
+                }
+                const rateText = addRate.trim();
+                const rate = rateText === '' ? null : Number(rateText);
+                if (rate != null && !Number.isFinite(rate)) {
+                  toast.error('Rate must be a number');
+                  return;
+                }
+                setAdding(true);
+                try {
+                  const res = await addMarketingRow(addId, weekStart, hours, rate);
+                  if (!res.ok) toast.error(res.error || 'Could not add the row');
+                  else {
+                    toast.success('Added to the run');
+                    setAddId('');
+                    setAddHours('');
+                    setAddRate('');
+                    router.refresh();
+                  }
+                } finally {
+                  setAdding(false);
+                }
+              }}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            For someone who did marketing but never went out on a move, so they are not in the
+            SmartMoving report. Tips, commissions, bonus and mileage can be set on their row once
+            it appears. Leave the rate blank to use their employee record.
+          </p>
+        </div>
+      )}
       <p className="text-xs text-muted-foreground mt-2">
         Edited cells (amber) override the computed value; the reset arrow reverts to computed. A
         re-import never clears your corrections. The ADP tables below reflect these values.

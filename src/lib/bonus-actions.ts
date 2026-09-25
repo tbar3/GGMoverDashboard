@@ -344,6 +344,23 @@ export async function approveWeek(weekStartRaw: string): Promise<Result> {
   const weekStart = validWeek(weekStartRaw);
   if (!weekStart) return { ok: false, error: 'Invalid week' };
 
+  // Bonus is hours × base_rate × multiplier, and hours come from the weekly payroll
+  // import. Locking before that import lands freezes $0 for everyone — and because the
+  // snapshot below only keeps people with hours or events, most of the crew get no row
+  // at all. Nothing about the locked board looks wrong; it surfaces days later as a
+  // missing bonus on the payroll run. Refuse instead, and say what to do about it.
+  const [imported] = await query<{ n: number }>(
+    'SELECT COUNT(*)::int AS n FROM payroll_entries WHERE week_start = $1',
+    [weekStart]
+  );
+  if (!imported || imported.n === 0) {
+    return {
+      ok: false,
+      error:
+        'No payroll imported for this week yet, so every bonus would freeze at $0. Import the week on the Payroll Run tab first, then lock.',
+    };
+  }
+
   const [board, config] = await Promise.all([getWeekBoard(weekStart), getBonusConfig()]);
   // Only snapshot people who have something for the week (hours or events) —
   // an empty $0 row for everyone else is just noise on the export.

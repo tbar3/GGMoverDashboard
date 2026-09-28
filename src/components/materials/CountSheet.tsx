@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   dispatchJob,
@@ -196,15 +196,27 @@ export default function CountSheet({
       }
     });
 
-  // Show a clear popup + a persistent red checklist of everything missing.
+  // Show a persistent red checklist of everything missing and scroll to it.
+  // No window.alert: in-app browsers (and some phone setups) silently block
+  // dialogs, which left crews tapping a button that appeared to do nothing.
+  const errorsRef = useRef<HTMLDivElement>(null);
   const failValidation = (problems: string[]) => {
     setTriedSubmit(true);
     setErrors(problems);
     setMessage(null);
-    window.alert(
-      "Can't submit yet — please complete:\n\n• " + problems.join("\n• ")
+    setConfirming(null);
+    // After React commits the error list.
+    setTimeout(() =>
+      errorsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
     );
   };
+
+  // Inline confirmation for Complete — replaces window.confirm, which returns
+  // false without showing anything when dialogs are blocked, so Complete never ran.
+  const [confirming, setConfirming] = useState<{
+    short: string[];
+    text: string;
+  } | null>(null);
 
   // Collect EVERYTHING missing for Step 1 (dispatch), in one pass.
   const dispatchProblems = (): string[] => {
@@ -242,7 +254,7 @@ export default function CountSheet({
       (header.storage_pads_used === null ||
         header.storage_pads_used === undefined)
     )
-      p.push("Pads left in storage (Furniture Pads)");
+      p.push("Pads left in storage (Storage-In box)");
     const eqMissing = initialEquipment.some(
       (e) => numInt(equip[e.equipment_id]?.after ?? "") === null
     );
@@ -295,24 +307,23 @@ export default function CountSheet({
         after + storageUsed < e.dispatch_count
       );
     });
-    let confirmMsg = adminEditing
-      ? "Save changes? Live inventory will be recalculated."
-      : "Complete this job? This updates live inventory and locks the sheet.";
-    if (short.length) {
-      confirmMsg =
-        "⚠ EQUIPMENT MISSING:\n" +
-        short
-          .map(
-            (e) =>
-              `• ${e.name}: dispatched with ${e.dispatch_count}, only ${numInt(
-                equip[e.equipment_id].after
-              )} now`
-          )
-          .join("\n") +
-        "\n\n" +
-        confirmMsg;
-    }
-    if (!window.confirm(confirmMsg)) return;
+    setErrors([]);
+    setMessage(null);
+    setConfirming({
+      short: short.map(
+        (e) =>
+          `${e.name}: dispatched with ${e.dispatch_count}, only ${numInt(
+            equip[e.equipment_id].after
+          )} now`
+      ),
+      text: adminEditing
+        ? "Save changes? Live inventory will be recalculated."
+        : "Complete this job? This updates live inventory and locks the sheet.",
+    });
+  };
+
+  const confirmComplete = () => {
+    setConfirming(null);
     setMessage(null);
     setWarnings([]);
     run(
@@ -466,12 +477,43 @@ export default function CountSheet({
           />
           Storage-In job (furniture pads stay in storage)
         </label>
-        {header.is_storage_in && (
+        {header.is_storage_in && !showAfterJob && (
           <p className="mt-2 font-ui text-xs text-navy-500">
-            In Step 2 you&apos;ll enter <strong>pads left in storage</strong> on
-            the Furniture Pads row of the Equipment Checklist below — that count
-            is charged to the customer and deducted from total pads on hand.
+            In Step 2 you&apos;ll enter <strong>pads left in storage</strong>{" "}
+            here — that count is charged to the customer and deducted from total
+            pads on hand.
           </p>
+        )}
+        {/* Lives here rather than on the Furniture Pads equipment row: if no
+            row is flagged as the storage pad, that input never rendered while
+            Complete still required it, so Storage-In jobs could never close. */}
+        {header.is_storage_in && showAfterJob && (
+          <div className="mt-3">
+            <span className="gg-eyebrow mb-1 block text-red-600">
+              Pads left in storage — charge customer · required
+            </span>
+            <input
+              inputMode="numeric"
+              disabled={locked}
+              className={`gg-input-num${
+                triedSubmit && header.storage_pads_used == null
+                  ? " border-red-500 bg-red-100/40"
+                  : ""
+              }`}
+              placeholder="0"
+              value={header.storage_pads_used ?? ""}
+              onChange={(ev) =>
+                setHeader((h) => ({
+                  ...h,
+                  storage_pads_used: numInt(ev.target.value),
+                }))
+              }
+            />
+            <span className="ml-2 font-ui text-xs text-navy-500">
+              auto-filled from Furniture Pads dispatched − on truck · edit if
+              needed · deducted from total pads on hand at completion
+            </span>
+          </div>
         )}
       </div>
 
@@ -762,31 +804,6 @@ export default function CountSheet({
                       short!
                     </span>
                   )}
-                  {/* Storage-In: pads left in storage (charged + deducted) */}
-                  {storagePadRow && showAfterJob && (
-                    <div className="mt-1 w-full border-t border-navy-100 pt-2">
-                      <span className="gg-eyebrow mb-1 block text-red-600">
-                        Pads left in storage — charge customer · required
-                      </span>
-                      <input
-                        inputMode="numeric"
-                        disabled={locked}
-                        className="gg-input-num"
-                        placeholder="0"
-                        value={header.storage_pads_used ?? ""}
-                        onChange={(ev) =>
-                          setHeader((h) => ({
-                            ...h,
-                            storage_pads_used: numInt(ev.target.value),
-                          }))
-                        }
-                      />
-                      <span className="ml-2 font-ui text-xs text-navy-500">
-                        auto-filled from dispatched − on truck · edit if needed ·
-                        deducted from total pads on hand at completion
-                      </span>
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -815,7 +832,10 @@ export default function CountSheet({
       )}
 
       {errors.length > 0 ? (
-        <div className="mt-3 rounded-lg border-2 border-red-500 bg-red-100/50 p-3">
+        <div
+          ref={errorsRef}
+          className="mt-3 rounded-lg border-2 border-red-500 bg-red-100/50 p-3"
+        >
           <p className="font-ui text-sm font-bold text-red-600">
             Can&apos;t submit yet — please complete:
           </p>
@@ -841,6 +861,42 @@ export default function CountSheet({
               <li key={w}>{w}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {confirming && (
+        <div className="mt-3 rounded-lg border-2 border-navy-700 bg-cream-50 p-3">
+          {confirming.short.length > 0 && (
+            <div className="mb-2">
+              <p className="font-ui text-sm font-bold text-red-600">
+                ⚠ Equipment missing:
+              </p>
+              <ul className="mt-1 list-disc pl-5 font-ui text-sm font-semibold text-red-700">
+                {confirming.short.map((s) => (
+                  <li key={s}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p className="font-ui text-sm font-semibold text-navy-700">
+            {confirming.text}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <button
+              onClick={confirmComplete}
+              disabled={pending}
+              className="gg-btn-cta"
+            >
+              {adminEditing ? "Yes, save changes" : "Yes, complete job"}
+            </button>
+            <button
+              onClick={() => setConfirming(null)}
+              disabled={pending}
+              className="gg-btn-ghost"
+            >
+              Go back
+            </button>
+          </div>
         </div>
       )}
 
@@ -874,7 +930,7 @@ export default function CountSheet({
               disabled={pending}
               className="gg-btn-cta"
             >
-              Complete Job — Final Count
+              {pending ? "Saving…" : "Complete Job — Final Count"}
             </button>
           </>
         )}

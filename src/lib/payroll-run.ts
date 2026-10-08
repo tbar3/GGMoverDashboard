@@ -85,7 +85,12 @@ export interface WeekSummary {
   jobs: number | null;
   revenue: number | null;
   payrollGross: number; // effective (entered override, else computed from the run)
-  computedGross: number; // the run's computed gross_pay sum
+  /** Cash owed to the team for the week: every row's total compensation (hourly +
+   *  OT + salaries + marketing + tips + commissions + bonus + mileage). */
+  computedGross: number;
+  /** Hourly base pay frozen at import (SUM payroll_entries.gross_pay) — kept only
+   *  for the audit's import-to-live bridge. Not a cash figure. */
+  importGross: number;
   grossIsOverride: boolean;
   laborRatio: number | null; // payrollGross / revenue
   prior: {
@@ -96,7 +101,15 @@ export interface WeekSummary {
   };
 }
 
-async function grossFor(weekStart: string): Promise<number> {
+/** Total cash owed to the team for the week — the same figure as "Total
+ *  compensation this period" and the closed run's gross_payroll. Reads the frozen
+ *  snapshot once the week is closed, else recomputes the live run. */
+async function runGross(weekStart: string): Promise<number> {
+  const run = await getPayrollRun(weekStart);
+  return round2(run.detail.reduce((t, d) => t + d.totalCompensation, 0));
+}
+
+async function importGrossFor(weekStart: string): Promise<number> {
   const r = await queryOne<{ g: number }>(
     'SELECT COALESCE(SUM(gross_pay), 0) AS g FROM payroll_entries WHERE week_start = $1',
     [weekStart]
@@ -107,9 +120,10 @@ async function grossFor(weekStart: string): Promise<number> {
 export async function getWeekSummary(weekStart: string): Promise<WeekSummary> {
   const prior = format(addDays(new Date(`${weekStart}T12:00:00`), -7), 'yyyy-MM-dd');
   type Row = { jobs: number | null; revenue: number | null; payroll_gross: number | null };
-  const [computedGross, computedGrossPrior, s, sp] = await Promise.all([
-    grossFor(weekStart),
-    grossFor(prior),
+  const [computedGross, computedGrossPrior, importGross, s, sp] = await Promise.all([
+    runGross(weekStart),
+    runGross(prior),
+    importGrossFor(weekStart),
     queryOne<Row>(
       'SELECT jobs, revenue, payroll_gross FROM payroll_week_summary WHERE week_start = $1',
       [weekStart]
@@ -132,6 +146,7 @@ export async function getWeekSummary(weekStart: string): Promise<WeekSummary> {
     revenue,
     payrollGross,
     computedGross,
+    importGross,
     grossIsOverride: s?.payroll_gross != null,
     laborRatio: revenue && revenue > 0 ? payrollGross / revenue : null,
     prior: {
@@ -154,7 +169,7 @@ export interface WeeklyTrendPoint {
 
 /** The last `limit` weeks of business metrics for the dashboard trend charts,
  *  oldest → newest. Revenue/jobs come from payroll_week_summary; payroll gross is
- *  the entered override or the run's computed gross. */
+ *  the entered override or the run's total compensation (cash owed to the team). */
 export async function getWeeklyTrends(limit = 12): Promise<WeeklyTrendPoint[]> {
   const weeks = await query<{ w: string }>(
     `SELECT week_start::text AS w FROM (
@@ -166,18 +181,19 @@ export async function getWeeklyTrends(limit = 12): Promise<WeeklyTrendPoint[]> {
   if (weeks.length === 0) return [];
   const list = weeks.map((r) => r.w);
 
-  const [summaries, gross] = await Promise.all([
-    query<{ week_start: string; jobs: number | null; revenue: number | null; payroll_gross: number | null }>(
-      'SELECT week_start::text, jobs, revenue, payroll_gross FROM payroll_week_summary WHERE week_start = ANY($1)',
-      [list]
-    ),
-    query<{ week_start: string; g: number }>(
-      'SELECT week_start::text, COALESCE(SUM(gross_pay), 0) AS g FROM payroll_entries WHERE week_start = ANY($1) GROUP BY week_start',
-      [list]
-    ),
-  ]);
+  const summaries = await query<{ week_start: string; jobs: number | null; revenue: number | null; payroll_gross: number | null }>(
+    'SELECT week_start::text, jobs, revenue, payroll_gross FROM payroll_week_summary WHERE week_start = ANY($1)',
+    [list]
+  );
   const sumBy = new Map(summaries.map((s) => [s.week_start, s]));
-  const grossBy = new Map(gross.map((g) => [g.week_start, Number(g.g)]));
+  // Only weeks without an entered override need the run computed.
+  const grossBy = new Map(
+    await Promise.all(
+      list
+        .filter((w) => sumBy.get(w)?.payroll_gross == null)
+        .map(async (w) => [w, await runGross(w)] as const)
+    )
+  );
 
   return list
     .slice()

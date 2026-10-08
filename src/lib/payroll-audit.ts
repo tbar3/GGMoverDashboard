@@ -428,7 +428,7 @@ export async function getPayrollAudit(weekStart: string): Promise<PayrollAudit> 
     overrideCount: employees.filter((e) => e.overriddenFields.length > 0).length,
   };
 
-  const checks = buildChecks(run, employees, totals, summary.computedGross);
+  const checks = buildChecks(run, employees, totals, summary.importGross);
 
   return {
     weekStart,

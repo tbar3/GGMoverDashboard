@@ -160,7 +160,7 @@ export function WeekSummaryPanel({ weekStart, summary }: { weekStart: string; su
             <Delta cur={gross} prior={summary.prior.payrollGross} mode="money" good="down" />
           </div>
           <p className="text-[11px] text-muted-foreground/70 pt-1">
-            Preliminary · from run ({money(summary.computedGross)}) · excludes base salaries
+            Total cash owed to the team · from run ({money(summary.computedGross)}) · excl. employer taxes
           </p>
         </div>
 

@@ -114,7 +114,13 @@ export function WeekSummaryPanel({ weekStart, summary }: { weekStart: string; su
   const [revenue, setRevenue] = useState(summary.revenue);
   const [gross, setGross] = useState<number>(summary.payrollGross);
 
+  // What the server last gave us, per field. Blur fires even when nothing was typed,
+  // so without this an untouched field re-saves what's on screen — and if that's
+  // stale, it silently overwrites a newer value (e.g. one a jobs import just wrote).
+  const loaded = { jobs: summary.jobs, revenue: summary.revenue, gross: summary.payrollGross };
+
   async function save(field: 'jobs' | 'revenue' | 'gross', value: number | null) {
+    if (value === loaded[field]) return;
     const res = await saveWeekSummary(weekStart, field, value);
     if (!res.ok) toast.error(res.error || 'Save failed');
     else toast.success('Saved');
@@ -152,7 +158,10 @@ export function WeekSummaryPanel({ weekStart, summary }: { weekStart: string; su
           <Field
             value={gross}
             onChange={(v) => setGross(v ?? summary.computedGross)}
-            onCommit={() => save('gross', gross === summary.computedGross ? null : gross)}
+            onCommit={() => {
+              if (gross === loaded.gross) return;
+              save('gross', gross === summary.computedGross ? null : gross);
+            }}
             prefix="$"
           />
           <div className="flex items-center justify-between">

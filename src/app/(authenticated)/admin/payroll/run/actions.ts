@@ -331,6 +331,7 @@ export async function saveWeekSummary(
     changedByName: guard.employee.name,
   });
 
+  revalidatePath('/admin/payroll');
   revalidatePath('/admin/payroll/run');
   return { ok: true };
 }

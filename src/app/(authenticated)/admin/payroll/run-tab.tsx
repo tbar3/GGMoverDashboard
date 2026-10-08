@@ -170,7 +170,14 @@ export async function RunTab({ weekStart }: { weekStart: string | null }) {
               </CardHeader>
               <CardContent className="space-y-6">
                 <JobsReportUpload />
-                <WeekSummaryPanel weekStart={run.weekStart} summary={summary} />
+                {/* Keyed on the saved figures: the panel seeds its editable inputs from
+                    props once, so without a remount a jobs-report import (which
+                    router.refresh()es fresh props) would leave the old values on screen. */}
+                <WeekSummaryPanel
+                  key={`${run.weekStart}|${summary.jobs}|${summary.revenue}|${summary.payrollGross}`}
+                  weekStart={run.weekStart}
+                  summary={summary}
+                />
               </CardContent>
             </Card>
           )}

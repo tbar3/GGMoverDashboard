@@ -259,3 +259,109 @@ export async function deleteDiscussion(id: string): Promise<Result> {
   revalidate();
   return { ok: true };
 }
+
+// ── Feedback ─────────────────────────────────────────────────────────────────
+
+const FEEDBACK_SOURCES = ['customer', 'back_office', 'crew'] as const;
+const FEEDBACK_AUDIENCES = ['crew', 'back_office'] as const;
+
+/**
+ * Log a piece of feedback.
+ *
+ * Crew feedback is raised in the room, so it belongs to today's meeting. Anything
+ * else is being queued: logged before the meeting ends (7:45 AM ET) it still makes
+ * today's, after that it waits for tomorrow's. The cutoff is computed in the
+ * database so it can't drift with the server's clock or timezone.
+ *
+ * As with discussion points, the job label and person's name are frozen here so
+ * the row still reads as a sentence after the job is re-imported or they leave.
+ */
+export async function addFeedback(input: {
+  body: string;
+  source: string;
+  audience: string;
+  jobId?: string;
+  jobLabel?: string;
+  employeeId?: string;
+  employeeName?: string;
+}): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  const body = input.body.trim();
+  if (!body) return { ok: false, error: 'Write the feedback first' };
+  if (!(FEEDBACK_SOURCES as readonly string[]).includes(input.source)) {
+    return { ok: false, error: 'Pick where the feedback came from' };
+  }
+  if (!(FEEDBACK_AUDIENCES as readonly string[]).includes(input.audience)) {
+    return { ok: false, error: 'Pick who the feedback is for' };
+  }
+
+  await query(
+    `INSERT INTO morning_meeting_feedback
+       (body, source, audience, meeting_date, job_id, job_label,
+        employee_id, employee_name, author_id, author_name)
+     VALUES ($1, $2, $3,
+             CASE
+               WHEN $2 = 'crew'
+                 OR (NOW() AT TIME ZONE 'America/New_York')::time < TIME '07:45'
+               THEN (NOW() AT TIME ZONE 'America/New_York')::date
+               ELSE (NOW() AT TIME ZONE 'America/New_York')::date + 1
+             END,
+             $4, $5, $6, $7, $8, $9)`,
+    [
+      body,
+      input.source,
+      input.audience,
+      input.jobId || null,
+      input.jobLabel || null,
+      input.employeeId || null,
+      input.employeeName || null,
+      guard.employee.id,
+      guard.employee.name,
+    ]
+  );
+  revalidate();
+  return { ok: true };
+}
+
+/** Mark feedback mentioned (queued) or addressed (crew) — takes it off the board. */
+export async function closeFeedback(id: string): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  const row = await queryOne<{ id: string }>(
+    `UPDATE morning_meeting_feedback
+        SET status = 'closed', closed_at = NOW(), closed_by = $2,
+            closed_by_name = $3, updated_at = NOW()
+      WHERE id = $1
+      RETURNING id`,
+    [id, guard.employee.id, guard.employee.name]
+  );
+  if (!row) return { ok: false, error: 'That feedback is gone' };
+  revalidate();
+  return { ok: true };
+}
+
+/** Undo a close — puts the feedback back on the board. */
+export async function reopenFeedback(id: string): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  await query(
+    `UPDATE morning_meeting_feedback
+        SET status = 'open', closed_at = NULL, closed_by = NULL,
+            closed_by_name = NULL, updated_at = NOW()
+      WHERE id = $1`,
+    [id]
+  );
+  revalidate();
+  return { ok: true };
+}
+
+export async function deleteFeedback(id: string): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  await query('DELETE FROM morning_meeting_feedback WHERE id = $1', [id]);
+  revalidate();
+  return { ok: true };
+}

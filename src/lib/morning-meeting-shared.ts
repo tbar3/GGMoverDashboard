@@ -93,3 +93,44 @@ export interface CrewOption {
   name: string;
   role: string;
 }
+
+export type FeedbackSource = 'customer' | 'back_office' | 'crew';
+export type FeedbackAudience = 'crew' | 'back_office';
+
+export const FEEDBACK_SOURCE_LABELS: Record<FeedbackSource, string> = {
+  customer: 'Customer',
+  back_office: 'Back office',
+  crew: 'Crew',
+};
+
+export const FEEDBACK_AUDIENCE_LABELS: Record<FeedbackAudience, string> = {
+  crew: 'For the crew',
+  back_office: 'For the back office',
+};
+
+/**
+ * Feedback for the meeting — either queued during the day (a customer's comment on
+ * a job, something the office heard) so it lands on the next meeting, or raised
+ * live by the crew about how the crew or the office could do better.
+ *
+ * It stays open until closed: queued feedback once mentioned, crew suggestions
+ * once addressed.
+ */
+export interface FeedbackItem {
+  id: string;
+  body: string;
+  source: FeedbackSource;
+  audience: FeedbackAudience;
+  /** The first meeting it shows at. Later than today means it's queued. */
+  meeting_date: string;
+  job_id: string | null;
+  job_label: string | null;
+  /** Who it's about (customer / office) or who raised it (crew). */
+  employee_id: string | null;
+  employee_name: string | null;
+  status: 'open' | 'closed';
+  closed_at: string | null;
+  closed_by_name: string | null;
+  author_name: string;
+  created_at: string;
+}

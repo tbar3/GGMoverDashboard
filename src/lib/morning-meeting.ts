@@ -8,6 +8,9 @@
  *   2. Reminders   — whatever came up that morning, typed straight in.
  *   3. Policy of the Day — one standing reminder, auto-rotated least-recently-shown,
  *      overridable by pinning.
+ *   4. Discussion points — questions about past jobs, open until answered.
+ *   5. Feedback       — customer / office feedback queued for the meeting, plus
+ *      the crew's own ideas for the crew and the office, open until closed.
  *
  * Back office only. Every caller sits under /admin, which is guarded by
  * src/app/(authenticated)/admin/layout.tsx, and every write self-guards again.
@@ -23,6 +26,7 @@ import type {
   DiscussionPoint,
   DiscussionJob,
   CrewOption,
+  FeedbackItem,
 } from '@/lib/morning-meeting-shared';
 import type { Policy } from '@/lib/policies-shared';
 
@@ -297,5 +301,27 @@ export async function getCrewOptions(): Promise<CrewOption[]> {
        FROM employees
       WHERE is_active = TRUE AND exclude_from_roster = FALSE
       ORDER BY name`
+  );
+}
+
+// ── Feedback ─────────────────────────────────────────────────────────────────
+
+/**
+ * Open feedback (queued and live), plus what was closed recently.
+ *
+ * Open items carry forward with no expiry. Items whose meeting_date is still in
+ * the future are returned too — the board shows them as "queued for the next
+ * meeting" so whoever logged one can see it landed.
+ */
+export async function getFeedback(closedDays = 14): Promise<FeedbackItem[]> {
+  return query<FeedbackItem>(
+    `SELECT id, body, source, audience, meeting_date::text AS meeting_date,
+            job_id, job_label, employee_id, employee_name, status,
+            closed_at, closed_by_name, author_name, created_at
+       FROM morning_meeting_feedback
+      WHERE status = 'open'
+         OR closed_at >= NOW() - ($1::int * INTERVAL '1 day')
+      ORDER BY status DESC, meeting_date ASC, created_at DESC`,
+    [closedDays]
   );
 }

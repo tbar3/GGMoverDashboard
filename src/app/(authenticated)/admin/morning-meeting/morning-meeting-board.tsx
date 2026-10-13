@@ -48,6 +48,7 @@ import {
   type DiscussionPoint,
   type DiscussionJob,
   type CrewOption,
+  type FeedbackItem,
 } from '@/lib/morning-meeting-shared';
 import { policyCategoryLabel, type Policy } from '@/lib/policies-shared';
 import {
@@ -60,6 +61,7 @@ import {
   unpinPolicyOfDay,
 } from '@/lib/morning-meeting-actions';
 import { DiscussionPoints } from './morning-meeting-discussions';
+import { FeedbackSection } from './morning-meeting-feedback';
 
 const textareaClass =
   'w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm ' +
@@ -83,6 +85,7 @@ export default function MorningMeetingBoard({
   discussions,
   jobs,
   crew,
+  feedback,
 }: {
   today: string;
   board: RecognitionGroup[];
@@ -93,6 +96,7 @@ export default function MorningMeetingBoard({
   discussions: DiscussionPoint[];
   jobs: DiscussionJob[];
   crew: CrewOption[];
+  feedback: FeedbackItem[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -156,11 +160,12 @@ export default function MorningMeetingBoard({
             {formatDate(`${today}T00:00:00.000Z`, 'EEEE, MMMM d')} &middot; the 7:15–7:45 walk-through
           </p>
         </div>
-        <div className="flex gap-2 text-xs text-muted-foreground">
+        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
           <Badge variant="outline">1 &middot; Recognition</Badge>
           <Badge variant="outline">2 &middot; Reminders</Badge>
           <Badge variant="outline">3 &middot; Policy of the Day</Badge>
           <Badge variant="outline">4 &middot; Discussion</Badge>
+          <Badge variant="outline">5 &middot; Feedback</Badge>
         </div>
       </div>
 
@@ -309,6 +314,16 @@ export default function MorningMeetingBoard({
       {/* ── 4. Discussion points and questions ───────────────────────────── */}
       <DiscussionPoints
         discussions={discussions}
+        jobs={jobs}
+        crew={crew}
+        pending={pending}
+        run={run}
+      />
+
+      {/* ── 5. Feedback — queued from customers/office, and live from crew ─ */}
+      <FeedbackSection
+        today={today}
+        feedback={feedback}
         jobs={jobs}
         crew={crew}
         pending={pending}

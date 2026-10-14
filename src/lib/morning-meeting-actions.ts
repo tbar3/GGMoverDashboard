@@ -365,3 +365,114 @@ export async function deleteFeedback(id: string): Promise<Result> {
   revalidate();
   return { ok: true };
 }
+
+// ── Culture ──────────────────────────────────────────────────────────────────
+
+const CULTURE_KIND_VALUES = ['core_value', 'mission', 'purpose', 'vision', 'other'] as const;
+
+/** Add or edit an entry on the culture list. */
+export async function saveCultureItem(input: {
+  id?: string;
+  kind: string;
+  title: string;
+  body: string;
+  active: boolean;
+}): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  const title = input.title.trim();
+  if (!title) return { ok: false, error: 'Give it a title' };
+  if (!(CULTURE_KIND_VALUES as readonly string[]).includes(input.kind)) {
+    return { ok: false, error: 'Pick what kind of item this is' };
+  }
+  const body = input.body.trim() || null;
+
+  if (input.id) {
+    const row = await queryOne<{ id: string }>(
+      `UPDATE culture_items
+          SET kind = $2, title = $3, body = $4, active = $5, updated_at = NOW()
+        WHERE id = $1 RETURNING id`,
+      [input.id, input.kind, title, body, input.active]
+    );
+    if (!row) return { ok: false, error: 'That item is gone' };
+  } else {
+    // New items go to the end of the list.
+    await query(
+      `INSERT INTO culture_items (kind, title, body, active, sort_order, created_by)
+       VALUES ($1, $2, $3, $4,
+               COALESCE((SELECT MAX(sort_order) FROM culture_items), 0) + 10, $5)`,
+      [input.kind, title, body, input.active, guard.employee.id]
+    );
+  }
+  revalidate();
+  return { ok: true };
+}
+
+/** Move an item one place up or down the list. */
+export async function moveCultureItem(input: { id: string; direction: 'up' | 'down' }): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  const items = await query<{ id: string }>(
+    'SELECT id FROM culture_items ORDER BY sort_order, created_at'
+  );
+  const index = items.findIndex((i) => i.id === input.id);
+  const swapWith = input.direction === 'up' ? index - 1 : index + 1;
+  if (index < 0 || swapWith < 0 || swapWith >= items.length) return { ok: true };
+
+  // Renumber the whole list in steps of 10 with the two swapped. Rewriting every
+  // row keeps the order unambiguous even if two rows ever shared a sort_order.
+  const ids = items.map((i) => i.id);
+  [ids[index], ids[swapWith]] = [ids[swapWith], ids[index]];
+  await query(
+    `UPDATE culture_items c
+        SET sort_order = t.ord * 10, updated_at = NOW()
+       FROM UNNEST($1::uuid[]) WITH ORDINALITY AS t(id, ord)
+      WHERE c.id = t.id`,
+    [ids]
+  );
+  revalidate();
+  return { ok: true };
+}
+
+/**
+ * Remove an item. Past meeting days keep their row (the FK sets it null), so the
+ * rotation's history isn't rewritten — but "switch off" is usually the better
+ * choice, and the UI offers it first.
+ */
+export async function deleteCultureItem(id: string): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  await query('DELETE FROM culture_items WHERE id = $1', [id]);
+  revalidate();
+  return { ok: true };
+}
+
+/** Override today's culture card. */
+export async function pinCultureOfDay(input: { itemId: string; today: string }): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.today)) return { ok: false, error: 'Bad date' };
+
+  await query(
+    `INSERT INTO morning_meeting_culture_days (meeting_date, culture_item_id, pinned, pinned_by)
+     VALUES ($1, $2, TRUE, $3)
+     ON CONFLICT (meeting_date) DO UPDATE
+        SET culture_item_id = EXCLUDED.culture_item_id, pinned = TRUE,
+            pinned_by = EXCLUDED.pinned_by, updated_at = NOW()`,
+    [input.today, input.itemId, guard.employee.id]
+  );
+  revalidate();
+  return { ok: true };
+}
+
+/** Hand today's culture card back to the rotation. Same reasoning as unpinPolicyOfDay. */
+export async function unpinCultureOfDay(today: string): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) return { ok: false, error: 'Bad date' };
+  await query('DELETE FROM morning_meeting_culture_days WHERE meeting_date = $1', [today]);
+  revalidate();
+  return { ok: true };
+}

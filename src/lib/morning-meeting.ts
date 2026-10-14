@@ -11,6 +11,8 @@
  *   4. Discussion points — questions about past jobs, open until answered.
  *   5. Feedback       — customer / office feedback queued for the meeting, plus
  *      the crew's own ideas for the crew and the office, open until closed.
+ *   Culture — one core value / mission / purpose card per meeting, rotated the
+ *      same way as the Policy of the Day.
  *
  * Back office only. Every caller sits under /admin, which is guarded by
  * src/app/(authenticated)/admin/layout.tsx, and every write self-guards again.
@@ -27,6 +29,8 @@ import type {
   DiscussionJob,
   CrewOption,
   FeedbackItem,
+  CultureItem,
+  CultureOfDay,
 } from '@/lib/morning-meeting-shared';
 import type { Policy } from '@/lib/policies-shared';
 
@@ -324,4 +328,92 @@ export async function getFeedback(closedDays = 14): Promise<FeedbackItem[]> {
       ORDER BY status DESC, meeting_date ASC, created_at DESC`,
     [closedDays]
   );
+}
+
+// ── Culture ──────────────────────────────────────────────────────────────────
+
+/**
+ * What may rotate: active, and either a core value (its name alone is worth
+ * saying) or anything else that has wording. An empty "Our Mission" card would
+ * be a blank slide at 7:15.
+ */
+const CULTURE_ELIGIBLE_SQL = `(c.active AND (c.kind = 'core_value' OR COALESCE(TRIM(c.body), '') <> ''))`;
+
+const CULTURE_SELECT = `
+  SELECT c.id, c.kind, c.title, c.body, c.active, c.sort_order,
+         ${CULTURE_ELIGIBLE_SQL}       AS eligible,
+         d.last_on::text               AS last_shown_on,
+         COALESCE(d.times, 0)::int     AS times_shown
+    FROM culture_items c
+    LEFT JOIN (
+      SELECT culture_item_id, MAX(meeting_date) AS last_on, COUNT(*) AS times
+        FROM morning_meeting_culture_days
+       WHERE culture_item_id IS NOT NULL
+       GROUP BY culture_item_id
+    ) d ON d.culture_item_id = c.id`;
+
+/** The whole list, in display order — for the editor and the pin picker. */
+export async function getCultureItems(): Promise<CultureItem[]> {
+  return query<CultureItem>(`${CULTURE_SELECT} ORDER BY c.sort_order, c.created_at`);
+}
+
+/**
+ * Today's culture card: whatever is recorded for today, otherwise the eligible
+ * item shown longest ago, claimed for today. Same claim-on-first-view and safe
+ * race as getPolicyOfDay — a second concurrent viewer cannot overwrite the pick.
+ */
+export async function getCultureOfDay(today: string): Promise<CultureOfDay> {
+  const existing = await queryOne<{ culture_item_id: string | null; pinned: boolean }>(
+    'SELECT culture_item_id, pinned FROM morning_meeting_culture_days WHERE meeting_date = $1',
+    [today]
+  );
+  if (existing?.culture_item_id) {
+    const item = await queryOne<CultureItem>(`${CULTURE_SELECT} WHERE c.id = $1`, [
+      existing.culture_item_id,
+    ]);
+    // A pick that was since switched off or emptied falls through to a fresh one.
+    if (item && (item.eligible || existing.pinned)) {
+      return { item, pinned: existing.pinned, empty: false };
+    }
+  }
+
+  const next = await queryOne<{ id: string }>(
+    `SELECT c.id
+       FROM culture_items c
+       LEFT JOIN (
+         SELECT culture_item_id, MAX(meeting_date) AS last_on, COUNT(*) AS times
+           FROM morning_meeting_culture_days
+          WHERE culture_item_id IS NOT NULL AND meeting_date < $1
+          GROUP BY culture_item_id
+       ) d ON d.culture_item_id = c.id
+      WHERE ${CULTURE_ELIGIBLE_SQL}
+      ORDER BY d.last_on ASC NULLS FIRST, d.times ASC NULLS FIRST, c.sort_order, c.created_at
+      LIMIT 1`,
+    [today]
+  );
+  if (!next) return { item: null, pinned: false, empty: true };
+
+  // Fills an empty row, or replaces an unpinned pick that is no longer eligible.
+  await query(
+    `INSERT INTO morning_meeting_culture_days (meeting_date, culture_item_id)
+     VALUES ($1, $2)
+     ON CONFLICT (meeting_date) DO UPDATE
+        SET culture_item_id = EXCLUDED.culture_item_id, updated_at = NOW()
+      WHERE morning_meeting_culture_days.pinned = FALSE
+        AND morning_meeting_culture_days.culture_item_id IS DISTINCT FROM EXCLUDED.culture_item_id
+        AND (morning_meeting_culture_days.culture_item_id IS NULL
+             OR NOT EXISTS (SELECT 1 FROM culture_items c
+                             WHERE c.id = morning_meeting_culture_days.culture_item_id
+                               AND ${CULTURE_ELIGIBLE_SQL}))`,
+    [today, next.id]
+  );
+
+  const settled = await queryOne<{ culture_item_id: string | null; pinned: boolean }>(
+    'SELECT culture_item_id, pinned FROM morning_meeting_culture_days WHERE meeting_date = $1',
+    [today]
+  );
+  const item = await queryOne<CultureItem>(`${CULTURE_SELECT} WHERE c.id = $1`, [
+    settled?.culture_item_id ?? next.id,
+  ]);
+  return { item, pinned: settled?.pinned ?? false, empty: !item };
 }

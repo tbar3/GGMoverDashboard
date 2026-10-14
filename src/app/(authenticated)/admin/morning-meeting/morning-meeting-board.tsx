@@ -49,6 +49,8 @@ import {
   type DiscussionJob,
   type CrewOption,
   type FeedbackItem,
+  type CultureItem,
+  type CultureOfDay,
 } from '@/lib/morning-meeting-shared';
 import { policyCategoryLabel, type Policy } from '@/lib/policies-shared';
 import {
@@ -62,6 +64,7 @@ import {
 } from '@/lib/morning-meeting-actions';
 import { DiscussionPoints } from './morning-meeting-discussions';
 import { FeedbackSection } from './morning-meeting-feedback';
+import { CultureSection } from './morning-meeting-culture';
 
 const textareaClass =
   'w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm ' +
@@ -86,6 +89,8 @@ export default function MorningMeetingBoard({
   jobs,
   crew,
   feedback,
+  cultureOfDay,
+  cultureItems,
 }: {
   today: string;
   board: RecognitionGroup[];
@@ -97,6 +102,8 @@ export default function MorningMeetingBoard({
   jobs: DiscussionJob[];
   crew: CrewOption[];
   feedback: FeedbackItem[];
+  cultureOfDay: CultureOfDay;
+  cultureItems: CultureItem[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -161,15 +168,25 @@ export default function MorningMeetingBoard({
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <Badge variant="outline">1 &middot; Recognition</Badge>
-          <Badge variant="outline">2 &middot; Reminders</Badge>
-          <Badge variant="outline">3 &middot; Policy of the Day</Badge>
-          <Badge variant="outline">4 &middot; Discussion</Badge>
-          <Badge variant="outline">5 &middot; Feedback</Badge>
+          <Badge variant="outline">1 &middot; Culture</Badge>
+          <Badge variant="outline">2 &middot; Recognition</Badge>
+          <Badge variant="outline">3 &middot; Reminders</Badge>
+          <Badge variant="outline">4 &middot; Policy of the Day</Badge>
+          <Badge variant="outline">5 &middot; Discussion</Badge>
+          <Badge variant="outline">6 &middot; Feedback</Badge>
         </div>
       </div>
 
-      {/* ── 1. Recognition ───────────────────────────────────────────────── */}
+      {/* ── 1. Culture — open on a value ──────────────────────────────────── */}
+      <CultureSection
+        today={today}
+        cultureOfDay={cultureOfDay}
+        items={cultureItems}
+        pending={pending}
+        run={run}
+      />
+
+      {/* ── 2. Recognition ───────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -292,7 +309,7 @@ export default function MorningMeetingBoard({
         </CardContent>
       </Card>
 
-      {/* ── 2. Ad-hoc reminders ──────────────────────────────────────────── */}
+      {/* ── 3. Ad-hoc reminders ──────────────────────────────────────────── */}
       <RemindersLog
         todaysNotes={todaysNotes}
         earlierNotes={earlierNotes}
@@ -301,7 +318,7 @@ export default function MorningMeetingBoard({
         run={run}
       />
 
-      {/* ── 3. Policy of the day + the standing list ─────────────────────── */}
+      {/* ── 4. Policy of the day + the standing list ─────────────────────── */}
       <PolicySection
         today={today}
         policyOfDay={policyOfDay}
@@ -311,7 +328,7 @@ export default function MorningMeetingBoard({
         run={run}
       />
 
-      {/* ── 4. Discussion points and questions ───────────────────────────── */}
+      {/* ── 5. Discussion points and questions ───────────────────────────── */}
       <DiscussionPoints
         discussions={discussions}
         jobs={jobs}
@@ -320,7 +337,7 @@ export default function MorningMeetingBoard({
         run={run}
       />
 
-      {/* ── 5. Feedback — queued from customers/office, and live from crew ─ */}
+      {/* ── 6. Feedback — queued from customers/office, and live from crew ─ */}
       <FeedbackSection
         today={today}
         feedback={feedback}

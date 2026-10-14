@@ -134,3 +134,40 @@ export interface FeedbackItem {
   author_name: string;
   created_at: string;
 }
+
+// ── Culture ──────────────────────────────────────────────────────────────────
+
+export type CultureKind = 'core_value' | 'mission' | 'purpose' | 'vision' | 'other';
+
+export const CULTURE_KINDS: { value: CultureKind; label: string }[] = [
+  { value: 'core_value', label: 'Core value' },
+  { value: 'mission', label: 'Mission' },
+  { value: 'purpose', label: 'Purpose' },
+  { value: 'vision', label: 'Vision' },
+  { value: 'other', label: 'Other' },
+];
+
+export function cultureKindLabel(kind: string): string {
+  return CULTURE_KINDS.find((k) => k.value === kind)?.label ?? kind;
+}
+
+/** One entry on the culture list — a core value, the mission, the purpose, etc. */
+export interface CultureItem {
+  id: string;
+  kind: CultureKind;
+  title: string;
+  body: string | null;
+  active: boolean;
+  sort_order: number;
+  /** Whether it can come up in the rotation (see getCultureOfDay). */
+  eligible: boolean;
+  last_shown_on: string | null;
+  times_shown: number;
+}
+
+export interface CultureOfDay {
+  item: CultureItem | null;
+  pinned: boolean;
+  /** Nothing on the list can rotate yet. */
+  empty: boolean;
+}

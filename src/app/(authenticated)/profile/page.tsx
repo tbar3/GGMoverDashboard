@@ -2,6 +2,9 @@ import { getCurrentEmployee } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDate } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
+import { Badge } from '@/components/ui/badge';
+import { getMyDiscussedFeedback } from '@/lib/my-feedback';
+import { feedbackNoteKindLabel, kindBadgeClass, meetingTypeLabel } from '@/lib/crew-meetings-shared';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +24,10 @@ export default async function ProfilePage() {
       </div>
     );
   }
+
+  // Scoped to the signed-in employee and to notes already gone over with them —
+  // see src/lib/my-feedback.ts. Never takes an id from the URL.
+  const feedback = await getMyDiscussedFeedback(employee.id);
 
   const rows: { label: string; value: string }[] = [
     { label: 'Name', value: employee.name },
@@ -52,6 +59,43 @@ export default async function ProfilePage() {
               <span className="font-medium capitalize">{r.value}</span>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>Feedback from your meetings</CardTitle>
+          <CardDescription>
+            What we&apos;ve gone over with you in your sit-downs, and what you said back.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {feedback.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nothing yet.</p>
+          ) : (
+            <ul className="space-y-3">
+              {feedback.map((note) => (
+                <li key={note.id} className="rounded-lg border border-border p-3 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className={`text-[10px] ${kindBadgeClass(note.kind)}`}>
+                      {feedbackNoteKindLabel(note.kind)}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {meetingTypeLabel(note.meeting_type)} ·{' '}
+                      {formatDate(note.discussed_on, 'MMM d, yyyy')}
+                      {note.job_label ? ` · ${note.job_label}` : ''}
+                    </span>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap">{note.body}</p>
+                  {note.crew_response && (
+                    <p className="mt-1 text-muted-foreground">
+                      You said: &ldquo;{note.crew_response}&rdquo;
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -11,13 +11,18 @@ import { Card, CardContent } from '@/components/ui/card';
 import { BonusMultiplierCard } from './bonus-multiplier-card';
 import { getWriteUpMonthCount } from '@/lib/admin-metrics';
 import { getEvaluationForEmployee, EVAL_WINDOW_DAYS } from '@/lib/new-crew-eval';
-import { getMeetingsForEmployee } from '@/lib/crew-meetings';
+import {
+  getMeetingsForEmployee,
+  getFeedbackNotesForEmployee,
+  getFeedbackJobOptions,
+} from '@/lib/crew-meetings';
 import { isBackOfficeRole } from '@/lib/roles';
 import { EditEmployeeForm } from './edit-form';
 import { SkillsManager } from './skills-manager';
 import { TerminationCard } from './termination-card';
 import { NewCrewEvalCard } from './new-crew-eval-card';
 import { MeetingsCard } from './meetings-card';
+import { FeedbackNotesCard } from './feedback-notes-card';
 import { EventsTable } from '@/components/crew/events-table';
 import { addDays, format } from 'date-fns';
 
@@ -32,7 +37,7 @@ export default async function EditEmployeePage({
   const employee = await queryOne<Employee>('SELECT * FROM employees WHERE id = $1', [id]);
   if (!employee) notFound();
 
-  const [skills, earned, baseRate, events, writeUpsThisMonth, evaluation, estBonus, bonusConfig, meetings] = await Promise.all([
+  const [skills, earned, baseRate, events, writeUpsThisMonth, evaluation, estBonus, bonusConfig, meetings, feedbackNotes, feedbackJobs] = await Promise.all([
     getSkills(),
     getEmployeeSkills(id),
     getBaseRate(),
@@ -42,6 +47,8 @@ export default async function EditEmployeePage({
     getEstimatedWeekBonus(id, weekStartOf(new Date())),
     getBonusConfig(),
     getMeetingsForEmployee(id),
+    getFeedbackNotesForEmployee(id),
+    getFeedbackJobOptions(id),
   ]);
   const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const derivedRate = baseRate + sumRaises(earned);
@@ -90,7 +97,17 @@ export default async function EditEmployeePage({
       )}
       {/* Not gated on isCrew: ad-hoc meetings can be booked with anyone, office
           included, and only the quarterly cadence is crew-scoped. */}
-      <MeetingsCard employeeId={employee.id} meetings={meetings} />
+      <FeedbackNotesCard
+        employeeId={employee.id}
+        employeeName={employee.name}
+        notes={feedbackNotes}
+        jobs={feedbackJobs}
+      />
+      <MeetingsCard
+        employeeId={employee.id}
+        meetings={meetings}
+        pendingNotes={feedbackNotes.filter((n) => !n.discussed_at)}
+      />
       <BonusMultiplierCard
         employeeId={employee.id}
         companyBase={bonusConfig.baseMultiplier}

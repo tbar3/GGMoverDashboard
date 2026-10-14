@@ -14,9 +14,16 @@ import {
   meetingTypeLabel,
   quarterLabel,
   type CrewMeeting,
+  type FeedbackNote,
   type MeetingType,
 } from '@/lib/crew-meetings-shared';
 import { scheduleMeeting, completeMeeting } from '@/lib/crew-meetings-actions';
+import {
+  FeedbackReviewList,
+  initialReviewState,
+  reviewPayload,
+  type ReviewState,
+} from '@/components/crew/feedback-review';
 
 const inputClass = 'w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
 const textareaClass =
@@ -33,9 +40,12 @@ const textareaClass =
 export function MeetingsCard({
   employeeId,
   meetings,
+  pendingNotes = [],
 }: {
   employeeId: string;
   meetings: CrewMeeting[];
+  /** This person's feedback notes not yet gone over — reviewed when a meeting is recorded. */
+  pendingNotes?: FeedbackNote[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -45,6 +55,7 @@ export function MeetingsCard({
   const [time, setTime] = useState('');
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
+  const [review, setReview] = useState<ReviewState>({});
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>, okMessage: string, after?: () => void) {
     startTransition(async () => {
@@ -161,7 +172,13 @@ export function MeetingsCard({
                   </span>
                   <span className="flex-1" />
                   {completingId !== m.id && (
-                    <Button size="sm" onClick={() => setCompletingId(m.id)}>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setReview(initialReviewState(pendingNotes));
+                        setCompletingId(m.id);
+                      }}
+                    >
                       <Check className="h-4 w-4" />
                       Record it
                     </Button>
@@ -169,6 +186,7 @@ export function MeetingsCard({
                 </div>
                 {completingId === m.id && (
                   <div className="mt-2 space-y-2">
+                    <FeedbackReviewList notes={pendingNotes} state={review} onChange={setReview} />
                     <textarea
                       className={textareaClass}
                       placeholder="What was said? One line is enough."
@@ -181,7 +199,11 @@ export function MeetingsCard({
                         size="sm"
                         disabled={pending || !notes.trim()}
                         onClick={() =>
-                          run(() => completeMeeting({ id: m.id, notes }), 'Recorded', () => {
+                          run(
+                            () =>
+                              completeMeeting({ id: m.id, notes, discussed: reviewPayload(review) }),
+                            'Recorded',
+                            () => {
                             setNotes('');
                             setCompletingId(null);
                           })

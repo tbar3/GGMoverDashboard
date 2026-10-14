@@ -4,6 +4,8 @@ import {
   getScheduledMeetings,
   getRecentMeetings,
   getMeetingTargets,
+  getAllPendingFeedbackNotes,
+  getPendingFeedbackSummary,
 } from '@/lib/crew-meetings';
 import MeetingsBoard from './meetings-board';
 
@@ -12,12 +14,15 @@ import MeetingsBoard from './meetings-board';
 export const dynamic = 'force-dynamic';
 
 export default async function MeetingsPage() {
-  const [quarter, due, scheduled, recent, targets] = await Promise.all([
+  const [quarter, due, scheduled, recent, targets, pendingNotes, feedbackWaiting] =
+    await Promise.all([
     currentQuarter(),
     getDueThisQuarter(),
     getScheduledMeetings(),
     getRecentMeetings(),
     getMeetingTargets(),
+    getAllPendingFeedbackNotes(),
+    getPendingFeedbackSummary(),
   ]);
 
   return (
@@ -27,6 +32,8 @@ export default async function MeetingsPage() {
       scheduled={scheduled}
       recent={recent}
       targets={targets}
+      pendingNotes={pendingNotes}
+      feedbackWaiting={feedbackWaiting}
     />
   );
 }

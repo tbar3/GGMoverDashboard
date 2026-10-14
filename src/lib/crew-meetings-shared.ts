@@ -76,3 +76,58 @@ export interface MeetingTarget {
   role: string;
   is_crew: boolean;
 }
+
+// ── Feedback notes ───────────────────────────────────────────────────────────
+
+export type FeedbackNoteKind = 'praise' | 'needs_work' | 'coaching';
+
+export const FEEDBACK_NOTE_KINDS: { value: FeedbackNoteKind; label: string }[] = [
+  { value: 'praise', label: 'Praise' },
+  { value: 'needs_work', label: 'Needs work' },
+  { value: 'coaching', label: 'Coaching' },
+];
+
+export function feedbackNoteKindLabel(kind: string): string {
+  return FEEDBACK_NOTE_KINDS.find((k) => k.value === kind)?.label ?? kind;
+}
+
+/** Badge colours per kind. Here, not in a client file, because /profile renders it on the server. */
+export function kindBadgeClass(kind: string): string {
+  if (kind === 'praise') return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400';
+  if (kind === 'needs_work') return 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400';
+  return 'border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-400';
+}
+
+/**
+ * One piece of individual feedback. Pending until it is gone over in a completed
+ * meeting; only then can the crew member see it.
+ */
+export interface FeedbackNote {
+  id: string;
+  employee_id: string;
+  kind: FeedbackNoteKind;
+  body: string;
+  job_label: string | null;
+  author_name: string;
+  created_at: string;
+  meeting_id: string | null;
+  discussed_at: string | null;
+  crew_response: string | null;
+}
+
+/** Someone with feedback waiting, for the Crew Meetings board. */
+export interface PendingFeedbackSummary {
+  employee_id: string;
+  employee_name: string;
+  pending_count: number;
+  oldest_pending_at: string;
+  last_met_on: string | null;
+  /** A meeting with them is already booked. */
+  has_upcoming: boolean;
+}
+
+/** A job the person worked, for attaching a note to it. */
+export interface FeedbackJobOption {
+  id: string;
+  label: string;
+}

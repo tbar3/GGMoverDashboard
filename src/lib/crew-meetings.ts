@@ -12,7 +12,14 @@
  */
 
 import { query, queryOne } from '@/lib/db';
-import type { CrewMeeting, DueCrewMember, MeetingTarget } from '@/lib/crew-meetings-shared';
+import type {
+  CrewMeeting,
+  DueCrewMember,
+  MeetingTarget,
+  FeedbackNote,
+  FeedbackJobOption,
+  PendingFeedbackSummary,
+} from '@/lib/crew-meetings-shared';
 
 export * from '@/lib/crew-meetings-shared';
 
@@ -148,4 +155,64 @@ export async function getMeetingTargets(): Promise<MeetingTarget[]> {
 export async function getDueCount(): Promise<number> {
   const due = await getDueThisQuarter();
   return due.length;
+}
+
+// ── Feedback notes ───────────────────────────────────────────────────────────
+
+const NOTE_SELECT = `
+  SELECT n.id, n.employee_id, n.kind, n.body, n.job_label, n.author_name, n.created_at,
+         n.meeting_id, n.discussed_at, n.crew_response
+    FROM crew_feedback_notes n`;
+
+/** Every note for one person — pending first, oldest pending first. */
+export async function getFeedbackNotesForEmployee(employeeId: string): Promise<FeedbackNote[]> {
+  return query<FeedbackNote>(
+    `${NOTE_SELECT}
+      WHERE n.employee_id = $1
+      ORDER BY (n.discussed_at IS NULL) DESC,
+               CASE WHEN n.discussed_at IS NULL THEN n.created_at END ASC,
+               n.discussed_at DESC`,
+    [employeeId]
+  );
+}
+
+/** Pending notes for everyone, oldest first — what the board's meeting rows need. */
+export async function getAllPendingFeedbackNotes(): Promise<FeedbackNote[]> {
+  return query<FeedbackNote>(
+    `${NOTE_SELECT}
+      WHERE n.discussed_at IS NULL
+      ORDER BY n.created_at`
+  );
+}
+
+/** Who has feedback waiting, longest-waiting first. */
+export async function getPendingFeedbackSummary(): Promise<PendingFeedbackSummary[]> {
+  return query<PendingFeedbackSummary>(
+    `SELECT e.id AS employee_id, e.name AS employee_name,
+            COUNT(*)::int        AS pending_count,
+            MIN(n.created_at)    AS oldest_pending_at,
+            (SELECT MAX(m.completed_at)::date::text FROM crew_meetings m
+              WHERE m.employee_id = e.id AND m.completed_at IS NOT NULL) AS last_met_on,
+            EXISTS (SELECT 1 FROM crew_meetings m
+                     WHERE m.employee_id = e.id AND m.completed_at IS NULL) AS has_upcoming
+       FROM crew_feedback_notes n
+       JOIN employees e ON e.id = n.employee_id
+      WHERE n.discussed_at IS NULL AND e.is_active = TRUE
+      GROUP BY e.id, e.name
+      ORDER BY MIN(n.created_at)`
+  );
+}
+
+/** Jobs this person worked recently, for attaching a note to one. */
+export async function getFeedbackJobOptions(employeeId: string, limit = 60): Promise<FeedbackJobOption[]> {
+  return query<FeedbackJobOption>(
+    `SELECT id,
+            to_char(date, 'Mon FMDD, YYYY') || ' · ' || COALESCE(customer_name, 'Customer')
+              || COALESCE(' · #' || job_number, '') AS label
+       FROM jobs
+      WHERE $1::uuid = ANY(COALESCE(crew_ids, '{}'))
+      ORDER BY date DESC
+      LIMIT $2`,
+    [employeeId, limit]
+  );
 }

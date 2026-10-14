@@ -1,12 +1,21 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { CalendarClock, Check, Trash2, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react';
+import {
+  CalendarClock,
+  Check,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  MessageSquare,
+  MessageSquareText,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/utils';
 import {
@@ -15,6 +24,8 @@ import {
   quarterLabel,
   type CrewMeeting,
   type DueCrewMember,
+  type FeedbackNote,
+  type PendingFeedbackSummary,
   type MeetingTarget,
   type MeetingType,
 } from '@/lib/crew-meetings-shared';
@@ -24,6 +35,12 @@ import {
   rescheduleMeeting,
   deleteMeeting,
 } from '@/lib/crew-meetings-actions';
+import {
+  FeedbackReviewList,
+  initialReviewState,
+  reviewPayload,
+  type ReviewState,
+} from '@/components/crew/feedback-review';
 
 const inputClass = 'w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
 const textareaClass =
@@ -56,12 +73,17 @@ export default function MeetingsBoard({
   scheduled,
   recent,
   targets,
+  pendingNotes,
+  feedbackWaiting,
 }: {
   quarter: { quarter: string; start: string; end: string };
   due: DueCrewMember[];
   scheduled: CrewMeeting[];
   recent: CrewMeeting[];
   targets: MeetingTarget[];
+  /** Everyone's feedback notes not yet gone over. */
+  pendingNotes: FeedbackNote[];
+  feedbackWaiting: PendingFeedbackSummary[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -127,6 +149,52 @@ export default function MeetingsBoard({
         </CardContent>
       </Card>
 
+      {/* ── Feedback waiting to be gone over ─────────────────────────────── */}
+      {feedbackWaiting.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquareText className="h-5 w-5 text-primary" />
+              Feedback waiting to go over
+            </CardTitle>
+            <CardDescription>
+              Notes logged on someone&apos;s employee page since their last sit-down. They&apos;re
+              listed for review when you record that person&apos;s next meeting.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {feedbackWaiting.map((p) => (
+                <li
+                  key={p.employee_id}
+                  className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-3 text-sm"
+                >
+                  <span className="font-semibold">{p.employee_name}</span>
+                  <Badge className="text-[10px]">
+                    {p.pending_count} note{p.pending_count === 1 ? '' : 's'}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    oldest {formatDate(p.oldest_pending_at, 'MMM d')} ·{' '}
+                    {p.last_met_on ? `last met ${formatDate(p.last_met_on, 'MMM d')}` : 'never met'}
+                  </span>
+                  <span className="flex-1" />
+                  {p.has_upcoming ? (
+                    <Badge variant="outline" className="text-[10px]">
+                      Meeting booked
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-amber-700 dark:text-amber-400">No meeting booked</span>
+                  )}
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/admin/employees/${p.employee_id}`}>Open</Link>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── 2. Book anything, with anyone ────────────────────────────────── */}
       <BookMeeting targets={targets} pending={pending} run={run} />
 
@@ -147,7 +215,13 @@ export default function MeetingsBoard({
             <p className="text-sm text-muted-foreground">Nothing booked.</p>
           ) : (
             scheduled.map((m) => (
-              <ScheduledMeeting key={m.id} meeting={m} pending={pending} run={run} />
+              <ScheduledMeeting
+                key={m.id}
+                meeting={m}
+                notesToReview={pendingNotes.filter((n) => n.employee_id === m.employee_id)}
+                pending={pending}
+                run={run}
+              />
             ))
           )}
         </CardContent>
@@ -395,14 +469,17 @@ function BookMeeting({
 /** A booked meeting: complete it with notes, move it, or drop it. */
 function ScheduledMeeting({
   meeting,
+  notesToReview,
   pending,
   run,
 }: {
   meeting: CrewMeeting;
+  notesToReview: FeedbackNote[];
   pending: boolean;
   run: Run;
 }) {
   const [completing, setCompleting] = useState(false);
+  const [review, setReview] = useState<ReviewState>({});
   const [notes, setNotes] = useState('');
   const [moving, setMoving] = useState(false);
   const [date, setDate] = useState(meeting.scheduled_for);
@@ -424,9 +501,20 @@ function ScheduledMeeting({
           {formatDate(meeting.scheduled_for, 'EEE, MMM d')}
           {meeting.scheduled_time ? ` at ${formatTime(meeting.scheduled_time)}` : ''}
         </span>
+        {notesToReview.length > 0 && (
+          <Badge variant="outline" className="text-[10px]">
+            {notesToReview.length} feedback note{notesToReview.length === 1 ? '' : 's'} to go over
+          </Badge>
+        )}
         <span className="flex-1" />
         {!completing && (
-          <Button size="sm" onClick={() => setCompleting(true)}>
+          <Button
+            size="sm"
+            onClick={() => {
+              setReview(initialReviewState(notesToReview));
+              setCompleting(true);
+            }}
+          >
             <Check className="h-4 w-4" />
             Record it
           </Button>
@@ -478,6 +566,7 @@ function ScheduledMeeting({
 
       {completing && (
         <div className="mt-2 space-y-2">
+          <FeedbackReviewList notes={notesToReview} state={review} onChange={setReview} />
           <textarea
             className={textareaClass}
             placeholder="What was said? One line is enough — but there has to be one."
@@ -491,7 +580,8 @@ function ScheduledMeeting({
               disabled={pending || !notes.trim()}
               onClick={() =>
                 run(
-                  () => completeMeeting({ id: meeting.id, notes }),
+                  () =>
+                    completeMeeting({ id: meeting.id, notes, discussed: reviewPayload(review) }),
                   'Recorded',
                   () => {
                     setNotes('');

@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { formatBytes } from '@/lib/policies-shared';
 import { formatDate } from '@/lib/utils';
 import { uploadAttachment, deleteAttachment } from '@/lib/compliance/attachment-actions';
+import { validateUpload } from '@/lib/upload-limits';
 import type { ComplianceAttachment } from '@/lib/compliance/types';
 
 /**
@@ -42,6 +43,14 @@ export function AttachmentPanel({
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    // An oversized file is refused before the action runs, so its own check never
+    // gets to explain why — check here first.
+    const file = formData.get('file');
+    const invalid = file instanceof File ? validateUpload(file) : null;
+    if (invalid) {
+      toast.error(invalid, { duration: 8000 });
+      return;
+    }
     formData.set('parentKind', parentKind);
     formData.set('parentId', parentId);
     startTransition(async () => {
@@ -129,7 +138,7 @@ export function AttachmentPanel({
                 required
                 onChange={(e) => setFileName(e.target.files?.[0]?.name ?? '')}
               />
-              <p className="text-xs text-muted-foreground">PDF, image, or Office file up to 25 MB.</p>
+              <p className="text-xs text-muted-foreground">PDF, image, or Office file up to 4 MB.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor={`title-${parentId}`}>Label (optional)</Label>

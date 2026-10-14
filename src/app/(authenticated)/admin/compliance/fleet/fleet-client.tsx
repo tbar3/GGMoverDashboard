@@ -36,6 +36,8 @@ import { toast } from 'sonner';
 import { formatDate } from '@/lib/utils';
 import { StateBadge } from '@/components/compliance/state-badge';
 import { saveVehicle, addVehicleFromTruck, type VehicleInput } from '@/lib/compliance/vehicle-actions';
+import type { FleetChecklistRow } from '@/lib/compliance/checklists';
+import { FleetChecklist } from './fleet-checklist';
 import { serviceTypeLabel, VEHICLE_TYPES, OWNERSHIP_TYPES, type PmScheduleRow, type VehicleRow } from '@/lib/compliance/types';
 
 type FormState = {
@@ -80,10 +82,14 @@ export default function FleetClient({
   vehicles,
   unlinkedTrucks,
   pmSchedules,
+  checklist,
+  storageReady,
 }: {
   vehicles: VehicleRow[];
   unlinkedTrucks: { id: number; name: string }[];
   pmSchedules: PmScheduleRow[];
+  checklist: FleetChecklistRow[];
+  storageReady: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -220,6 +226,8 @@ export default function FleetClient({
           </CardContent>
         </Card>
       )}
+
+      <FleetChecklist rows={checklist} storageReady={storageReady} />
 
       <Card>
         <CardHeader>

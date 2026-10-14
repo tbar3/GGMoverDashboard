@@ -23,6 +23,7 @@ import {
   FileText,
   FileCheck,
   Truck,
+  IdCard,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -322,6 +323,12 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         href: '/admin/compliance/fleet',
         description: 'Vehicles, preventative maintenance, and service history',
         icon: Truck,
+      },
+      {
+        title: 'Driver Files',
+        href: '/admin/compliance/drivers',
+        description: 'Applications, medical cards, driver tests, insurance approval',
+        icon: IdCard,
       },
     ],
   },

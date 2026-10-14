@@ -8,7 +8,13 @@
  * re-typed in two places.
  */
 
-export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+/**
+ * 4 MB, not more: uploads travel through a server action, and Vercel refuses any
+ * function request body over 4.5 MB. A bigger number here would only move the
+ * failure from a clear message to an opaque 413. Larger files would need direct
+ * browser-to-Blob uploads.
+ */
+export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 export const ALLOWED_UPLOAD_TYPES = new Set([
   'application/pdf',
@@ -18,13 +24,17 @@ export const ALLOWED_UPLOAD_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'image/png',
   'image/jpeg',
+  // iPhones save photos as HEIC by default — a photo of a medical card must work.
+  'image/heic',
+  'image/heif',
+  'image/webp',
   'text/plain',
 ]);
 
 /** Null when the file is acceptable, otherwise the sentence to show the user. */
 export function validateUpload(file: File): string | null {
   if (file.size === 0) return 'That file is empty';
-  if (file.size > MAX_UPLOAD_BYTES) return 'That file is larger than 25 MB';
+  if (file.size > MAX_UPLOAD_BYTES) return 'That file is larger than 4 MB — try a PDF scan or a smaller photo';
   // Some browsers send an empty type for uncommon extensions; the size and the
   // private-by-default storage are the real controls, so an unknown type passes.
   if (file.type && !ALLOWED_UPLOAD_TYPES.has(file.type)) {

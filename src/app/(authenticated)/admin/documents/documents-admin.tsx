@@ -44,6 +44,7 @@ import {
   type DocumentRow,
 } from '@/lib/policies-shared';
 import { uploadDocument, updateDocument, deleteDocument } from '@/lib/policies-actions';
+import { validateUpload } from '@/lib/upload-limits';
 
 type Result = { ok: boolean; error?: string };
 
@@ -76,6 +77,14 @@ export default function DocumentsAdmin({
   function submitUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    // An oversized file is refused before the action runs, so its own check never
+    // gets to explain why — check here first.
+    const file = formData.get('file');
+    const invalid = file instanceof File ? validateUpload(file) : null;
+    if (invalid) {
+      toast.error(invalid, { duration: 8000 });
+      return;
+    }
     run(() => uploadDocument(formData), 'Uploaded', () => {
       formRef.current?.reset();
       setFileName('');
@@ -123,7 +132,7 @@ export default function DocumentsAdmin({
             Upload a document
           </CardTitle>
           <CardDescription>
-            PDF, Word, Excel, images, or plain text. Up to 25 MB.
+            PDF, Word, Excel, images, or plain text. Up to 4 MB.
           </CardDescription>
         </CardHeader>
         <CardContent>

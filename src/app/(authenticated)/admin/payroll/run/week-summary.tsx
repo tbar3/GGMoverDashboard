@@ -128,10 +128,13 @@ export function WeekSummaryPanel({ weekStart, summary }: { weekStart: string; su
 
   const laborRatio = revenue && revenue > 0 ? (gross / revenue) * 100 : null;
   const priorRatio = summary.prior.laborRatio != null ? summary.prior.laborRatio * 100 : null;
+  const directRatio = revenue && revenue > 0 ? (summary.directLabor / revenue) * 100 : null;
+  const priorDirectRatio =
+    summary.prior.directLaborRatio != null ? summary.prior.directLaborRatio * 100 : null;
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {/* Jobs */}
         <div className="rounded-lg border p-4 space-y-1">
           <p className="text-xs text-muted-foreground uppercase tracking-wide">Jobs</p>
@@ -182,6 +185,19 @@ export function WeekSummaryPanel({ weekStart, summary }: { weekStart: string; su
             <Delta cur={laborRatio} prior={priorRatio} mode="pctpts" good="down" />
           </div>
           <p className="text-[11px] text-muted-foreground/70 pt-1">Payroll gross ÷ revenue</p>
+        </div>
+
+        {/* Direct labor-cost ratio — hourly crew only */}
+        <div className="rounded-lg border p-4 space-y-1">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">Direct labor-cost ratio</p>
+          <p className="text-2xl font-bold">{pct(directRatio)}</p>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">Prior: {pct(priorDirectRatio)}</span>
+            <Delta cur={directRatio} prior={priorDirectRatio} mode="pctpts" good="down" />
+          </div>
+          <p className="text-[11px] text-muted-foreground/70 pt-1">
+            Hourly crew pay ({money(summary.directLabor)}) ÷ revenue · excl. salaried staff
+          </p>
         </div>
       </div>
 

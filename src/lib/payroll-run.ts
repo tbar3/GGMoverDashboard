@@ -93,11 +93,16 @@ export interface WeekSummary {
   importGross: number;
   grossIsOverride: boolean;
   laborRatio: number | null; // payrollGross / revenue
+  /** Total compensation for hourly staff only — salaried people excluded. */
+  directLabor: number;
+  directLaborRatio: number | null; // directLabor / revenue
   prior: {
     jobs: number | null;
     revenue: number | null;
     payrollGross: number | null;
     laborRatio: number | null;
+    directLabor: number | null;
+    directLaborRatio: number | null;
   };
 }
 
@@ -105,8 +110,18 @@ export interface WeekSummary {
  *  compensation this period" and the closed run's gross_payroll. Reads the frozen
  *  snapshot once the week is closed, else recomputes the live run. */
 async function runGross(weekStart: string): Promise<number> {
+  return (await runTotals(weekStart)).gross;
+}
+
+/** The run's gross plus direct labor: the same total with salaried staff left out. */
+async function runTotals(weekStart: string): Promise<{ gross: number; direct: number }> {
   const run = await getPayrollRun(weekStart);
-  return round2(run.detail.reduce((t, d) => t + d.totalCompensation, 0));
+  return {
+    gross: round2(run.detail.reduce((t, d) => t + d.totalCompensation, 0)),
+    direct: round2(
+      run.detail.reduce((t, d) => (d.annualSalary == null ? t + d.totalCompensation : t), 0)
+    ),
+  };
 }
 
 async function importGrossFor(weekStart: string): Promise<number> {
@@ -120,9 +135,9 @@ async function importGrossFor(weekStart: string): Promise<number> {
 export async function getWeekSummary(weekStart: string): Promise<WeekSummary> {
   const prior = format(addDays(new Date(`${weekStart}T12:00:00`), -7), 'yyyy-MM-dd');
   type Row = { jobs: number | null; revenue: number | null; payroll_gross: number | null };
-  const [computedGross, computedGrossPrior, importGross, s, sp] = await Promise.all([
-    runGross(weekStart),
-    runGross(prior),
+  const [totals, totalsPrior, importGross, s, sp] = await Promise.all([
+    runTotals(weekStart),
+    runTotals(prior),
     importGrossFor(weekStart),
     queryOne<Row>(
       'SELECT jobs, revenue, payroll_gross FROM payroll_week_summary WHERE week_start = $1',
@@ -133,6 +148,8 @@ export async function getWeekSummary(weekStart: string): Promise<WeekSummary> {
       [prior]
     ),
   ]);
+  const computedGross = totals.gross;
+  const computedGrossPrior = totalsPrior.gross;
 
   const payrollGross = s?.payroll_gross != null ? Number(s.payroll_gross) : computedGross;
   const priorGross = sp?.payroll_gross != null ? Number(sp.payroll_gross) : computedGrossPrior;
@@ -149,11 +166,18 @@ export async function getWeekSummary(weekStart: string): Promise<WeekSummary> {
     importGross,
     grossIsOverride: s?.payroll_gross != null,
     laborRatio: revenue && revenue > 0 ? payrollGross / revenue : null,
+    directLabor: totals.direct,
+    directLaborRatio: revenue && revenue > 0 ? totals.direct / revenue : null,
     prior: {
       jobs: sp?.jobs ?? null,
       revenue: priorRevenue,
       payrollGross: hasPriorGross ? priorGross : null,
       laborRatio: priorRevenue && priorRevenue > 0 ? priorGross / priorRevenue : null,
+      directLabor: computedGrossPrior > 0 ? totalsPrior.direct : null,
+      directLaborRatio:
+        priorRevenue && priorRevenue > 0 && computedGrossPrior > 0
+          ? totalsPrior.direct / priorRevenue
+          : null,
     },
   };
 }

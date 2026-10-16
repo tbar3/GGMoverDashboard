@@ -94,7 +94,7 @@ export async function getStaleOpenJobs(today: string): Promise<StaleOpenJob[]> {
             t.name AS truck_name, j.sequence_no, j.status, j.customer
        FROM materials_jobs j JOIN trucks t ON t.id = j.truck_id
       WHERE j.status <> 'complete' AND j.job_date < $1
-      ORDER BY j.job_date ASC, t.name`,
+      ORDER BY j.job_date DESC, t.name, j.sequence_no DESC`,
     [today]
   );
 }

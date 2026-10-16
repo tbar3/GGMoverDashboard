@@ -165,7 +165,7 @@ export async function getUnclosedSheets(): Promise<UnclosedSheet[]> {
     `SELECT mj.id, t.name AS truck, mj.sequence_no, mj.job_date::text AS job_date, mj.customer
        FROM materials_jobs mj JOIN trucks t ON t.id = mj.truck_id
       WHERE mj.status <> 'complete' AND mj.job_date < CURRENT_DATE
-      ORDER BY mj.job_date`
+      ORDER BY mj.job_date DESC, mj.sequence_no DESC`
   );
   return rows.map((r) => ({
     id: r.id,

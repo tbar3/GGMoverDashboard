@@ -18,7 +18,9 @@ import { CONFIG } from '@/types';
 import { getOwnedTruckCapacity } from '@/lib/truck-capacity';
 import {
   buildWindows,
+  applyWindowOverrides,
   driftFor,
+  type WindowOverride,
   type DemandDay,
   type RentalWindow,
   type Drift,
@@ -215,6 +217,25 @@ export async function getOffloadState(
   };
 }
 
+/** Decisions about windows that are not yet in the past, newest first. */
+export async function getWindowOverrides(today: string): Promise<WindowOverride[]> {
+  return query<WindowOverride>(
+    `SELECT id,
+            needed_from::text     AS needed_from,
+            last_needed::text     AS last_needed,
+            trucks_needed,
+            dismissed,
+            override_from::text   AS override_from,
+            override_return::text AS override_return,
+            override_trucks,
+            note, created_by_name
+       FROM rental_window_overrides
+      WHERE last_needed >= $1::date
+      ORDER BY updated_at DESC`,
+    [today]
+  );
+}
+
 export interface RentalBoardData {
   today: string;
   windows: RentalWindow[];
@@ -235,17 +256,27 @@ export async function getRentalBoard(): Promise<RentalBoardData> {
   const today = await rentalToday();
   const horizonDays = CONFIG.RENTAL_HORIZON_DAYS;
 
-  const [capacity, leadTimeDays, days, active, history, items, jobsMissingEstimate, dataAsOf] =
-    await Promise.all([
-      getOwnedTruckCapacity(),
-      getLeadTimeDays(),
-      getDemandDays(today, horizonDays),
-      getActiveRentals(),
-      getRentalHistory(),
-      getOffloadItems(),
-      getJobsMissingEstimate(today, horizonDays),
-      getDataAsOf(),
-    ]);
+  const [
+    capacity,
+    leadTimeDays,
+    days,
+    active,
+    history,
+    items,
+    jobsMissingEstimate,
+    dataAsOf,
+    overrides,
+  ] = await Promise.all([
+    getOwnedTruckCapacity(),
+    getLeadTimeDays(),
+    getDemandDays(today, horizonDays),
+    getActiveRentals(),
+    getRentalHistory(),
+    getOffloadItems(),
+    getJobsMissingEstimate(today, horizonDays),
+    getDataAsOf(),
+    getWindowOverrides(today),
+  ]);
 
   // Only rentals we actually hold or have reserved cover a shortfall. A 'planned'
   // row is an intention, not a truck.
@@ -253,15 +284,23 @@ export async function getRentalBoard(): Promise<RentalBoardData> {
     .filter((r) => r.status === 'booked' || r.status === 'picked_up')
     .map((r) => ({ needed_from: r.needed_from, est_return_date: r.est_return_date }));
 
-  const windows = buildWindows({
-    days,
-    capacity,
-    coverage,
+  const windows = applyWindowOverrides(
+    buildWindows({
+      days,
+      capacity,
+      coverage,
+      today,
+      horizonDays,
+      leadTimeDays,
+      bridgeDays: CONFIG.RENTAL_BRIDGE_DAYS,
+    }),
+    overrides,
     today,
-    horizonDays,
-    leadTimeDays,
-    bridgeDays: CONFIG.RENTAL_BRIDGE_DAYS,
-  });
+    leadTimeDays
+  );
+  // A dismissed window is one we decided not to rent for, so it should not tell
+  // a rental we hold to stay out longer either.
+  const liveWindows = windows.filter((w) => !w.override?.dismissed);
 
   const out = active.filter((r) => r.status === 'picked_up');
   const offloadStates = await Promise.all(out.map((r) => getOffloadState(r, items)));
@@ -274,7 +313,7 @@ export async function getRentalBoard(): Promise<RentalBoardData> {
     if (rental.status === 'planned') continue;
     drift[rental.id] = driftFor(
       { needed_from: rental.needed_from, est_return_date: rental.est_return_date },
-      windows
+      liveWindows
     );
   }
 

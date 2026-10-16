@@ -67,71 +67,10 @@ export async function setWarehouseActive(id: number, active: boolean) {
   bump();
 }
 
-// ── Trucks ────────────────────────────────────────────────────
-export async function createTruck(name: string): Promise<ActionResult> {
-  await assert();
-  try {
-    await withTransaction(async (client) => {
-      const { rows } = await client.query(
-        `INSERT INTO trucks (name, sort_order, warehouse_id)
-         VALUES ($1, (SELECT COALESCE(MAX(sort_order),0)+1 FROM trucks),
-                 (SELECT id FROM warehouses ORDER BY sort_order, id LIMIT 1))
-         RETURNING id`,
-        [name]
-      );
-      const id = rows[0].id;
-      await client.query(
-        `INSERT INTO truck_stock (truck_id, material_id)
-         SELECT $1, id FROM materials ON CONFLICT DO NOTHING`,
-        [id]
-      );
-    });
-  } catch (e) {
-    if ((e as { code?: string })?.code === '23505')
-      return { ok: false, message: 'A truck with that name already exists.' };
-    return { ok: false, message: 'Could not add truck.' };
-  }
-  bump();
-  return { ok: true };
-}
-
-export async function renameTruck(id: number, name: string): Promise<ActionResult> {
-  await assert();
-  try {
-    await query('UPDATE trucks SET name=$2, updated_at=NOW() WHERE id=$1', [id, name]);
-  } catch (e) {
-    if ((e as { code?: string })?.code === '23505')
-      return { ok: false, message: 'A truck with that name already exists.' };
-    return { ok: false, message: 'Could not rename truck.' };
-  }
-  bump();
-  return { ok: true };
-}
-
-export async function setTruckActive(id: number, active: boolean) {
-  await assert();
-  await query('UPDATE trucks SET active=$2, updated_at=NOW() WHERE id=$1', [id, active]);
-  bump();
-}
-
-export async function reorderTrucks(orderedIds: number[]) {
-  await assert();
-  await withTransaction(async (client) => {
-    for (let i = 0; i < orderedIds.length; i++) {
-      await client.query('UPDATE trucks SET sort_order=$2, updated_at=NOW() WHERE id=$1', [
-        orderedIds[i],
-        i + 1,
-      ]);
-    }
-  });
-  bump();
-}
-
-export async function setTruckWarehouse(id: number, warehouseId: number) {
-  await assert();
-  await query('UPDATE trucks SET warehouse_id=$2, updated_at=NOW() WHERE id=$1', [id, warehouseId]);
-  bump();
-}
+// ── Trucks ────────────────────────────────────────────────
+// Managed in Fleet (src/lib/compliance/vehicle-actions.ts saveVehicle), which
+// writes the truck and its fleet vehicle together. Rentals are created and
+// retired by the Rental Trucks board.
 
 // ── Materials ─────────────────────────────────────────────────
 export type MaterialFields = { name: string; par: number; cost: number; charge: number };

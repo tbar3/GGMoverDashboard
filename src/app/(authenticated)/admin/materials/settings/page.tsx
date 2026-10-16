@@ -1,7 +1,7 @@
 import { query } from '@/lib/db';
 import { getInventory } from '@/lib/materials/live-inventory';
 import { WarehousesEditor } from './warehouses-editor';
-import { TrucksEditor } from './trucks-editor';
+import Link from 'next/link';
 import { MaterialsEditor } from './materials-editor';
 import { LowLevelEditor } from './low-level-editor';
 import { EquipmentEditor } from './equipment-editor';
@@ -14,8 +14,16 @@ export default async function AdminPage() {
     query<{ id: number; name: string; par: number; cost_per_unit: number; charge_per_unit: number }>(
       'SELECT id, name, par, cost_per_unit, charge_per_unit FROM materials WHERE active = TRUE ORDER BY sort_order, name'
     ),
-    query<{ id: number; name: string; active: boolean; warehouse_id: number | null }>(
-      'SELECT id, name, active, warehouse_id FROM trucks ORDER BY sort_order, name'
+    // Read-only here: trucks are managed in Fleet, which keeps the materials truck
+    // and its fleet record in step. Returned rentals are history, not trucks.
+    query<{ id: number; name: string; warehouse: string | null; rented: boolean }>(
+      `SELECT t.id, t.name, w.name AS warehouse,
+              COALESCE(v.ownership = 'rented', FALSE) AS rented
+         FROM trucks t
+         LEFT JOIN warehouses w ON w.id = t.warehouse_id
+         LEFT JOIN vehicles v ON v.truck_id = t.id
+        WHERE t.active = TRUE
+        ORDER BY t.sort_order, t.name`
     ),
     query<{ id: number; phase: 'morning' | 'close'; label: string }>(
       "SELECT id, phase, label FROM routine_items WHERE active = TRUE ORDER BY phase, sort_order, id"
@@ -62,13 +70,32 @@ export default async function AdminPage() {
       <section>
         <h2 className="mb-1 font-display text-xl font-bold text-navy-700">Trucks</h2>
         <p className="mb-3 font-ui text-sm text-navy-500">
-          Add, rename, retire, reorder, and set each truck&apos;s home warehouse (loading pulls from
-          there). New trucks start with zero of every material.
+          Trucks on the count sheets, in the order crews see them. Add, rename, retire, reorder,
+          or change a truck&apos;s home warehouse in{' '}
+          <Link href="/admin/fleet" className="font-semibold underline">
+            Fleet
+          </Link>{' '}
+          — one place for its materials, compliance and calendar names. Rentals come and go from
+          the{' '}
+          <Link href="/admin/rentals" className="font-semibold underline">
+            Rental Trucks board
+          </Link>
+          .
         </p>
-        <TrucksEditor
-          rows={trucks.map((t) => ({ id: t.id, name: t.name, active: t.active, warehouse_id: t.warehouse_id }))}
-          warehouses={warehouseOpts}
-        />
+        <ul className="space-y-2">
+          {trucks.map((t) => (
+            <li key={t.id} className="gg-surface flex flex-wrap items-center gap-2 p-3 font-ui text-sm">
+              <span className="font-semibold text-navy-700">{t.name}</span>
+              {t.rented && (
+                <span className="rounded bg-cream-200 px-1.5 py-0.5 text-xs text-navy-500">
+                  rental
+                </span>
+              )}
+              <span className="flex-1" />
+              <span className="text-navy-400">{t.warehouse ?? 'No warehouse'}</span>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section>

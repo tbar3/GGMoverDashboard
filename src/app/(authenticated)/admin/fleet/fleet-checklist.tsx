@@ -82,7 +82,7 @@ export function FleetChecklist({
               {rows.map((row) => (
                 <TableRow key={row.vehicle_id}>
                   <TableCell className="font-medium">
-                    <Link href={`/admin/compliance/fleet/${row.vehicle_id}`} className="hover:underline">
+                    <Link href={`/admin/fleet/${row.vehicle_id}`} className="hover:underline">
                       {row.name}
                     </Link>
                   </TableCell>

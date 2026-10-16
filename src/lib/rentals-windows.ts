@@ -47,6 +47,45 @@ export interface RentalWindow {
   book_by: string;
   state: WindowState;
   days: WindowDay[];
+  /** Set when a person has dismissed or edited this window — see applyWindowOverrides. */
+  override?: WindowOverrideInfo;
+}
+
+/** A stored decision about a window (rental_window_overrides). */
+export interface WindowOverride {
+  id: string;
+  /** Snapshot of the computed window when the decision was made. */
+  needed_from: string;
+  last_needed: string;
+  trucks_needed: number;
+  dismissed: boolean;
+  override_from: string | null;
+  override_return: string | null;
+  override_trucks: number | null;
+  note: string | null;
+  created_by_name: string | null;
+}
+
+export interface WindowOverrideInfo {
+  id: string;
+  /** Hidden from the board: "we don't need a truck for this". */
+  dismissed: boolean;
+  /**
+   * Was dismissed, but demand has since grown past what was dismissed — earlier,
+   * later or more trucks — so it is back on the board for a fresh look.
+   */
+  regrown: boolean;
+  /** Dates or truck count differ from what the schedule implies. */
+  edited: boolean;
+  note: string | null;
+  by: string | null;
+  /** What the schedule alone says, before the edit. */
+  computed: {
+    needed_from: string;
+    last_needed: string;
+    suggested_return: string;
+    trucks_needed: number;
+  };
 }
 
 /** Add days to a yyyy-MM-dd string without ever touching local time. */
@@ -178,11 +217,7 @@ export function buildWindows(input: BuildWindowsInput): RentalWindow[] {
     const trucks_uncovered = Math.max(...shortDays.map((d) => d.shortfall - d.covered), 0);
     const book_by = subtractBusinessDays(needed_from, leadTimeDays);
 
-    let state: WindowState;
-    if (trucks_uncovered <= 0) state = 'covered';
-    else if (today >= needed_from) state = 'late';
-    else if (today >= book_by) state = 'book_now';
-    else state = 'planned';
+    const state = stateFor(today, needed_from, book_by, trucks_uncovered);
 
     return {
       needed_from,
@@ -224,4 +259,91 @@ export function driftFor(rental: RentalCoverage, windows: RentalWindow[]): Drift
   if (delta > 0) return { kind: 'extend', suggested_return: window.suggested_return, days: delta };
   if (delta < 0) return { kind: 'early', suggested_return: window.suggested_return, days: -delta };
   return { kind: 'none', suggested_return: rental.est_return_date, days: 0 };
+}
+
+function stateFor(
+  today: string,
+  needed_from: string,
+  book_by: string,
+  trucks_uncovered: number
+): WindowState {
+  if (trucks_uncovered <= 0) return 'covered';
+  if (today >= needed_from) return 'late';
+  if (today >= book_by) return 'book_now';
+  return 'planned';
+}
+
+/**
+ * Lay what people decided over what the schedule computed.
+ *
+ * An override is matched by date OVERLAP rather than exact start, so a dismissal
+ * survives a job dropping off the first day. A dismissal only holds while the
+ * window stays inside what was dismissed: demand that grows past it is new work,
+ * and the window comes back flagged `regrown` instead of staying silently hidden.
+ *
+ * Edits replace the dates and truck count and re-derive book-by and state from
+ * them. What existing rentals already cover is kept as-is.
+ */
+export function applyWindowOverrides(
+  windows: RentalWindow[],
+  overrides: WindowOverride[],
+  today: string,
+  leadTimeDays: number
+): RentalWindow[] {
+  return windows.map((w) => {
+    const o = overrides.find(
+      (x) => x.needed_from <= w.last_needed && w.needed_from <= x.last_needed
+    );
+    if (!o) return w;
+
+    const regrown =
+      o.dismissed &&
+      (w.needed_from < o.needed_from ||
+        w.last_needed > o.last_needed ||
+        w.trucks_needed > o.trucks_needed);
+    const edited =
+      o.override_from !== null || o.override_return !== null || o.override_trucks !== null;
+
+    const needed_from = o.override_from ?? w.needed_from;
+    const suggested_return = o.override_return ?? w.suggested_return;
+    const last_needed =
+      o.override_return !== null
+        ? addDays(suggested_return, -1) < needed_from
+          ? needed_from
+          : addDays(suggested_return, -1)
+        : w.last_needed < needed_from
+          ? needed_from
+          : w.last_needed;
+
+    const coveredPeak = w.trucks_needed - w.trucks_uncovered;
+    const trucks_needed = o.override_trucks ?? w.trucks_needed;
+    const trucks_uncovered =
+      o.override_trucks !== null ? Math.max(0, trucks_needed - coveredPeak) : w.trucks_uncovered;
+    const book_by = subtractBusinessDays(needed_from, leadTimeDays);
+
+    return {
+      ...w,
+      needed_from,
+      last_needed,
+      suggested_return,
+      trucks_needed,
+      trucks_uncovered,
+      book_by,
+      state: stateFor(today, needed_from, book_by, trucks_uncovered),
+      override: {
+        id: o.id,
+        dismissed: o.dismissed && !regrown,
+        regrown,
+        edited,
+        note: o.note,
+        by: o.created_by_name,
+        computed: {
+          needed_from: w.needed_from,
+          last_needed: w.last_needed,
+          suggested_return: w.suggested_return,
+          trucks_needed: w.trucks_needed,
+        },
+      },
+    };
+  });
 }

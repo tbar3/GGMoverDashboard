@@ -111,6 +111,13 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
         group: 'Daily',
       },
       {
+        title: 'Fleet',
+        href: '/admin/fleet',
+        description: 'Every truck — compliance, materials count sheets, and calendar names',
+        icon: Truck,
+        group: 'Daily',
+      },
+      {
         title: 'Crew Responses',
         href: '/admin/responses',
         description: 'Who accepted or declined jobs — and why they declined',
@@ -320,7 +327,7 @@ export const BACK_OFFICE_AREAS: NavArea[] = [
       },
       {
         title: 'Fleet & Maintenance',
-        href: '/admin/compliance/fleet',
+        href: '/admin/fleet',
         description: 'Vehicles, preventative maintenance, and service history',
         icon: Truck,
       },

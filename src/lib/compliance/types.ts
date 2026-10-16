@@ -142,6 +142,8 @@ export interface Vehicle {
   in_service_date: string | null;
   active: boolean;
   notes: string | null;
+  /** How the calendar names this truck on jobs ("#1 OG"). Matched case-insensitively. */
+  calendar_names: string[];
   created_at: string;
   updated_at: string;
 }
@@ -150,6 +152,13 @@ export interface VehicleRow extends Vehicle {
   /** Worst state across this vehicle's compliance items and PM schedules. */
   worst_state: PmState;
   open_count: number;
+  /** The linked materials truck, when there is one. */
+  truck_active: boolean | null;
+  truck_warehouse_id: number | null;
+  warehouse_name: string | null;
+  /** The rental this vehicle belongs to, newest first. Only rented vehicles have one. */
+  rental_id: string | null;
+  rental_status: string | null;
 }
 
 export const PM_SERVICE_TYPES = [

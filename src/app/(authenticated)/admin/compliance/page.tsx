@@ -52,7 +52,7 @@ export default async function ComplianceOverviewPage() {
             </Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link href="/admin/compliance/fleet">
+            <Link href="/admin/fleet">
               <Truck className="h-4 w-4" />
               Fleet &amp; PM
             </Link>
@@ -135,7 +135,7 @@ export default async function ComplianceOverviewPage() {
                     <TableRow key={s.id}>
                       <TableCell>
                         <Link
-                          href={`/admin/compliance/fleet/${s.vehicle_id}`}
+                          href={`/admin/fleet/${s.vehicle_id}`}
                           className="font-medium text-foreground hover:underline"
                         >
                           {s.vehicle_name}

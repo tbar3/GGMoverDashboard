@@ -128,6 +128,12 @@ export async function createRental(input: {
       );
     });
   } catch (err) {
+    if ((err as Error).message === 'NAME_IS_FLEET_TRUCK') {
+      return {
+        ok: false,
+        error: `"${truckName}" is one of our own trucks — give the rental its own name, e.g. "Penske 26 (rental)"`,
+      };
+    }
     if ((err as Error).message === 'TRUCK_ALREADY_OUT') {
       return {
         ok: false,
@@ -174,6 +180,21 @@ async function setUpRentalTruck(
     [truckName, rentalId ?? null]
   );
   if (clash.rowCount) throw new Error('TRUCK_ALREADY_OUT');
+
+  // The upserts below key on name, so a rental named like one of OUR trucks would
+  // take it over: reactivate it as a rental, flip its fleet record to 'rented'
+  // and drop it out of owned capacity. Rentals get their own names.
+  const fleetName = await client.query(
+    `SELECT 1 FROM vehicles
+      WHERE LOWER(name) = LOWER($1) AND ownership <> 'rented'
+     UNION ALL
+     SELECT 1 FROM trucks t
+      WHERE LOWER(t.name) = LOWER($1)
+        AND NOT EXISTS (SELECT 1 FROM vehicles v WHERE v.truck_id = t.id AND v.ownership = 'rented')
+      LIMIT 1`,
+    [truckName]
+  );
+  if (fleetName.rowCount) throw new Error('NAME_IS_FLEET_TRUCK');
 
   const truck = await client.query<{ id: number }>(
     `INSERT INTO trucks (name, sort_order, warehouse_id)
@@ -409,6 +430,12 @@ export async function pickUpRental(input: {
       );
     });
   } catch (err) {
+    if ((err as Error).message === 'NAME_IS_FLEET_TRUCK') {
+      return {
+        ok: false,
+        error: `"${truckName}" is one of our own trucks — give the rental its own name, e.g. "Penske 26 (rental)"`,
+      };
+    }
     if ((err as Error).message === 'TRUCK_ALREADY_OUT') {
       return {
         ok: false,
@@ -538,6 +565,96 @@ export async function setRentalLeadTime(days: number): Promise<Result> {
     return { ok: false, error: 'Give a whole number of days, 0–60' };
   }
   await setStringSetting('rental_lead_time_days', String(days));
+  revalidate();
+  return { ok: true };
+}
+
+/** The computed window a decision is made against — the snapshot it is stored with. */
+type WindowSnapshot = { neededFrom: string; lastNeeded: string; trucksNeeded: number };
+
+function badSnapshot(w: WindowSnapshot): string | null {
+  if (!DATE_RE.test(w.neededFrom) || !DATE_RE.test(w.lastNeeded)) return 'Bad date';
+  if (!Number.isInteger(w.trucksNeeded) || w.trucksNeeded < 0) return 'Bad truck count';
+  return null;
+}
+
+/**
+ * Record a decision about a coverage window: dismiss it, or edit its dates and
+ * truck count. One row per window — `overrideId` updates the existing decision,
+ * and the snapshot is refreshed to the window as it is now, so a window that came
+ * back because demand grew is dismissed against its new size.
+ */
+export async function saveWindowOverride(input: {
+  overrideId?: string;
+  window: WindowSnapshot;
+  dismissed: boolean;
+  overrideFrom?: string | null;
+  overrideReturn?: string | null;
+  overrideTrucks?: number | null;
+  note?: string;
+}): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  const snapshotError = badSnapshot(input.window);
+  if (snapshotError) return { ok: false, error: snapshotError };
+
+  const from = input.overrideFrom || null;
+  const ret = input.overrideReturn || null;
+  if ((from && !DATE_RE.test(from)) || (ret && !DATE_RE.test(ret))) {
+    return { ok: false, error: 'Bad date' };
+  }
+  if (from && ret && ret < from) {
+    return { ok: false, error: 'The return date cannot be before the day it is needed' };
+  }
+  const trucks = input.overrideTrucks ?? null;
+  if (trucks !== null && (!Number.isInteger(trucks) || trucks < 0 || trucks > 20)) {
+    return { ok: false, error: 'Give a whole number of trucks, 0–20' };
+  }
+  const note = input.note?.trim() || null;
+
+  const values = [
+    input.window.neededFrom,
+    input.window.lastNeeded,
+    input.window.trucksNeeded,
+    input.dismissed,
+    from,
+    ret,
+    trucks,
+    note,
+    guard.employee.name,
+  ];
+
+  if (input.overrideId) {
+    const row = await queryOne<{ id: string }>(
+      `UPDATE rental_window_overrides
+          SET needed_from = $2, last_needed = $3, trucks_needed = $4, dismissed = $5,
+              override_from = $6, override_return = $7, override_trucks = $8,
+              note = $9, created_by_name = $10, updated_at = NOW()
+        WHERE id = $1
+        RETURNING id`,
+      [input.overrideId, ...values]
+    );
+    if (!row) return { ok: false, error: 'That window changed — refresh and try again' };
+  } else {
+    await query(
+      `INSERT INTO rental_window_overrides
+         (needed_from, last_needed, trucks_needed, dismissed,
+          override_from, override_return, override_trucks, note, created_by_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      values
+    );
+  }
+  revalidate();
+  return { ok: true };
+}
+
+/** Undo a decision: the window goes back to exactly what the schedule says. */
+export async function clearWindowOverride(id: string): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+
+  await query('DELETE FROM rental_window_overrides WHERE id = $1', [id]);
   revalidate();
   return { ok: true };
 }

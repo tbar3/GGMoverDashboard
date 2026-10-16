@@ -209,6 +209,11 @@ export async function getVehicles(): Promise<VehicleRow[]> {
       SELECT vehicle_id, state FROM pm_state
     )
     SELECT v.*,
+           t.active       AS truck_active,
+           t.warehouse_id AS truck_warehouse_id,
+           w.name         AS warehouse_name,
+           r.id           AS rental_id,
+           r.status       AS rental_status,
            COALESCE(
              (SELECT c.state FROM combined c
                WHERE c.vehicle_id = v.id
@@ -216,7 +221,15 @@ export async function getVehicles(): Promise<VehicleRow[]> {
            (SELECT COUNT(*)::int FROM combined c
              WHERE c.vehicle_id = v.id AND c.state IN ('expired','due_soon')) AS open_count
       FROM vehicles v
-     ORDER BY v.active DESC, v.name`);
+      LEFT JOIN trucks t ON t.id = v.truck_id
+      LEFT JOIN warehouses w ON w.id = t.warehouse_id
+      LEFT JOIN LATERAL (
+        SELECT id, status FROM truck_rentals
+         WHERE vehicle_id = v.id
+         ORDER BY created_at DESC
+         LIMIT 1
+      ) r ON TRUE
+     ORDER BY v.active DESC, t.sort_order NULLS LAST, v.name`);
 }
 
 export async function getVehicle(id: string): Promise<Vehicle | null> {
@@ -230,6 +243,38 @@ export async function getVehicle(id: string): Promise<Vehicle | null> {
  * query is the mitigation: it makes the drift visible on the fleet page as an
  * "add to fleet" prompt, instead of a truck silently having no compliance record.
  */
+/**
+ * Truck names on upcoming jobs that match no vehicle, with how many jobs use each.
+ *
+ * Jobs carry their trucks as calendar text, comma-separated when a move uses more
+ * than one. A name that matches no vehicle's name or calendar names is a job the
+ * app cannot tie to a truck — a typo, a new truck nobody added, or a calendar
+ * alias nobody recorded. "Crew: ..." entries are the parser reading the next line
+ * of an event with no Trucks field; they are not truck names, so they are left out.
+ */
+export async function getUnmatchedCalendarTrucks(): Promise<{ name: string; jobs: number }[]> {
+  return query(
+    `WITH names AS (
+       SELECT DISTINCT j.id, BTRIM(n) AS name
+         FROM jobs j, unnest(string_to_array(j.truck_name, ',')) AS n
+        WHERE j.date >= CURRENT_DATE - 14
+          AND j.date < CURRENT_DATE + 60
+          AND j.truck_name IS NOT NULL
+     ), known AS (
+       SELECT LOWER(name) AS name FROM vehicles
+       UNION
+       SELECT LOWER(BTRIM(c)) FROM vehicles, unnest(calendar_names) AS c
+     )
+     SELECT name, COUNT(*)::int AS jobs
+       FROM names
+      WHERE name <> ''
+        AND name NOT ILIKE 'crew:%'
+        AND LOWER(name) NOT IN (SELECT name FROM known)
+      GROUP BY name
+      ORDER BY jobs DESC, name`
+  );
+}
+
 export async function getUnlinkedTrucks(): Promise<{ id: number; name: string }[]> {
   return query(
     `SELECT t.id, t.name

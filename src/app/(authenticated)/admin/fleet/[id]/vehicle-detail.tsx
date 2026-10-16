@@ -179,7 +179,7 @@ export default function VehicleDetail({
     <div className="p-6 space-y-6">
       <div>
         <Button variant="ghost" size="sm" asChild className="-ml-2 mb-2">
-          <Link href="/admin/compliance/fleet">
+          <Link href="/admin/fleet">
             <ArrowLeft className="h-4 w-4" />
             Fleet
           </Link>

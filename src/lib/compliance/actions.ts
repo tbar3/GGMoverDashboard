@@ -25,7 +25,7 @@ const STATUS_SET = new Set<string>(ITEM_STATUSES.map((s) => s.value));
 function revalidate() {
   revalidatePath('/admin/compliance');
   revalidatePath('/admin/compliance/items');
-  revalidatePath('/admin/compliance/fleet');
+  revalidatePath('/admin/fleet');
   // The nav badge is computed in the authenticated layout, so every back-office
   // page shows a stale count until its layout re-renders.
   revalidatePath('/admin', 'layout');

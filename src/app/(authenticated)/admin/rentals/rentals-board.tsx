@@ -19,6 +19,9 @@ import {
   ArrowUpRight,
   Clock,
   ChevronRight,
+  Pencil,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/utils';
@@ -39,6 +42,8 @@ import {
   cancelRental,
   updateRentalDates,
   setRentalLeadTime,
+  saveWindowOverride,
+  clearWindowOverride,
 } from '@/lib/rentals-actions';
 
 const inputClass = 'w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
@@ -89,7 +94,11 @@ export default function RentalsBoard({
     });
   }
 
-  const gaps = data.windows.filter((w) => w.state === 'book_now' || w.state === 'late');
+  // Dismissed windows are ones we decided not to rent for. They leave both lists
+  // and wait at the bottom of the forecast, where they can be restored.
+  const liveWindows = data.windows.filter((w) => !w.override?.dismissed);
+  const dismissedWindows = data.windows.filter((w) => w.override?.dismissed);
+  const gaps = liveWindows.filter((w) => w.state === 'book_now' || w.state === 'late');
   const needToBook = data.active.filter((r) => r.status === 'planned');
   const booked = data.active.filter((r) => r.status === 'booked');
   const out = data.active.filter((r) => r.status === 'picked_up');
@@ -228,16 +237,20 @@ export default function RentalsBoard({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {data.windows.length === 0 ? (
+          {liveWindows.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No day in the horizon needs more than we own.
+              No day in the horizon needs more than we own
+              {dismissedWindows.length > 0 ? ' — or we have decided against renting.' : '.'}
             </p>
           ) : (
             <ul className="space-y-2">
-              {data.windows.map((w) => (
+              {liveWindows.map((w) => (
                 <WindowRow key={w.needed_from} window={w} pending={pending} run={run} />
               ))}
             </ul>
+          )}
+          {dismissedWindows.length > 0 && (
+            <DismissedWindows windows={dismissedWindows} pending={pending} run={run} />
           )}
         </CardContent>
       </Card>
@@ -350,7 +363,19 @@ function SpecBadges({ rental }: { rental: TruckRental }) {
   );
 }
 
-/** One demand window: what it needs, by when, and until when. */
+/** The computed window a decision is stored against — never the edited one. */
+function snapshotOf(window: RentalWindow) {
+  const c = window.override?.computed ?? window;
+  return { neededFrom: c.needed_from, lastNeeded: c.last_needed, trucksNeeded: c.trucks_needed };
+}
+
+/**
+ * One demand window: what it needs, by when, and until when.
+ *
+ * The window itself is computed from the schedule, so "edit" and "delete" are
+ * decisions laid over it: edit replaces the dates or truck count, dismiss says we
+ * are not renting for it. Either can be undone back to what the schedule says.
+ */
 function WindowRow({
   window,
   pending,
@@ -360,8 +385,13 @@ function WindowRow({
   pending: boolean;
   run: Run;
 }) {
-  const [open, setOpen] = useState(false);
+  const [panel, setPanel] = useState<'book' | 'edit' | 'dismiss' | null>(null);
   const state = STATE_LABEL[window.state];
+  const o = window.override;
+
+  function toggle(p: 'book' | 'edit' | 'dismiss') {
+    setPanel((current) => (current === p ? null : p));
+  }
 
   return (
     <li className="rounded-lg border border-border p-3 text-sm">
@@ -379,20 +409,58 @@ function WindowRow({
             ? ` · ${window.trucks_uncovered} still uncovered`
             : ''}
         </span>
+        {o?.edited && (
+          <Badge variant="outline" className="text-[10px]">
+            Edited
+          </Badge>
+        )}
+        {o?.regrown && (
+          <Badge variant="outline" className="border-amber-500 text-[10px] text-amber-700">
+            Back — more work since dismissed
+          </Badge>
+        )}
         <span className="flex-1" />
         {window.state !== 'covered' && (
-          <Button size="sm" variant="outline" onClick={() => setOpen((v) => !v)}>
-            {open ? 'Cancel' : 'Book a rental'}
+          <Button
+            size="sm"
+            variant={panel === 'book' ? 'secondary' : 'outline'}
+            onClick={() => toggle('book')}
+          >
+            {panel === 'book' ? 'Cancel' : 'Book a rental'}
           </Button>
         )}
+        <Button
+          size="sm"
+          variant={panel === 'edit' ? 'secondary' : 'ghost'}
+          onClick={() => toggle('edit')}
+          aria-label="Edit this window"
+          title="Edit"
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <Button
+          size="sm"
+          variant={panel === 'dismiss' ? 'secondary' : 'ghost'}
+          onClick={() => toggle('dismiss')}
+          aria-label="Dismiss this window"
+          title="Not needed — dismiss"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
       </div>
 
       <p className="mt-1 text-xs text-muted-foreground">
         Book by {formatDate(window.book_by, 'EEE, MMM d')} · back on{' '}
         {formatDate(window.suggested_return, 'EEE, MMM d')}
+        {o?.edited &&
+          ` · schedule says ${formatDate(o.computed.needed_from, 'MMM d')} – ${formatDate(
+            o.computed.suggested_return,
+            'MMM d'
+          )}, ${o.computed.trucks_needed} truck${o.computed.trucks_needed === 1 ? '' : 's'}`}
+        {o?.note && ` · “${o.note}”`}
       </p>
 
-      {open && (
+      {panel === 'book' && (
         <div className="mt-3 border-t border-border pt-3">
           <RentalForm
             neededFrom={window.needed_from}
@@ -400,11 +468,229 @@ function WindowRow({
             lockedStatus="booked"
             pending={pending}
             run={run}
-            onDone={() => setOpen(false)}
+            onDone={() => setPanel(null)}
           />
         </div>
       )}
+
+      {panel === 'edit' && (
+        <WindowEditForm window={window} pending={pending} run={run} onDone={() => setPanel(null)} />
+      )}
+
+      {panel === 'dismiss' && (
+        <WindowDismissForm
+          window={window}
+          pending={pending}
+          run={run}
+          onDone={() => setPanel(null)}
+        />
+      )}
     </li>
+  );
+}
+
+function WindowEditForm({
+  window,
+  pending,
+  run,
+  onDone,
+}: {
+  window: RentalWindow;
+  pending: boolean;
+  run: Run;
+  onDone: () => void;
+}) {
+  const o = window.override;
+  const [from, setFrom] = useState(window.needed_from);
+  const [to, setTo] = useState(window.suggested_return);
+  const [trucks, setTrucks] = useState(String(window.trucks_needed));
+  const [note, setNote] = useState(o?.note ?? '');
+
+  const computed = o?.computed ?? window;
+  const trucksNum = Number(trucks);
+  const canSave = !!from && !!to && to >= from && trucks !== '' && Number.isInteger(trucksNum);
+
+  function save() {
+    // Store only what differs from the schedule, so a later schedule change to
+    // an untouched field still flows through.
+    run(
+      () =>
+        saveWindowOverride({
+          overrideId: o?.id,
+          window: snapshotOf(window),
+          dismissed: false,
+          overrideFrom: from !== computed.needed_from ? from : null,
+          overrideReturn: to !== computed.suggested_return ? to : null,
+          overrideTrucks: trucksNum !== computed.trucks_needed ? trucksNum : null,
+          note,
+        }),
+      'Window updated',
+      onDone
+    );
+  }
+
+  return (
+    <div className="mt-3 grid gap-2 border-t border-border pt-3 sm:grid-cols-3">
+      <div className="space-y-1">
+        <Label>Needed from</Label>
+        <input type="date" className={inputClass} value={from} onChange={(e) => setFrom(e.target.value)} />
+      </div>
+      <div className="space-y-1">
+        <Label>Back on</Label>
+        <input type="date" className={inputClass} value={to} onChange={(e) => setTo(e.target.value)} />
+      </div>
+      <div className="space-y-1">
+        <Label>Extra trucks needed</Label>
+        <Input
+          type="number"
+          min={0}
+          max={20}
+          value={trucks}
+          onChange={(e) => setTrucks(e.target.value)}
+          inputMode="numeric"
+        />
+      </div>
+      <div className="space-y-1 sm:col-span-3">
+        <Label>Note</Label>
+        <Input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Optional — why it differs from the schedule"
+        />
+      </div>
+      <div className="flex flex-wrap items-center gap-2 sm:col-span-3">
+        <Button size="sm" disabled={pending || !canSave} onClick={save}>
+          <Check className="mr-1 h-4 w-4" />
+          Save
+        </Button>
+        {o?.edited && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pending}
+            onClick={() => run(() => clearWindowOverride(o.id), 'Back to the schedule', onDone)}
+          >
+            <RotateCcw className="mr-1 h-4 w-4" />
+            Reset to schedule
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={onDone}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function WindowDismissForm({
+  window,
+  pending,
+  run,
+  onDone,
+}: {
+  window: RentalWindow;
+  pending: boolean;
+  run: Run;
+  onDone: () => void;
+}) {
+  const [note, setNote] = useState('');
+
+  return (
+    <div className="mt-3 space-y-2 border-t border-border pt-3">
+      <p className="text-muted-foreground">
+        Not renting for this one? It leaves Coverage gaps and the Forecast. If more work is
+        booked into these days later, it comes back on its own.
+      </p>
+      <Input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Optional — why (e.g. doubling up, job moved)"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant="destructive"
+          disabled={pending}
+          onClick={() =>
+            run(
+              () =>
+                saveWindowOverride({
+                  overrideId: window.override?.id,
+                  window: snapshotOf(window),
+                  dismissed: true,
+                  note,
+                }),
+              'Dismissed — no rental needed',
+              onDone
+            )
+          }
+        >
+          <X className="mr-1 h-4 w-4" />
+          Dismiss
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onDone}>
+          Keep it
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Windows we decided not to rent for — out of the way, but one click from back. */
+function DismissedWindows({
+  windows,
+  pending,
+  run,
+}: {
+  windows: RentalWindow[];
+  pending: boolean;
+  run: Run;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mt-4 border-t border-border pt-3">
+      <button
+        type="button"
+        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <ChevronRight className={`h-4 w-4 transition-transform ${open ? 'rotate-90' : ''}`} />
+        {windows.length} dismissed
+      </button>
+      {open && (
+        <ul className="mt-2 space-y-1">
+          {windows.map((w) => (
+            <li
+              key={w.needed_from}
+              className="flex flex-wrap items-center gap-2 rounded-md px-2 py-1 text-sm text-muted-foreground"
+            >
+              <span className="line-through">
+                {formatDate(w.needed_from, 'EEE, MMM d')}
+                {w.last_needed !== w.needed_from
+                  ? ` – ${formatDate(w.last_needed, 'EEE, MMM d')}`
+                  : ''}
+              </span>
+              <span>
+                · {w.trucks_needed} truck{w.trucks_needed === 1 ? '' : 's'}
+              </span>
+              {w.override?.note && <span>· “{w.override.note}”</span>}
+              {w.override?.by && <span>· {w.override.by}</span>}
+              <span className="flex-1" />
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={pending}
+                onClick={() => run(() => clearWindowOverride(w.override!.id), 'Restored')}
+              >
+                <RotateCcw className="mr-1 h-4 w-4" />
+                Restore
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

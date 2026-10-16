@@ -10,6 +10,7 @@ import {
   getFeedback,
   getCultureItems,
   getCultureOfDay,
+  getMaterialsCheck,
   meetingToday,
 } from '@/lib/morning-meeting';
 import MorningMeetingBoard from './morning-meeting-board';
@@ -26,7 +27,7 @@ export default async function MorningMeetingPage() {
   const policyOfDay = await getPolicyOfDay(today);
   // Same claim-on-first-view as the policy, so it runs before the list read too.
   const cultureOfDay = await getCultureOfDay(today);
-  const [board, policies, notes, history, discussions, jobs, crew, feedback, cultureItems] =
+  const [board, policies, notes, history, discussions, jobs, crew, feedback, cultureItems, materials] =
     await Promise.all([
     getRecognitionBoard(),
     getRotationPolicies(),
@@ -37,6 +38,7 @@ export default async function MorningMeetingPage() {
     getCrewOptions(),
     getFeedback(),
     getCultureItems(),
+    getMaterialsCheck(today),
   ]);
 
   return (
@@ -53,6 +55,7 @@ export default async function MorningMeetingPage() {
       feedback={feedback}
       cultureOfDay={cultureOfDay}
       cultureItems={cultureItems}
+      materials={materials}
     />
   );
 }

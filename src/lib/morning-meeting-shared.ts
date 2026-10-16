@@ -171,3 +171,52 @@ export interface CultureOfDay {
   /** Nothing on the list can rotate yet. */
   empty: boolean;
 }
+
+// ── Materials Check ──────────────────────────────────────────────────────────
+
+/**
+ * Leak check for one truck, by job rather than by day: the final count from two
+ * jobs ago vs. the initial count from the last job. Offloads in between are
+ * netted out, so `diff` is what went missing (negative) or appeared (positive).
+ */
+export interface MaterialsCountCheck {
+  truck_id: number;
+  truck_name: string;
+  /** 1 job ago — its initial (pre_dispatch) count. */
+  last: { job_id: number; job_date: string; job_label: string; counted: boolean };
+  /** 2 jobs ago — its final (post_job) count. Not closed = no final count. */
+  prior: { job_id: number; job_date: string; job_label: string; closed: boolean } | null;
+  lines: {
+    material_id: number;
+    name: string;
+    prior_final: number | null;
+    offloaded: number;
+    expected: number | null;
+    initial: number | null;
+    diff: number | null; // initial − expected
+  }[];
+}
+
+/** Used vs. charged for one job on the last working day. Only charged materials. */
+export interface MaterialsChargeJob {
+  job_id: number;
+  truck_name: string;
+  sequence_no: number;
+  customer: string | null;
+  job_number: string | null;
+  status: string;
+  lines: {
+    material_id: number;
+    name: string;
+    used: number | null;
+    charged: number | null;
+    charge_per_unit: number;
+  }[];
+}
+
+export interface MaterialsCheck {
+  /** The most recent day with materials jobs before the meeting. */
+  jobDay: string | null;
+  counts: MaterialsCountCheck[];
+  charges: MaterialsChargeJob[];
+}

@@ -476,3 +476,44 @@ export async function unpinCultureOfDay(today: string): Promise<Result> {
   revalidate();
   return { ok: true };
 }
+
+// ── Materials Check ──────────────────────────────────────────────────────────
+
+/**
+ * Save charged materials (from SmartMoving) for one materials job. Writes
+ * job_counts.charged — the same field the Leakage report reads and edits. A blank
+ * clears it; a material the crew never counted only gets a row if it was charged.
+ */
+export async function saveMaterialsCharged(input: {
+  jobId: number;
+  entries: { materialId: number; charged: number | null }[];
+}): Promise<Result> {
+  const guard = await requireBackOffice();
+  if (!guard.ok) return { ok: false, error: 'Back office access required' };
+  if (!Number.isInteger(input.jobId)) return { ok: false, error: 'Bad job' };
+  for (const e of input.entries) {
+    if (!Number.isInteger(e.materialId)) return { ok: false, error: 'Bad material' };
+    if (e.charged != null && (!Number.isFinite(e.charged) || e.charged < 0)) {
+      return { ok: false, error: 'Charged amounts must be zero or more' };
+    }
+  }
+  const job = await queryOne<{ id: number }>('SELECT id FROM materials_jobs WHERE id = $1', [input.jobId]);
+  if (!job) return { ok: false, error: 'That job no longer exists — reload the page.' };
+
+  await query(
+    `INSERT INTO job_counts (job_id, material_id, charged)
+     SELECT $1, x.material_id, x.charged
+       FROM unnest($2::int[], $3::numeric[]) AS x(material_id, charged)
+      WHERE x.charged IS NOT NULL
+         OR EXISTS (SELECT 1 FROM job_counts jc WHERE jc.job_id = $1 AND jc.material_id = x.material_id)
+     ON CONFLICT (job_id, material_id) DO UPDATE SET charged = EXCLUDED.charged`,
+    [
+      input.jobId,
+      input.entries.map((e) => e.materialId),
+      input.entries.map((e) => e.charged),
+    ]
+  );
+  revalidate();
+  revalidatePath('/admin/materials/reporting');
+  return { ok: true };
+}

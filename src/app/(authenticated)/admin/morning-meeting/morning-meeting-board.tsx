@@ -51,6 +51,7 @@ import {
   type FeedbackItem,
   type CultureItem,
   type CultureOfDay,
+  type MaterialsCheck,
 } from '@/lib/morning-meeting-shared';
 import { policyCategoryLabel, type Policy } from '@/lib/policies-shared';
 import {
@@ -65,6 +66,7 @@ import {
 import { DiscussionPoints } from './morning-meeting-discussions';
 import { FeedbackSection } from './morning-meeting-feedback';
 import { CultureSection } from './morning-meeting-culture';
+import { MaterialsCheckSection } from './morning-meeting-materials';
 
 const textareaClass =
   'w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm ' +
@@ -91,6 +93,7 @@ export default function MorningMeetingBoard({
   feedback,
   cultureOfDay,
   cultureItems,
+  materials,
 }: {
   today: string;
   board: RecognitionGroup[];
@@ -104,6 +107,7 @@ export default function MorningMeetingBoard({
   feedback: FeedbackItem[];
   cultureOfDay: CultureOfDay;
   cultureItems: CultureItem[];
+  materials: MaterialsCheck;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -174,6 +178,7 @@ export default function MorningMeetingBoard({
           <Badge variant="outline">4 &middot; Policy of the Day</Badge>
           <Badge variant="outline">5 &middot; Discussion</Badge>
           <Badge variant="outline">6 &middot; Feedback</Badge>
+          <Badge variant="outline">7 &middot; Materials</Badge>
         </div>
       </div>
 
@@ -346,6 +351,9 @@ export default function MorningMeetingBoard({
         pending={pending}
         run={run}
       />
+
+      {/* ── 7. Materials Check — overnight counts, used vs charged ───────── */}
+      <MaterialsCheckSection check={materials} />
     </div>
   );
 }

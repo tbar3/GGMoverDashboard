@@ -13,6 +13,8 @@
  *      the crew's own ideas for the crew and the office, open until closed.
  *   Culture — one core value / mission / purpose card per meeting, rotated the
  *      same way as the Policy of the Day.
+ *   Materials Check — each truck's overnight count (last final count vs
+ *      yesterday's initial count) and yesterday's used vs charged materials.
  *
  * Back office only. Every caller sits under /admin, which is guarded by
  * src/app/(authenticated)/admin/layout.tsx, and every write self-guards again.
@@ -31,6 +33,9 @@ import type {
   FeedbackItem,
   CultureItem,
   CultureOfDay,
+  MaterialsCheck,
+  MaterialsCountCheck,
+  MaterialsChargeJob,
 } from '@/lib/morning-meeting-shared';
 import type { Policy } from '@/lib/policies-shared';
 
@@ -416,4 +421,180 @@ export async function getCultureOfDay(today: string): Promise<CultureOfDay> {
     settled?.culture_item_id ?? next.id,
   ]);
   return { item, pinned: settled?.pinned ?? false, empty: !item };
+}
+
+// ── Materials Check ──────────────────────────────────────────────────────────
+
+function n(v: unknown): number | null {
+  return v == null ? null : Number(v);
+}
+
+function materialsJobLabel(j: { customer: string | null; job_number: string | null; sequence_no: number }): string {
+  const who = [j.job_number ? `#${j.job_number}` : null, j.customer].filter(Boolean).join(' · ');
+  return who || `Job ${j.sequence_no}`;
+}
+
+/**
+ * The materials leak check, read before anyone counts today:
+ *  - counts: per truck that worked the last working day, the final count
+ *    (post_job) from the last job of its previous working day vs. the initial
+ *    count (pre_dispatch) from the first job of its latest one, with offloads in
+ *    between netted out. Same-day jobs are skipped (their initial is a copy of
+ *    the job before), and idle days don't matter. If that earlier sheet was never
+ *    closed there is no final count; it is flagged rather than skipped, since an
+ *    older count would miss that job's restock.
+ *  - charges: for each job on the last working day, used (post_dispatch −
+ *    post_job) vs. charged in SmartMoving, for materials the customer pays for
+ *    (charge_per_unit > 0 — shrink wrap and tape are free). Charged is
+ *    job_counts.charged, the same figure the Leakage report uses.
+ */
+export async function getMaterialsCheck(today: string): Promise<MaterialsCheck> {
+  type JobRow = {
+    id: number;
+    truck_id: number;
+    truck_name: string;
+    job_date: string;
+    sequence_no: number;
+    customer: string | null;
+    job_number: string | null;
+    status: string;
+    created_at: string;
+    rn: number;
+  };
+  // Per active truck, its last two working days before today: rn 1 = the first
+  // job of the latest day (a fresh morning count), rn 2 = the last job of the day
+  // before that (the final count it parked with). Later jobs on the same day start
+  // from a copy of the previous job's final count, so comparing within a day would
+  // always show zero.
+  const recent = await query<JobRow>(
+    `WITH days AS (
+        SELECT truck_id, job_date, MIN(sequence_no) AS first_seq, MAX(sequence_no) AS last_seq,
+               DENSE_RANK() OVER (PARTITION BY truck_id ORDER BY job_date DESC)::int AS rn
+          FROM materials_jobs
+         WHERE job_date < $1::date
+         GROUP BY truck_id, job_date
+     )
+     SELECT j.id, j.truck_id, t.name AS truck_name, j.job_date::text AS job_date, j.sequence_no,
+            j.customer, j.job_number, j.status, j.created_at, d.rn
+       FROM days d
+       JOIN materials_jobs j
+         ON j.truck_id = d.truck_id AND j.job_date = d.job_date
+        AND j.sequence_no = CASE WHEN d.rn = 1 THEN d.first_seq ELSE d.last_seq END
+       JOIN trucks t ON t.id = j.truck_id
+      WHERE t.active = TRUE AND d.rn <= 2
+      ORDER BY t.sort_order, t.name, d.rn`,
+    [today]
+  );
+  if (recent.length === 0) return { jobDay: null, counts: [], charges: [] };
+
+  const jobDay = recent.reduce((d, j) => (j.job_date > d ? j.job_date : d), '');
+  const dayJobs = await query<Omit<JobRow, 'created_at' | 'rn'>>(
+    `SELECT j.id, j.truck_id, t.name AS truck_name, j.job_date::text AS job_date, j.sequence_no,
+            j.customer, j.job_number, j.status
+       FROM materials_jobs j
+       JOIN trucks t ON t.id = j.truck_id
+      WHERE j.job_date = $1::date
+      ORDER BY t.sort_order, t.name, j.sequence_no`,
+    [jobDay]
+  );
+
+  // Only trucks that worked the last working day — an idle truck's check was
+  // already walked at an earlier meeting.
+  const last = recent.filter((j) => j.rn === 1 && j.job_date === jobDay);
+  const priorByTruck = new Map(recent.filter((j) => j.rn === 2).map((j) => [j.truck_id, j]));
+  const jobIds = [...new Set([...recent.map((j) => j.id), ...dayJobs.map((j) => j.id)])];
+
+  const [materials, counts, offloads] = await Promise.all([
+    query<{ id: number; name: string; charge_per_unit: number | null }>(
+      'SELECT id, name, charge_per_unit FROM materials WHERE active = TRUE ORDER BY sort_order, name'
+    ),
+    query<{
+      job_id: number;
+      material_id: number;
+      pre_dispatch: number | null;
+      post_job: number | null;
+      used: number | null;
+      charged: number | null;
+    }>(
+      `SELECT job_id, material_id, pre_dispatch, post_job, used, charged
+         FROM job_counts WHERE job_id = ANY($1::int[])`,
+      [jobIds]
+    ),
+    // Offloads from the start of the day of the job two back until the last
+    // job's sheet was opened.
+    Promise.all(
+      last
+        .filter((j) => priorByTruck.has(j.truck_id))
+        .map((j) =>
+          query<{ truck_id: number; material_id: number; qty: number }>(
+            `SELECT truck_id, material_id, SUM(qty_delta) AS qty
+               FROM inventory_transactions
+              WHERE type = 'offload' AND truck_id = $1
+                AND created_at >= ($2::date::timestamp AT TIME ZONE 'America/New_York')
+                AND created_at < $3
+              GROUP BY truck_id, material_id`,
+            [j.truck_id, priorByTruck.get(j.truck_id)!.job_date, j.created_at]
+          )
+        )
+    ).then((r) => r.flat()),
+  ]);
+
+  const countAt = new Map(counts.map((c) => [`${c.job_id}:${c.material_id}`, c]));
+  const offAt = new Map(offloads.map((o) => [`${o.truck_id}:${o.material_id}`, Number(o.qty)]));
+
+  const countChecks: MaterialsCountCheck[] = last.map((j) => {
+    const prior = priorByTruck.get(j.truck_id) ?? null;
+    const priorClosed = prior?.status === 'complete';
+    const lines = materials.map((m) => {
+      const priorFinal = prior && priorClosed ? n(countAt.get(`${prior.id}:${m.id}`)?.post_job) : null;
+      const offloaded = offAt.get(`${j.truck_id}:${m.id}`) ?? 0;
+      const expected = priorFinal == null ? null : priorFinal - offloaded;
+      const initial = n(countAt.get(`${j.id}:${m.id}`)?.pre_dispatch);
+      return {
+        material_id: m.id,
+        name: m.name,
+        prior_final: priorFinal,
+        offloaded,
+        expected,
+        initial,
+        diff: expected == null || initial == null ? null : initial - expected,
+      };
+    });
+    return {
+      truck_id: j.truck_id,
+      truck_name: j.truck_name,
+      last: {
+        job_id: j.id,
+        job_date: j.job_date,
+        job_label: materialsJobLabel(j),
+        counted: j.status !== 'draft' && lines.some((l) => l.initial != null),
+      },
+      prior: prior
+        ? { job_id: prior.id, job_date: prior.job_date, job_label: materialsJobLabel(prior), closed: priorClosed }
+        : null,
+      lines,
+    };
+  });
+
+  const charged = materials.filter((m) => Number(m.charge_per_unit ?? 0) > 0);
+  const charges: MaterialsChargeJob[] = dayJobs.map((j) => ({
+    job_id: j.id,
+    truck_name: j.truck_name,
+    sequence_no: j.sequence_no,
+    customer: j.customer,
+    job_number: j.job_number,
+    status: j.status,
+    lines: charged.map((m) => {
+      const c = countAt.get(`${j.id}:${m.id}`);
+      return {
+        material_id: m.id,
+        name: m.name,
+        used: n(c?.used),
+        charged: n(c?.charged),
+        charge_per_unit: Number(m.charge_per_unit),
+      };
+    }),
+  }));
+
+  return { jobDay, counts: countChecks, charges };
 }
